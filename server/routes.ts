@@ -73,10 +73,10 @@ Return JSON in this format:
         ? `The user has selected: ${carInfo.make} ${carInfo.model} ${carInfo.year}. Analyze the car parts visible in the image.`
         : `Identify the car make, model, year, and all visible parts in the image.`;
 
-      console.log("Calling OpenAI API with model gpt-5...");
+      console.log("Calling OpenAI API with model gpt-4o...");
       
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -91,7 +91,7 @@ Return JSON in this format:
           },
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 2048,
+        max_tokens: 2048,
       });
 
       console.log("OpenAI API response received");
