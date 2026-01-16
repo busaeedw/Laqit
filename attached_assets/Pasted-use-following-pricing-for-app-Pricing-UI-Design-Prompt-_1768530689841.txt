@@ -1,0 +1,87 @@
+use following pricing for app
+
+**🎨 Pricing UI Design Prompt (Arabic + Automotive Theme)**
+Design a modern, automotive-themed pricing page UI for an Arabic mobile app called "راصد القطع" (PartScope). 
+The app uses AI to identify car models and parts from photos. 
+The pricing page should showcase clean, high-tech visuals inspired by car dashboards, metallic surfaces, and automotive branding.
+
+
+Create the following in an RTL Arabic layout:
+
+
+1. **Page Header**
+   - Bold automotive hero section
+   - Title: "الباقات والأسعار"
+   - Subtitle: "اختر الخطة المناسبة لاستخدامك"
+
+
+2. **Pricing Cards (3 main tiers + 1 lifetime option)**
+   - Metallic, high-contrast card design with automotive styling
+   - Sharp edges, subtle chrome accents, speedometer-inspired curves
+
+
+   **Tier 1 – Basic**
+   - Title: "الباقة الأساسية"
+   - Price: "9 ريال / شهر"
+   - Features:
+     - 10 عمليات فحص شهريًا
+     - دقة عادية
+     - معالجة قياسية
+   - CTA Button: "اشترك الآن"
+
+
+   **Tier 2 – Pro**
+   - Highlight as “الأكثر شعبية”
+   - Title: "الباقة الاحترافية"
+   - Price: "19 ريال / شهر"
+   - Features:
+     - 30 عملية فحص شهريًا
+     - دقة عالية
+     - معالجة أسرع
+     - خصومات على الطلبات
+   - CTA Button: "اشترك الآن"
+   - Accent color: electric blue or neon cyan
+
+
+   **Tier 3 – Workshop**
+   - Title: "باقة الورش"
+   - Price: "79 ريال / شهر"
+   - Features:
+     - فحص غير محدود
+     - أعلى مستوى دقة
+     - أولوية دعم
+     - إدارة بيانات العملاء
+   - CTA Button: "اشترك الآن"
+   - More industrial/metallic styling
+
+
+3. **Lifetime Plan**
+   - Separate premium section
+   - Title: "اشتراك مدى الحياة"
+   - Price: "149–199 ريال"
+   - Highlight premium feel with glowing borders or chrome textures
+   - CTA Button: "شراء مدى الحياة"
+
+
+4. **Pay‑Per‑Scan Box**
+   - Small card beneath main tiers
+   - Title: "الدفع لكل فحص"
+   - Price: "3.99 ريال لكل عملية"
+   - Simple, lightweight design
+
+
+5. **Visual Style**
+   - Automotive-inspired UI
+   - Metallic silver (#C0C7CE), deep graphite black (#1B1B1E), electric blue (#1E74F2)
+   - Light chrome reflections
+   - Speedometer arcs, car‑grill patterns, carbon fiber textures (optional)
+   - Clean Arabic font (Noto Kufi Arabic / Cairo)
+
+
+6. **Footer Section**
+   - Notes: “يمكنك الإلغاء في أي وقت”
+   - Icons for secure payment: Apple Pay, Mada, Visa, STC Pay, Tabby, Tamara
+
+
+Keywords:
+Arabic pricing UI, automotive branding, RTL layout, metallic design, car-themed UI, chrome accents, high-tech pricing page, subscription cards, app pricing table, futuristic design, electric blue, speedometer UI elements.

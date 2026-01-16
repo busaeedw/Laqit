@@ -1,0 +1,87 @@
+**Design a modern, professional, and intuitive Arabic mobile application interface for an AI‑powered car identification and parts‑ordering app. The app allows users to upload a photo of part of a car, automatically detect the car’s make, model, and year, and identify visible car parts in the photo. The interface should be clean, minimalistic, and technology‑driven with Arabic right‑to‑left layout. Use colors that reflect trust and professionalism (deep blue, silver, dark grey). Include screens for:**
+- **Home screen with a large button for uploading or capturing a car photo.**
+- **AI analysis screen showing progress of identifying the car model.**
+- **Results screen displaying the detected car model (brand, type, year).**
+- **Highlighted detected car parts within the image using bounding boxes.**
+- **List of identified parts with photos, descriptions, prices, and "Add to Cart".**
+- **Shopping cart and checkout screen.**
+- **Navigation bar in Arabic: الرئيسية، تصوير، طلباتي، الحساب.**
+**Design characteristics:**
+- Arabic typography (Noto Kufi Arabic or Cairo font)
+- High-tech feel, smooth gradients, rounded cards - Icons inspired by automotive design
+- Use AI‑related visual cues (scanning grid, detection boxes, smart labels)
+
+**Keywords:**
+Arabic App Design, Car Recognition App, AI Detection UI, Auto Parts Finder, Modern Minimalist, Automotive Interface, RTL Layout, Professional Blue Theme.
+
+with Create a full automotive‑centric visual identity for an Arabic mobile app called "راصد القطع" (PartScope). 
+The app identifies the car’s make, model, and parts through an uploaded image, but the brand identity should lean heavily into automotive design language and mechanical aesthetics.
+
+
+Brand Direction:
+- Strong automotive personality
+- Precision and mechanical detailing
+- Metallic, chrome, and engine-inspired aesthetics
+- A sense of motion, engineering, and power
+- Still modern, clean, and minimal enough for a mobile app
+
+
+Key Deliverables:
+
+
+1. **Primary Logo**:
+   - A bold emblem inspired by car badges or grill emblems.
+   - Combine a car front silhouette + scanning frame + mechanical lines.
+   - Style references: car brand logos (Lexus, Audi, GMC, Ford) but simpler and geometric.
+   - Metallic or chrome finish option.
+
+
+2. **Arabic Logotype** ("راصد القطع"):
+   - Strong automotive feel.
+   - Use bold, modern Arabic type with sharp angles to resemble car logos.
+   - Optional English version: “PartScope”.
+
+
+3. **Color Palette**:
+   - Primary: metallic silver (#C0C7CE), graphite black (#1B1B1E)
+   - Secondary: engine red (#C8102E) or brake‑caliper yellow (#F2B705)
+   - Accents: AI scanning neon blue (#1E74F2)
+   - Overall: strong automotive colors like those used in sports cars and dashboards.
+
+
+4. **Visual Motifs / Patterns**:
+   - Tire‑tread patterns
+   - Car grill textures (honeycomb, mesh)
+   - Engine lines, pistons, sensors
+   - Speedometer arcs
+   - Carbon‑fiber texture (optional)
+
+
+5. **App Icon**:
+   - Simplified emblem inspired by a car badge.
+   - Strong contrast.
+   - May include a car outline + scanning symbol.
+
+
+6. **Typography**:
+   - Headings: bold, automotive‑style Arabic font with angular cuts.
+   - Body text: clean sans-serif for readability.
+
+
+7. **Usage Mockups**:
+   - Mobile app splash screen with the automotive identity
+   - Business card with metallic accents
+   - Car workshop banner / plate
+   - Social media template with car imagery
+   - App UI showing detection frames and automotive color palette
+
+
+Visual Style:
+- High contrast, metallic highlights
+- Strong edges and bold shapes
+- Inspired by sports cars, engines, dashboards, and car emblems
+- Mix of mechanical and futuristic AI scanning elements
+
+
+Keywords:
+automotive branding, Arabic app design, car parts identity, metallic logo, car emblem aesthetic, chrome logo, AI automotive detection, professional, bold, high-contrast, RTL design.
