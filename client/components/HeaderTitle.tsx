@@ -11,29 +11,30 @@ interface HeaderTitleProps {
 export function HeaderTitle({ title }: HeaderTitleProps) {
   return (
     <View style={styles.container}>
+      <ThemedText style={styles.title}>{title}</ThemedText>
       <Image
         source={require("../../assets/images/icon.png")}
         style={styles.icon}
         resizeMode="contain"
       />
-      <ThemedText style={styles.title}>{title}</ThemedText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "flex-start",
   },
   icon: {
     width: 28,
     height: 28,
-    marginRight: Spacing.sm,
+    marginLeft: Spacing.sm,
   },
   title: {
     fontSize: 17,
     fontWeight: "600",
+    fontFamily: "Cairo_700Bold",
   },
 });
