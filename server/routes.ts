@@ -12,9 +12,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { imageUri, carInfo } = req.body;
 
-      const systemPrompt = `You are an expert automotive parts identification system. Analyze the provided car image and identify:
-1. The car's make, model, and year (if visible and not already provided)
-2. All visible car parts that can be identified
+      const systemPrompt = `You are an expert automotive parts identification system with extensive knowledge of all car makes, models, and years. 
+
+CRITICAL INSTRUCTIONS:
+1. FIRST, carefully identify the car's make, model, and year by looking at:
+   - Badge/emblem on the car (Ford, Toyota, Honda, etc.)
+   - Body shape and design cues
+   - Distinctive features (grille design, taillight shape, etc.)
+   - Any visible text or logos
+   
+2. THEN identify all visible car parts that can be identified
+
+For the car identification:
+- Look carefully at the brand emblem/badge
+- If you see "Ford" logo, it's a Ford vehicle
+- If you see "FLEX" text, it's a Ford Flex
+- Be accurate - don't default to common cars like Toyota Camry
 
 For each identified part, provide:
 - name (English)

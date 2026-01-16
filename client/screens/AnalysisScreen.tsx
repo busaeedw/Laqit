@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -86,11 +87,33 @@ export default function AnalysisScreen() {
   useEffect(() => {
     const analyzeImage = async () => {
       try {
+        let base64Image = "";
+        
+        if (imageUri.startsWith("data:")) {
+          base64Image = imageUri;
+        } else if (imageUri.startsWith("http://") || imageUri.startsWith("https://")) {
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          base64Image = await new Promise((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } else {
+          const base64 = await FileSystem.readAsStringAsync(imageUri, {
+            encoding: "base64",
+          });
+          const extension = imageUri.split(".").pop()?.toLowerCase() || "jpeg";
+          const mimeType = extension === "png" ? "image/png" : "image/jpeg";
+          base64Image = `data:${mimeType};base64,${base64}`;
+        }
+
         const response = await fetch(new URL("/api/analyze", getApiUrl()).href, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            imageUri,
+            imageUri: base64Image,
             carInfo,
           }),
         });
@@ -100,42 +123,25 @@ export default function AnalysisScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         const detectedCarInfo: CarInfo = data.carInfo || carInfo || {
-          make: "Toyota",
-          makeAr: "تويوتا",
-          model: "Camry",
-          modelAr: "كامري",
-          year: "2023",
+          make: "Unknown",
+          makeAr: "غير معروف",
+          model: "Unknown",
+          modelAr: "غير معروف",
+          year: "---",
         };
 
-        const detectedParts: DetectedPart[] = data.parts || [
-          {
-            id: "1",
-            name: "Headlight Assembly",
-            nameAr: "مجموعة المصباح الأمامي",
-            description: "LED Headlight with DRL",
-            descriptionAr: "مصباح LED مع إضاءة نهارية",
-            price: 850,
-            boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
-          },
-          {
-            id: "2",
-            name: "Front Bumper",
-            nameAr: "الصدام الأمامي",
-            description: "OEM Style Front Bumper",
-            descriptionAr: "صدام أمامي أصلي",
-            price: 1200,
-            boundingBox: { x: 0.1, y: 0.5, width: 0.8, height: 0.15 },
-          },
-          {
-            id: "3",
-            name: "Hood",
-            nameAr: "غطاء المحرك",
-            description: "Steel Hood Panel",
-            descriptionAr: "غطاء محرك من الصلب",
-            price: 950,
-            boundingBox: { x: 0.2, y: 0.3, width: 0.6, height: 0.2 },
-          },
-        ];
+        const detectedParts: DetectedPart[] = (data.parts || []).map((part: any, index: number) => ({
+          id: part.id || String(index + 1),
+          name: part.name || "Unknown Part",
+          nameAr: part.nameAr || "قطعة غير معروفة",
+          description: part.description || "",
+          descriptionAr: part.descriptionAr || "",
+          primaryUse: part.primaryUse || "",
+          primaryUseAr: part.primaryUseAr || "",
+          price: part.price || 0,
+          confidence: part.confidence || 75,
+          boundingBox: part.boundingBox || { x: 0.1, y: 0.1, width: 0.3, height: 0.2 },
+        }));
 
         navigation.replace("Results", {
           imageUri,
@@ -145,43 +151,28 @@ export default function AnalysisScreen() {
       } catch (error) {
         console.error("Analysis failed:", error);
         
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
         const fallbackCarInfo: CarInfo = carInfo || {
-          make: "Toyota",
-          makeAr: "تويوتا",
-          model: "Camry",
-          modelAr: "كامري",
-          year: "2023",
+          make: "Unknown",
+          makeAr: "غير معروف",
+          model: "Unknown",
+          modelAr: "غير معروف",
+          year: "---",
         };
 
         const fallbackParts: DetectedPart[] = [
           {
             id: "1",
-            name: "Headlight Assembly",
-            nameAr: "مجموعة المصباح الأمامي",
-            description: "LED Headlight with DRL",
-            descriptionAr: "مصباح LED مع إضاءة نهارية",
-            price: 850,
+            name: "Unknown Part",
+            nameAr: "قطعة غير محددة",
+            description: "Part could not be identified",
+            descriptionAr: "لم نتمكن من تحديد القطعة",
+            primaryUse: "Unknown usage",
+            primaryUseAr: "الاستخدام غير معروف",
+            price: 0,
+            confidence: 0,
             boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
-          },
-          {
-            id: "2",
-            name: "Front Bumper",
-            nameAr: "الصدام الأمامي",
-            description: "OEM Style Front Bumper",
-            descriptionAr: "صدام أمامي أصلي",
-            price: 1200,
-            boundingBox: { x: 0.1, y: 0.5, width: 0.8, height: 0.15 },
-          },
-          {
-            id: "3",
-            name: "Hood",
-            nameAr: "غطاء المحرك",
-            description: "Steel Hood Panel",
-            descriptionAr: "غطاء محرك من الصلب",
-            price: 950,
-            boundingBox: { x: 0.2, y: 0.3, width: 0.6, height: 0.2 },
           },
         ];
 
@@ -193,7 +184,7 @@ export default function AnalysisScreen() {
       }
     };
 
-    const timer = setTimeout(analyzeImage, 3000);
+    const timer = setTimeout(analyzeImage, 2000);
     return () => clearTimeout(timer);
   }, [imageUri, carInfo, navigation]);
 
