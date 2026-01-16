@@ -92,69 +92,25 @@ Return JSON in this format:
       const result = JSON.parse(content);
 
       res.json(result);
-    } catch (error) {
-      console.error("Analysis error:", error);
+    } catch (error: any) {
+      console.error("Analysis error details:", {
+        message: error?.message,
+        status: error?.status,
+        code: error?.code,
+        type: error?.type,
+      });
       
-      const fallbackCarInfo = req.body.carInfo || {
-        make: "Toyota",
-        makeAr: "تويوتا",
-        model: "Camry",
-        modelAr: "كامري",
-        year: "2023",
-      };
-
-      res.json({
-        carInfo: fallbackCarInfo,
-        parts: [
-          {
-            id: "1",
-            name: "Headlight Assembly",
-            nameAr: "مجموعة المصباح الأمامي",
-            description: "LED Headlight with DRL",
-            descriptionAr: "مصباح LED مع إضاءة نهارية",
-            primaryUse: "Provides illumination for night driving and visibility",
-            primaryUseAr: "توفير الإضاءة للقيادة الليلية والرؤية",
-            price: 850,
-            confidence: 94,
-            boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
-          },
-          {
-            id: "2",
-            name: "Front Bumper",
-            nameAr: "الصدام الأمامي",
-            description: "OEM Style Front Bumper",
-            descriptionAr: "صدام أمامي أصلي",
-            primaryUse: "Absorbs impact and protects the front of the vehicle",
-            primaryUseAr: "يمتص الصدمات ويحمي مقدمة السيارة",
-            price: 1200,
-            confidence: 89,
-            boundingBox: { x: 0.1, y: 0.5, width: 0.8, height: 0.15 },
-          },
-          {
-            id: "3",
-            name: "Hood",
-            nameAr: "غطاء المحرك",
-            description: "Steel Hood Panel",
-            descriptionAr: "غطاء محرك من الصلب",
-            primaryUse: "Covers and protects the engine compartment",
-            primaryUseAr: "يغطي ويحمي حجرة المحرك",
-            price: 950,
-            confidence: 91,
-            boundingBox: { x: 0.2, y: 0.3, width: 0.6, height: 0.2 },
-          },
-          {
-            id: "4",
-            name: "Front Grille",
-            nameAr: "شبكة المقدمة",
-            description: "Chrome Accent Front Grille",
-            descriptionAr: "شبكة أمامية بلمسات كروم",
-            primaryUse: "Allows airflow to the radiator and engine",
-            primaryUseAr: "يسمح بتدفق الهواء إلى الرديتر والمحرك",
-            price: 450,
-            confidence: 87,
-            boundingBox: { x: 0.35, y: 0.45, width: 0.3, height: 0.1 },
-          },
-        ],
+      res.status(500).json({
+        error: true,
+        message: "فشل في تحليل الصورة. يرجى المحاولة مرة أخرى.",
+        carInfo: {
+          make: "Unknown",
+          makeAr: "غير معروف",
+          model: "Unknown",
+          modelAr: "غير معروف",
+          year: "---",
+        },
+        parts: [],
       });
     }
   });
