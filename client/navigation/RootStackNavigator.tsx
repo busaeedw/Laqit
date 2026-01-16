@@ -7,6 +7,7 @@ import AnalysisScreen from "@/screens/AnalysisScreen";
 import ResultsScreen from "@/screens/ResultsScreen";
 import CartScreen from "@/screens/CartScreen";
 import PricingScreen from "@/screens/PricingScreen";
+import ExpertScreen from "@/screens/ExpertScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 
 export type CarInfo = {
@@ -23,7 +24,10 @@ export type DetectedPart = {
   nameAr: string;
   description: string;
   descriptionAr: string;
+  primaryUse: string;
+  primaryUseAr: string;
   price: number;
+  confidence: number;
   boundingBox: { x: number; y: number; width: number; height: number };
 };
 
@@ -35,6 +39,7 @@ export type RootStackParamList = {
   Results: { imageUri: string; carInfo: CarInfo; parts: DetectedPart[] };
   Cart: undefined;
   Pricing: undefined;
+  Expert: { partName?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -94,6 +99,14 @@ export default function RootStackNavigator() {
         component={PricingScreen}
         options={{
           headerTitle: "الباقات والأسعار",
+        }}
+      />
+      <Stack.Screen
+        name="Expert"
+        component={ExpertScreen}
+        options={{
+          presentation: "modal",
+          headerTitle: "تواصل مع خبير",
         }}
       />
     </Stack.Navigator>

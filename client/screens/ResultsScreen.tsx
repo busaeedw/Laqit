@@ -28,6 +28,28 @@ type ResultsScreenRouteProp = RouteProp<RootStackParamList, "Results">;
 const { width: screenWidth } = Dimensions.get("window");
 const imageWidth = screenWidth - Spacing.lg * 2;
 
+function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const { theme } = useTheme();
+  
+  const getConfidenceConfig = () => {
+    if (confidence >= 90) return { label: "دقة عالية جداً", color: theme.success };
+    if (confidence >= 75) return { label: "دقة عالية", color: "#22C55E" };
+    if (confidence >= 60) return { label: "دقة متوسطة", color: theme.warning };
+    return { label: "دقة منخفضة", color: theme.error };
+  };
+
+  const config = getConfidenceConfig();
+
+  return (
+    <View style={[styles.confidenceBadge, { backgroundColor: config.color + "20" }]}>
+      <View style={[styles.confidenceDot, { backgroundColor: config.color }]} />
+      <ThemedText style={[styles.confidenceText, { color: config.color, fontFamily: "Cairo_600SemiBold" }]}>
+        {confidence}% - {config.label}
+      </ThemedText>
+    </View>
+  );
+}
+
 export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -52,6 +74,11 @@ export default function ResultsScreen() {
   const handleViewCart = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     navigation.navigate("Cart");
+  };
+
+  const handleConnectExpert = (partName?: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate("Expert", { partName });
   };
 
   const renderBoundingBoxes = () => (
@@ -115,6 +142,33 @@ export default function ResultsScreen() {
         </View>
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.duration(500).delay(150)}>
+        <Pressable
+          onPress={() => handleConnectExpert()}
+          style={({ pressed }) => [
+            styles.expertCard,
+            { 
+              backgroundColor: theme.warning + "15",
+              borderColor: theme.warning + "30",
+              opacity: pressed ? 0.9 : 1,
+            },
+          ]}
+        >
+          <View style={[styles.expertIcon, { backgroundColor: theme.warning + "20" }]}>
+            <Feather name="users" size={24} color={theme.warning} />
+          </View>
+          <View style={styles.expertContent}>
+            <ThemedText style={[styles.expertTitle, { fontFamily: "Cairo_700Bold" }]}>
+              هل تحتاج مساعدة احترافية؟
+            </ThemedText>
+            <ThemedText style={[styles.expertSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              تواصل مع خبير بضغطة واحدة
+            </ThemedText>
+          </View>
+          <Feather name="chevron-left" size={20} color={theme.warning} />
+        </Pressable>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.duration(500).delay(200)}>
         <View style={styles.sectionHeader}>
           <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
@@ -144,39 +198,85 @@ export default function ResultsScreen() {
             },
           ]}
         >
-          <View style={styles.partCardContent}>
-            <View style={[styles.partIcon, { backgroundColor: theme.primary + "15" }]}>
-              <Feather name="box" size={24} color={theme.primary} />
-            </View>
-            <View style={styles.partInfo}>
-              <ThemedText style={[styles.partName, { fontFamily: "Cairo_700Bold" }]}>
-                {item.nameAr}
-              </ThemedText>
-              <ThemedText style={[styles.partDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {item.descriptionAr}
-              </ThemedText>
-              <View style={styles.partPriceRow}>
-                <ThemedText style={[styles.partPrice, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-                  {item.price} ريال
+          <View style={styles.partCardHeader}>
+            <View style={styles.partCardContent}>
+              <View style={[styles.partIcon, { backgroundColor: theme.primary + "15" }]}>
+                <Feather name="box" size={24} color={theme.primary} />
+              </View>
+              <View style={styles.partInfo}>
+                <ThemedText style={[styles.partName, { fontFamily: "Cairo_700Bold" }]}>
+                  {item.nameAr}
+                </ThemedText>
+                <ThemedText style={[styles.partEnglishName, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                  {item.name}
                 </ThemedText>
               </View>
             </View>
+            <ConfidenceBadge confidence={item.confidence} />
           </View>
-          <Pressable
-            onPress={() => handleAddToCart(item)}
-            style={({ pressed }) => [
-              styles.addButton,
-              { 
-                backgroundColor: theme.primary,
-                transform: [{ scale: pressed ? 0.95 : 1 }],
-              },
-            ]}
-          >
-            <Feather name="plus" size={18} color="#FFFFFF" />
-            <ThemedText style={[styles.addButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-              إضافة للسلة
-            </ThemedText>
-          </Pressable>
+
+          <View style={[styles.partDivider, { backgroundColor: theme.border }]} />
+
+          <View style={styles.partDetails}>
+            <View style={styles.partDetailRow}>
+              <Feather name="info" size={14} color={theme.textSecondary} />
+              <ThemedText style={[styles.partDetailLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                الوصف:
+              </ThemedText>
+              <ThemedText style={[styles.partDetailValue, { fontFamily: "Cairo_400Regular" }]}>
+                {item.descriptionAr}
+              </ThemedText>
+            </View>
+            <View style={styles.partDetailRow}>
+              <Feather name="tool" size={14} color={theme.textSecondary} />
+              <ThemedText style={[styles.partDetailLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                الاستخدام:
+              </ThemedText>
+              <ThemedText style={[styles.partDetailValue, { fontFamily: "Cairo_400Regular" }]}>
+                {item.primaryUseAr}
+              </ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.partFooter}>
+            <View style={styles.partPriceRow}>
+              <ThemedText style={[styles.partPrice, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                {item.price} ريال
+              </ThemedText>
+              <ThemedText style={[styles.partPriceLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                السعر التقديري
+              </ThemedText>
+            </View>
+            <View style={styles.partActions}>
+              <Pressable
+                onPress={() => handleConnectExpert(item.nameAr)}
+                style={({ pressed }) => [
+                  styles.expertButton,
+                  { 
+                    backgroundColor: theme.warning + "15",
+                    transform: [{ scale: pressed ? 0.95 : 1 }],
+                  },
+                ]}
+              >
+                <Feather name="phone" size={16} color={theme.warning} />
+              </Pressable>
+              <Pressable
+                onPress={() => handleAddToCart(item)}
+                style={({ pressed }) => [
+                  styles.addButton,
+                  { 
+                    backgroundColor: theme.primary,
+                    transform: [{ scale: pressed ? 0.95 : 1 }],
+                  },
+                ]}
+              >
+                <Feather name="plus" size={16} color="#FFFFFF" />
+                <ThemedText style={[styles.addButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                  إضافة للسلة
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </Pressable>
     </Animated.View>
@@ -307,6 +407,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "right",
   },
+  expertCard: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    gap: Spacing.md,
+  },
+  expertIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  expertContent: {
+    flex: 1,
+    gap: 2,
+  },
+  expertTitle: {
+    fontSize: 15,
+    textAlign: "right",
+  },
+  expertSubtitle: {
+    fontSize: 13,
+    textAlign: "right",
+  },
   sectionHeader: {
     gap: Spacing.xs,
   },
@@ -323,9 +450,15 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     gap: Spacing.md,
   },
+  partCardHeader: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
   partCardContent: {
     flexDirection: "row-reverse",
     gap: Spacing.md,
+    flex: 1,
   },
   partIcon: {
     width: 50,
@@ -336,35 +469,89 @@ const styles = StyleSheet.create({
   },
   partInfo: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   partName: {
     fontSize: 16,
     textAlign: "right",
   },
-  partDescription: {
+  partEnglishName: {
+    fontSize: 12,
+    textAlign: "right",
+  },
+  confidenceBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  confidenceDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  confidenceText: {
+    fontSize: 11,
+  },
+  partDivider: {
+    height: 1,
+  },
+  partDetails: {
+    gap: Spacing.sm,
+  },
+  partDetailRow: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+  },
+  partDetailLabel: {
+    fontSize: 13,
+  },
+  partDetailValue: {
+    flex: 1,
     fontSize: 13,
     textAlign: "right",
   },
-  partPriceRow: {
+  partFooter: {
     flexDirection: "row-reverse",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 4,
+  },
+  partPriceRow: {
+    gap: 2,
   },
   partPrice: {
-    fontSize: 16,
+    fontSize: 18,
+    textAlign: "right",
+  },
+  partPriceLabel: {
+    fontSize: 11,
+    textAlign: "right",
+  },
+  partActions: {
+    flexDirection: "row-reverse",
+    gap: Spacing.sm,
+  },
+  expertButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
   },
   addButton: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "center",
     gap: Spacing.xs,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.sm,
   },
   addButtonText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 13,
   },
   cartBar: {
     position: "absolute",

@@ -25,16 +25,94 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Colors } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type RecentScan = {
+interface CarBrand {
   id: string;
-  imageUri: string;
-  carMake: string;
-  carModel: string;
-  date: string;
-  partsCount: number;
-};
+  name: string;
+  nameAr: string;
+  color: string;
+}
 
-const mockRecentScans: RecentScan[] = [];
+const carBrands: CarBrand[] = [
+  { id: "toyota", name: "Toyota", nameAr: "تويوتا", color: "#EB0A1E" },
+  { id: "honda", name: "Honda", nameAr: "هوندا", color: "#CC0000" },
+  { id: "nissan", name: "Nissan", nameAr: "نيسان", color: "#C3002F" },
+  { id: "hyundai", name: "Hyundai", nameAr: "هيونداي", color: "#002C5F" },
+  { id: "mercedes", name: "Mercedes", nameAr: "مرسيدس", color: "#333333" },
+  { id: "bmw", name: "BMW", nameAr: "بي إم دبليو", color: "#0066B1" },
+];
+
+interface HowToStep {
+  id: string;
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  description: string;
+}
+
+const howToSteps: HowToStep[] = [
+  {
+    id: "1",
+    icon: "camera",
+    title: "التقط صورة",
+    description: "صور قطعة السيارة أو اختر صورة من المعرض",
+  },
+  {
+    id: "2",
+    icon: "truck",
+    title: "حدد السيارة",
+    description: "اختر الشركة والموديل وسنة الصنع للحصول على نتائج أدق",
+  },
+  {
+    id: "3",
+    icon: "cpu",
+    title: "تحليل بالذكاء الاصطناعي",
+    description: "سيقوم الذكاء الاصطناعي بتحليل الصورة وتحديد القطع",
+  },
+  {
+    id: "4",
+    icon: "shopping-cart",
+    title: "اطلب القطع",
+    description: "أضف القطع للسلة واطلبها مباشرة أو تواصل مع خبير",
+  },
+];
+
+interface Feature {
+  id: string;
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  description: string;
+  color: string;
+}
+
+const features: Feature[] = [
+  {
+    id: "ai",
+    icon: "cpu",
+    title: "تحديد بالذكاء الاصطناعي",
+    description: "تقنية متقدمة لتحديد القطع بدقة عالية",
+    color: "#1E74F2",
+  },
+  {
+    id: "database",
+    icon: "database",
+    title: "قاعدة بيانات شاملة",
+    description: "ملايين القطع من جميع الماركات",
+    color: "#10B981",
+  },
+  {
+    id: "expert",
+    icon: "users",
+    title: "دعم الخبراء",
+    description: "تواصل مع ميكانيكيين محترفين",
+    color: "#F59E0B",
+  },
+  {
+    id: "shopping",
+    icon: "shopping-bag",
+    title: "تسوق فوري",
+    description: "اطلب القطع من موردين موثوقين",
+    color: "#C8102E",
+  },
+];
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -48,9 +126,17 @@ export default function HomeScreen() {
     navigation.navigate("Camera");
   };
 
-  const handleViewPricing = () => {
+  const handleSelectBrand = (brand: CarBrand) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate("Pricing");
+    navigation.navigate("Camera", {
+      carInfo: {
+        make: brand.name,
+        makeAr: brand.nameAr,
+        model: "",
+        modelAr: "",
+        year: "",
+      },
+    });
   };
 
   const renderHeader = () => (
@@ -60,27 +146,44 @@ export default function HomeScreen() {
           <View style={styles.heroContent}>
             <View style={styles.heroTextContainer}>
               <ThemedText style={[styles.heroTitle, { fontFamily: "Cairo_700Bold" }]}>
-                اكتشف قطع سيارتك بالذكاء الاصطناعي
+                اكتشف وحدد قطع السيارات بدقة الذكاء الاصطناعي
               </ThemedText>
               <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                صور أي جزء من سيارتك وسنتعرف عليه فوراً
+                صور أي قطعة وسنحددها لك فوراً مع تفاصيل كاملة ومستوى الثقة
               </ThemedText>
             </View>
-            <Pressable
-              onPress={handleStartScan}
-              style={({ pressed }) => [
-                styles.scanButton,
-                { 
-                  backgroundColor: theme.primary,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                },
-              ]}
-            >
-              <Feather name="camera" size={24} color="#FFFFFF" />
-              <ThemedText style={[styles.scanButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                ابدأ الفحص
-              </ThemedText>
-            </Pressable>
+            <View style={styles.heroButtons}>
+              <Pressable
+                onPress={handleStartScan}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  { 
+                    backgroundColor: theme.primary,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  },
+                ]}
+              >
+                <Feather name="camera" size={20} color="#FFFFFF" />
+                <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                  التقط صورة
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={handleStartScan}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  { 
+                    backgroundColor: theme.backgroundSecondary,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  },
+                ]}
+              >
+                <Feather name="upload" size={20} color={theme.text} />
+                <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                  ارفع صورة
+                </ThemedText>
+              </Pressable>
+            </View>
           </View>
           <View style={[styles.heroDecoration, { backgroundColor: theme.primary + "15" }]}>
             <Feather name="zap" size={60} color={theme.primary} style={{ opacity: 0.3 }} />
@@ -89,42 +192,96 @@ export default function HomeScreen() {
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.primary + "20" }]}>
-              <Feather name="cpu" size={20} color={theme.primary} />
+        <View style={styles.sectionHeader}>
+          <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
+            كيفية الاستخدام
+          </ThemedText>
+        </View>
+        <View style={styles.stepsContainer}>
+          {howToSteps.map((step, index) => (
+            <View key={step.id} style={[styles.stepCard, { backgroundColor: theme.backgroundDefault }]}>
+              <View style={[styles.stepNumber, { backgroundColor: theme.primary }]}>
+                <ThemedText style={[styles.stepNumberText, { fontFamily: "Cairo_700Bold" }]}>
+                  {index + 1}
+                </ThemedText>
+              </View>
+              <View style={[styles.stepIcon, { backgroundColor: theme.primary + "15" }]}>
+                <Feather name={step.icon} size={24} color={theme.primary} />
+              </View>
+              <View style={styles.stepContent}>
+                <ThemedText style={[styles.stepTitle, { fontFamily: "Cairo_700Bold" }]}>
+                  {step.title}
+                </ThemedText>
+                <ThemedText style={[styles.stepDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                  {step.description}
+                </ThemedText>
+              </View>
             </View>
-            <ThemedText style={[styles.statValue, { fontFamily: "Cairo_700Bold" }]}>AI</ThemedText>
-            <ThemedText style={[styles.statLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              تحليل ذكي
-            </ThemedText>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.accent + "20" }]}>
-              <Feather name="clock" size={20} color={theme.accent} />
-            </View>
-            <ThemedText style={[styles.statValue, { fontFamily: "Cairo_700Bold" }]}>ثوانٍ</ThemedText>
-            <ThemedText style={[styles.statLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              نتائج فورية
-            </ThemedText>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.success + "20" }]}>
-              <Feather name="check-circle" size={20} color={theme.success} />
-            </View>
-            <ThemedText style={[styles.statValue, { fontFamily: "Cairo_700Bold" }]}>دقة</ThemedText>
-            <ThemedText style={[styles.statLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              عالية جداً
-            </ThemedText>
-          </View>
+          ))}
         </View>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(600).delay(300)}>
+        <View style={styles.sectionHeader}>
+          <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
+            البحث حسب الماركة
+          </ThemedText>
+        </View>
+        <View style={styles.brandsGrid}>
+          {carBrands.map((brand) => (
+            <Pressable
+              key={brand.id}
+              onPress={() => handleSelectBrand(brand)}
+              style={({ pressed }) => [
+                styles.brandCard,
+                { 
+                  backgroundColor: theme.backgroundDefault,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <View style={[styles.brandIcon, { backgroundColor: brand.color + "20" }]}>
+                <Feather name="truck" size={20} color={brand.color} />
+              </View>
+              <ThemedText style={[styles.brandName, { fontFamily: "Cairo_600SemiBold" }]}>
+                {brand.nameAr}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(600).delay(400)}>
+        <View style={styles.sectionHeader}>
+          <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
+            مميزات التطبيق
+          </ThemedText>
+        </View>
+        <View style={styles.featuresGrid}>
+          {features.map((feature) => (
+            <View
+              key={feature.id}
+              style={[styles.featureCard, { backgroundColor: theme.backgroundDefault }]}
+            >
+              <View style={[styles.featureIcon, { backgroundColor: feature.color + "20" }]}>
+                <Feather name={feature.icon} size={24} color={feature.color} />
+              </View>
+              <ThemedText style={[styles.featureTitle, { fontFamily: "Cairo_700Bold" }]}>
+                {feature.title}
+              </ThemedText>
+              <ThemedText style={[styles.featureDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                {feature.description}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable
-          onPress={handleViewPricing}
+          onPress={() => navigation.navigate("Pricing")}
           style={({ pressed }) => [
-            styles.promoCard,
+            styles.ctaCard,
             { 
               backgroundColor: isDark ? "#1E2B3A" : "#E8F4FD",
               opacity: pressed ? 0.9 : 1,
@@ -132,71 +289,23 @@ export default function HomeScreen() {
             },
           ]}
         >
-          <View style={styles.promoContent}>
-            <View style={[styles.promoBadge, { backgroundColor: theme.accentYellow }]}>
-              <ThemedText style={[styles.promoBadgeText, { color: "#1B1B1E", fontFamily: "Cairo_700Bold" }]}>
-                جديد
+          <View style={styles.ctaContent}>
+            <View style={[styles.ctaBadge, { backgroundColor: theme.accentYellow }]}>
+              <ThemedText style={[styles.ctaBadgeText, { color: "#1B1B1E", fontFamily: "Cairo_700Bold" }]}>
+                عرض خاص
               </ThemedText>
             </View>
-            <ThemedText style={[styles.promoTitle, { fontFamily: "Cairo_700Bold" }]}>
-              اشترك الآن واحصل على خصم 20%
+            <ThemedText style={[styles.ctaTitle, { fontFamily: "Cairo_700Bold" }]}>
+              اشترك الآن واحصل على فحص غير محدود
             </ThemedText>
-            <ThemedText style={[styles.promoSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              باقات تناسب جميع احتياجاتك
+            <ThemedText style={[styles.ctaSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              ابدأ الآن بخصم 20% على جميع الباقات
             </ThemedText>
           </View>
           <Feather name="chevron-left" size={24} color={theme.primary} />
         </Pressable>
       </Animated.View>
-
-      <Animated.View entering={FadeInDown.duration(600).delay(400)}>
-        <View style={styles.sectionHeader}>
-          <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
-            عمليات الفحص الأخيرة
-          </ThemedText>
-        </View>
-      </Animated.View>
     </View>
-  );
-
-  const renderEmptyState = () => (
-    <Animated.View 
-      entering={FadeIn.duration(600).delay(500)}
-      style={[styles.emptyState, { backgroundColor: theme.backgroundDefault }]}
-    >
-      <View style={[styles.emptyIconContainer, { backgroundColor: theme.backgroundSecondary }]}>
-        <Feather name="search" size={48} color={theme.textSecondary} />
-      </View>
-      <ThemedText style={[styles.emptyTitle, { fontFamily: "Cairo_700Bold" }]}>
-        لا توجد عمليات فحص بعد
-      </ThemedText>
-      <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-        ابدأ بتصوير قطعة من سيارتك للتعرف عليها
-      </ThemedText>
-    </Animated.View>
-  );
-
-  const renderScanItem = ({ item, index }: { item: RecentScan; index: number }) => (
-    <Animated.View entering={FadeInDown.duration(400).delay(100 * index)}>
-      <Card style={styles.scanCard}>
-        <Image source={{ uri: item.imageUri }} style={styles.scanImage} />
-        <View style={styles.scanInfo}>
-          <ThemedText style={[styles.scanCarName, { fontFamily: "Cairo_700Bold" }]}>
-            {item.carMake} {item.carModel}
-          </ThemedText>
-          <ThemedText style={[styles.scanDate, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-            {item.date}
-          </ThemedText>
-          <View style={styles.scanParts}>
-            <Feather name="box" size={14} color={theme.primary} />
-            <ThemedText style={[styles.scanPartsText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
-              {item.partsCount} قطعة
-            </ThemedText>
-          </View>
-        </View>
-        <Feather name="chevron-left" size={20} color={theme.textSecondary} />
-      </Card>
-    </Animated.View>
   );
 
   return (
@@ -208,11 +317,10 @@ export default function HomeScreen() {
         paddingHorizontal: Spacing.lg,
       }}
       scrollIndicatorInsets={{ bottom: insets.bottom }}
-      data={mockRecentScans}
-      keyExtractor={(item) => item.id}
-      renderItem={renderScanItem}
+      data={[]}
+      keyExtractor={() => "header"}
+      renderItem={() => null}
       ListHeaderComponent={renderHeader}
-      ListEmptyComponent={renderEmptyState}
       showsVerticalScrollIndicator={false}
     />
   );
@@ -223,8 +331,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    gap: Spacing.lg,
-    marginBottom: Spacing.lg,
+    gap: Spacing.xl,
   },
   heroCard: {
     borderRadius: BorderRadius.lg,
@@ -237,15 +344,16 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   heroTextContainer: {
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   heroTitle: {
-    fontSize: 24,
-    lineHeight: 34,
+    fontSize: 22,
+    lineHeight: 32,
     textAlign: "right",
   },
   heroSubtitle: {
     fontSize: 14,
+    lineHeight: 22,
     textAlign: "right",
   },
   heroDecoration: {
@@ -258,12 +366,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  scanButton: {
+  heroButtons: {
+    flexDirection: "row-reverse",
+    gap: Spacing.md,
+  },
+  primaryButton: {
+    flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
-    paddingVertical: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
     shadowColor: "#1E74F2",
     shadowOffset: { width: 0, height: 4 },
@@ -271,123 +384,148 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  scanButtonText: {
+  primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 15,
   },
-  statsRow: {
-    flexDirection: "row-reverse",
-    gap: Spacing.sm,
-  },
-  statCard: {
+  secondaryButton: {
     flex: 1,
+    flexDirection: "row-reverse",
     alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
-  },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     justifyContent: "center",
-    alignItems: "center",
-    marginBottom: Spacing.xs,
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
-  statValue: {
-    fontSize: 16,
+  secondaryButtonText: {
+    fontSize: 15,
   },
-  statLabel: {
-    fontSize: 11,
-    textAlign: "center",
+  sectionHeader: {
+    marginBottom: Spacing.md,
   },
-  promoCard: {
+  sectionTitle: {
+    fontSize: 18,
+    textAlign: "right",
+  },
+  stepsContainer: {
+    gap: Spacing.md,
+  },
+  stepCard: {
     flexDirection: "row-reverse",
     alignItems: "center",
     padding: Spacing.lg,
     borderRadius: BorderRadius.md,
     gap: Spacing.md,
   },
-  promoContent: {
+  stepNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "absolute",
+    top: -6,
+    right: -6,
+  },
+  stepNumberText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+  },
+  stepIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stepContent: {
+    flex: 1,
+    gap: 2,
+  },
+  stepTitle: {
+    fontSize: 15,
+    textAlign: "right",
+  },
+  stepDescription: {
+    fontSize: 13,
+    textAlign: "right",
+  },
+  brandsGrid: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  brandCard: {
+    width: "31%",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.xs,
+  },
+  brandIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  brandName: {
+    fontSize: 12,
+    textAlign: "center",
+  },
+  featuresGrid: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: Spacing.md,
+  },
+  featureCard: {
+    width: "48%",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  featureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  featureTitle: {
+    fontSize: 14,
+    textAlign: "right",
+  },
+  featureDescription: {
+    fontSize: 12,
+    textAlign: "right",
+    lineHeight: 18,
+  },
+  ctaCard: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.md,
+  },
+  ctaContent: {
     flex: 1,
     gap: Spacing.xs,
   },
-  promoBadge: {
+  ctaBadge: {
     alignSelf: "flex-end",
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: BorderRadius.xs,
   },
-  promoBadgeText: {
+  ctaBadgeText: {
     fontSize: 10,
   },
-  promoTitle: {
+  ctaTitle: {
     fontSize: 15,
     textAlign: "right",
   },
-  promoSubtitle: {
+  ctaSubtitle: {
     fontSize: 12,
     textAlign: "right",
-  },
-  sectionHeader: {
-    marginTop: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    textAlign: "right",
-  },
-  emptyState: {
-    alignItems: "center",
-    padding: Spacing["3xl"],
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.md,
-  },
-  emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: "center",
-  },
-  scanCard: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  scanImage: {
-    width: 60,
-    height: 60,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: "#E5E7EB",
-  },
-  scanInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  scanCarName: {
-    fontSize: 15,
-    textAlign: "right",
-  },
-  scanDate: {
-    fontSize: 12,
-    textAlign: "right",
-  },
-  scanParts: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 4,
-  },
-  scanPartsText: {
-    fontSize: 12,
   },
 });

@@ -12,7 +12,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { imageUri, carInfo } = req.body;
 
-      const systemPrompt = `You are an automotive parts identification expert. Analyze the provided car image and identify:
+      const systemPrompt = `You are an expert automotive parts identification system. Analyze the provided car image and identify:
 1. The car's make, model, and year (if visible and not already provided)
 2. All visible car parts that can be identified
 
@@ -21,7 +21,10 @@ For each identified part, provide:
 - nameAr (Arabic name)
 - description (English)
 - descriptionAr (Arabic description)
+- primaryUse (English - what this part is used for)
+- primaryUseAr (Arabic - what this part is used for)
 - estimated price in SAR (Saudi Riyals)
+- confidence level (0-100 percentage of how confident you are in the identification)
 - approximate bounding box location (x, y, width, height as percentages 0-1)
 
 Return JSON in this format:
@@ -40,7 +43,10 @@ Return JSON in this format:
       "nameAr": "مجموعة المصباح الأمامي",
       "description": "LED Headlight with DRL",
       "descriptionAr": "مصباح LED مع إضاءة نهارية",
+      "primaryUse": "Provides illumination for night driving and visibility",
+      "primaryUseAr": "توفير الإضاءة للقيادة الليلية والرؤية",
       "price": 850,
+      "confidence": 92,
       "boundingBox": { "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.2 }
     }
   ]
@@ -93,7 +99,10 @@ Return JSON in this format:
             nameAr: "مجموعة المصباح الأمامي",
             description: "LED Headlight with DRL",
             descriptionAr: "مصباح LED مع إضاءة نهارية",
+            primaryUse: "Provides illumination for night driving and visibility",
+            primaryUseAr: "توفير الإضاءة للقيادة الليلية والرؤية",
             price: 850,
+            confidence: 94,
             boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
           },
           {
@@ -102,7 +111,10 @@ Return JSON in this format:
             nameAr: "الصدام الأمامي",
             description: "OEM Style Front Bumper",
             descriptionAr: "صدام أمامي أصلي",
+            primaryUse: "Absorbs impact and protects the front of the vehicle",
+            primaryUseAr: "يمتص الصدمات ويحمي مقدمة السيارة",
             price: 1200,
+            confidence: 89,
             boundingBox: { x: 0.1, y: 0.5, width: 0.8, height: 0.15 },
           },
           {
@@ -111,8 +123,23 @@ Return JSON in this format:
             nameAr: "غطاء المحرك",
             description: "Steel Hood Panel",
             descriptionAr: "غطاء محرك من الصلب",
+            primaryUse: "Covers and protects the engine compartment",
+            primaryUseAr: "يغطي ويحمي حجرة المحرك",
             price: 950,
+            confidence: 91,
             boundingBox: { x: 0.2, y: 0.3, width: 0.6, height: 0.2 },
+          },
+          {
+            id: "4",
+            name: "Front Grille",
+            nameAr: "شبكة المقدمة",
+            description: "Chrome Accent Front Grille",
+            descriptionAr: "شبكة أمامية بلمسات كروم",
+            primaryUse: "Allows airflow to the radiator and engine",
+            primaryUseAr: "يسمح بتدفق الهواء إلى الرديتر والمحرك",
+            price: 450,
+            confidence: 87,
+            boundingBox: { x: 0.35, y: 0.45, width: 0.3, height: 0.1 },
           },
         ],
       });
