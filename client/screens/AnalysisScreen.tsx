@@ -95,8 +95,8 @@ export default function AnalysisScreen() {
         } else {
           const manipulatedImage = await ImageManipulator.manipulateAsync(
             imageUri,
-            [{ resize: { width: 1024 } }],
-            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.8 }
+            [{ resize: { width: 800 } }],
+            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.7 }
           );
           
           if (manipulatedImage.base64) {
