@@ -4,12 +4,13 @@ import {
   View,
   Image,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
-import * as FileSystem from "expo-file-system";
+import * as ImageManipulator from "expo-image-manipulator";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -91,22 +92,18 @@ export default function AnalysisScreen() {
         
         if (imageUri.startsWith("data:")) {
           base64Image = imageUri;
-        } else if (imageUri.startsWith("http://") || imageUri.startsWith("https://")) {
-          const response = await fetch(imageUri);
-          const blob = await response.blob();
-          const reader = new FileReader();
-          base64Image = await new Promise((resolve, reject) => {
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
         } else {
-          const base64 = await FileSystem.readAsStringAsync(imageUri, {
-            encoding: "base64",
-          });
-          const extension = imageUri.split(".").pop()?.toLowerCase() || "jpeg";
-          const mimeType = extension === "png" ? "image/png" : "image/jpeg";
-          base64Image = `data:${mimeType};base64,${base64}`;
+          const manipulatedImage = await ImageManipulator.manipulateAsync(
+            imageUri,
+            [{ resize: { width: 1024 } }],
+            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.8 }
+          );
+          
+          if (manipulatedImage.base64) {
+            base64Image = `data:image/jpeg;base64,${manipulatedImage.base64}`;
+          } else {
+            throw new Error("Failed to convert image to base64");
+          }
         }
 
         const response = await fetch(new URL("/api/analyze", getApiUrl()).href, {
@@ -146,7 +143,18 @@ export default function AnalysisScreen() {
         navigation.replace("Results", {
           imageUri,
           carInfo: detectedCarInfo,
-          parts: detectedParts,
+          parts: detectedParts.length > 0 ? detectedParts : [{
+            id: "1",
+            name: "Analysis in progress",
+            nameAr: "جاري التحليل",
+            description: "Please try again",
+            descriptionAr: "يرجى المحاولة مرة أخرى",
+            primaryUse: "",
+            primaryUseAr: "",
+            price: 0,
+            confidence: 0,
+            boundingBox: { x: 0.1, y: 0.1, width: 0.3, height: 0.2 },
+          }],
         });
       } catch (error) {
         console.error("Analysis failed:", error);
@@ -161,25 +169,21 @@ export default function AnalysisScreen() {
           year: "---",
         };
 
-        const fallbackParts: DetectedPart[] = [
-          {
-            id: "1",
-            name: "Unknown Part",
-            nameAr: "قطعة غير محددة",
-            description: "Part could not be identified",
-            descriptionAr: "لم نتمكن من تحديد القطعة",
-            primaryUse: "Unknown usage",
-            primaryUseAr: "الاستخدام غير معروف",
-            price: 0,
-            confidence: 0,
-            boundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
-          },
-        ];
-
         navigation.replace("Results", {
           imageUri,
           carInfo: fallbackCarInfo,
-          parts: fallbackParts,
+          parts: [{
+            id: "1",
+            name: "Analysis failed",
+            nameAr: "فشل التحليل",
+            description: "Please try again with a clearer image",
+            descriptionAr: "يرجى المحاولة مرة أخرى بصورة أوضح",
+            primaryUse: "",
+            primaryUseAr: "",
+            price: 0,
+            confidence: 0,
+            boundingBox: { x: 0.1, y: 0.1, width: 0.3, height: 0.2 },
+          }],
         });
       }
     };
