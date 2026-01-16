@@ -11,6 +11,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/analyze", async (req, res) => {
     try {
       const { imageUri, carInfo } = req.body;
+      
+      console.log("Received analyze request");
+      console.log("Image URI length:", imageUri?.length || 0);
+      console.log("Image starts with:", imageUri?.substring(0, 50));
 
       const systemPrompt = `You are an expert automotive parts identification system with extensive knowledge of all car makes, models, and years. 
 
@@ -69,6 +73,8 @@ Return JSON in this format:
         ? `The user has selected: ${carInfo.make} ${carInfo.model} ${carInfo.year}. Analyze the car parts visible in the image.`
         : `Identify the car make, model, year, and all visible parts in the image.`;
 
+      console.log("Calling OpenAI API with model gpt-5...");
+      
       const response = await openai.chat.completions.create({
         model: "gpt-5",
         messages: [
@@ -88,7 +94,9 @@ Return JSON in this format:
         max_completion_tokens: 2048,
       });
 
+      console.log("OpenAI API response received");
       const content = response.choices[0]?.message?.content || "{}";
+      console.log("Response content:", content.substring(0, 200));
       const result = JSON.parse(content);
 
       res.json(result);
