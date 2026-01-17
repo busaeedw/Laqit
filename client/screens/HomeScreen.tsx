@@ -183,6 +183,38 @@ export default function HomeScreen() {
                 <ThemedText style={[styles.stepDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
                   {step.description}
                 </ThemedText>
+                {step.id === "1" ? (
+                  <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
+                    <Pressable
+                      onPress={() => navigation.navigate("Camera")}
+                      style={({ pressed }) => [
+                        styles.secondaryButton,
+                        { 
+                          backgroundColor: theme.backgroundSecondary,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
+                        },
+                      ]}
+                    >
+                      <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                        يدويا
+                      </ThemedText>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => navigation.navigate("Camera")}
+                      style={({ pressed }) => [
+                        styles.primaryButton,
+                        { 
+                          backgroundColor: theme.primary,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
+                        },
+                      ]}
+                    >
+                      <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        بالصورة
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                ) : null}
                 {step.id === "2" ? (
                   <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
                     <Pressable
