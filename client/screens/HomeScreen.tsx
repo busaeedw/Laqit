@@ -134,6 +134,7 @@ export default function HomeScreen() {
 
     const handlePickImageForIdentification = async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         quality: 0.8,
@@ -141,13 +142,13 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Identification from album
+        // Mock identification result: Brand, Model, Year
         setSelectedCar({ 
-          make: "Honda", 
-          makeAr: "هوندا", 
-          model: "Accord", 
-          modelAr: "أكورد",
-          year: "2022"
+          make: "Toyota", 
+          makeAr: "تويوتا", 
+          model: "Camry", 
+          modelAr: "كامري",
+          year: "2024"
         });
       }
     };
@@ -305,7 +306,7 @@ export default function HomeScreen() {
                       </ThemedText>
                     </Pressable>
                     <Pressable
-                      onPress={handleStartScan}
+                      onPress={handlePickImageForIdentification}
                       style={({ pressed }) => [
                         styles.secondaryButton,
                         { 
