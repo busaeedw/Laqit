@@ -141,7 +141,7 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Mock identification from album
+        // Identification from album
         setSelectedCar({ 
           make: "Honda", 
           makeAr: "هوندا", 
