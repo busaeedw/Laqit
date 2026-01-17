@@ -121,13 +121,15 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-    // Mock initial state for visibility check
-    const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string} | null>({ make: "Toyota", makeAr: "تويوتا" });
+    const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string, model?: string, modelAr?: string} | null>(null);
 
     const handleStartScan = () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setSelectedCar({ make: "Toyota", makeAr: "تويوتا" }); // Mock identification
-      navigation.navigate("Camera");
+      navigation.navigate("Camera", {
+        onSelectCar: (car) => {
+          setSelectedCar(car);
+        }
+      });
     };
 
     const handleSelectBrand = (brand: CarBrand) => {
@@ -141,6 +143,9 @@ export default function HomeScreen() {
           modelAr: "",
           year: "",
         },
+        onSelectCar: (car) => {
+          setSelectedCar(car);
+        }
       });
     };
 
@@ -241,7 +246,7 @@ export default function HomeScreen() {
                   <View style={[styles.resultBox, { backgroundColor: theme.primary + "10", borderColor: theme.primary + "30" }]}>
                     <Feather name="check-circle" size={16} color={theme.primary} />
                     <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-                      السيارة المحددة: {selectedCar.makeAr}
+                      السيارة المحددة: {selectedCar.makeAr} {selectedCar.modelAr}
                     </ThemedText>
                   </View>
                 ) : null}

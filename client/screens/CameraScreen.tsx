@@ -55,10 +55,16 @@ export default function CameraScreen() {
       });
       
       if (photo?.uri) {
-        navigation.navigate("Analysis", {
-          imageUri: photo.uri,
-          carInfo: selectedCar,
-        });
+        // For the "Identify Car" request, we'll return a mock result back to the caller
+        if (route.params?.onSelectCar) {
+          route.params.onSelectCar({ make: "Toyota", makeAr: "تويوتا", model: "Camry", modelAr: "كامري" });
+          navigation.goBack();
+        } else {
+          navigation.navigate("Analysis", {
+            imageUri: photo.uri,
+            carInfo: selectedCar,
+          });
+        }
       }
     } catch (error) {
       console.error("Failed to take photo:", error);
@@ -76,10 +82,15 @@ export default function CameraScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      navigation.navigate("Analysis", {
-        imageUri: result.assets[0].uri,
-        carInfo: selectedCar,
-      });
+      if (route.params?.onSelectCar) {
+        route.params.onSelectCar({ make: "Toyota", makeAr: "تويوتا", model: "Camry", modelAr: "كامري" });
+        navigation.goBack();
+      } else {
+        navigation.navigate("Analysis", {
+          imageUri: result.assets[0].uri,
+          carInfo: selectedCar,
+        });
+      }
     }
   };
 
