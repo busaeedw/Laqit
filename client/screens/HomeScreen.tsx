@@ -224,36 +224,6 @@ export default function HomeScreen() {
       <Animated.View entering={FadeInDown.duration(600).delay(300)}>
         <View style={styles.sectionHeader}>
           <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
-            البحث حسب الماركة
-          </ThemedText>
-        </View>
-        <View style={styles.brandsGrid}>
-          {carBrands.map((brand) => (
-            <Pressable
-              key={brand.id}
-              onPress={() => handleSelectBrand(brand)}
-              style={({ pressed }) => [
-                styles.brandCard,
-                { 
-                  backgroundColor: theme.backgroundDefault,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <View style={[styles.brandIcon, { backgroundColor: brand.color + "20" }]}>
-                <Feather name="truck" size={20} color={brand.color} />
-              </View>
-              <ThemedText style={[styles.brandName, { fontFamily: "Cairo_600SemiBold" }]}>
-                {brand.nameAr}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.duration(600).delay(400)}>
-        <View style={styles.sectionHeader}>
-          <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
             مميزات التطبيق
           </ThemedText>
         </View>
