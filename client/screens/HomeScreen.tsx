@@ -142,13 +142,15 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Identification from album
-        setSelectedCar({ 
-          make: "Honda", 
-          makeAr: "هوندا", 
-          model: "Accord", 
-          modelAr: "أكورد",
-          year: "2022"
+        navigation.navigate("Analysis", {
+          imageUri: result.assets[0].uri,
+          carInfo: selectedCar ? {
+            make: selectedCar.make,
+            makeAr: selectedCar.makeAr,
+            model: selectedCar.model || "",
+            modelAr: selectedCar.modelAr || "",
+            year: selectedCar.year || "",
+          } : undefined,
         });
       }
     };
