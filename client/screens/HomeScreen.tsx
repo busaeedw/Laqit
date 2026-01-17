@@ -196,7 +196,7 @@ export default function HomeScreen() {
                       ]}
                     >
                       <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                        يدويا
+                        يدوي
                       </ThemedText>
                     </Pressable>
                     <Pressable
@@ -210,7 +210,7 @@ export default function HomeScreen() {
                       ]}
                     >
                       <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                        بالصورة
+                        تصوير
                       </ThemedText>
                     </Pressable>
                     <Pressable
@@ -225,7 +225,7 @@ export default function HomeScreen() {
                     >
                       <Feather name="image" size={20} color={theme.text} />
                       <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                        البوم
+                        رفع صورة
                       </ThemedText>
                     </Pressable>
                   </View>
