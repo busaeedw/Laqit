@@ -213,6 +213,21 @@ export default function HomeScreen() {
                         بالصورة
                       </ThemedText>
                     </Pressable>
+                    <Pressable
+                      onPress={() => navigation.navigate("Camera")}
+                      style={({ pressed }) => [
+                        styles.secondaryButton,
+                        { 
+                          backgroundColor: theme.backgroundSecondary,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
+                        },
+                      ]}
+                    >
+                      <Feather name="image" size={20} color={theme.text} />
+                      <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                        البوم
+                      </ThemedText>
+                    </Pressable>
                   </View>
                 ) : null}
                 {step.id === "2" ? (
