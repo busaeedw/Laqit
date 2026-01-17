@@ -121,7 +121,7 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-    const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string, model?: string, modelAr?: string} | null>(null);
+    const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string, model?: string, modelAr?: string, year?: string} | null>(null);
 
     const handleStartScan = () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -130,6 +130,26 @@ export default function HomeScreen() {
           setSelectedCar(car);
         }
       });
+    };
+
+    const handlePickImageForIdentification = async () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        // Mock identification from album
+        setSelectedCar({ 
+          make: "Honda", 
+          makeAr: "هوندا", 
+          model: "Accord", 
+          modelAr: "أكورد",
+          year: "2022"
+        });
+      }
     };
 
     const handleSelectBrand = (brand: CarBrand) => {
@@ -226,7 +246,7 @@ export default function HomeScreen() {
                       </ThemedText>
                     </Pressable>
                     <Pressable
-                      onPress={() => navigation.navigate("Camera")}
+                      onPress={handlePickImageForIdentification}
                       style={({ pressed }) => [
                         styles.secondaryButton,
                         { 
@@ -246,7 +266,7 @@ export default function HomeScreen() {
                   <View style={[styles.resultBox, { backgroundColor: theme.primary + "10", borderColor: theme.primary + "30" }]}>
                     <Feather name="check-circle" size={16} color={theme.primary} />
                     <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-                      السيارة المحددة: {selectedCar.makeAr} {selectedCar.modelAr}
+                      السيارة المحددة: {selectedCar.makeAr} {selectedCar.modelAr} {selectedCar.year}
                     </ThemedText>
                   </View>
                 ) : null}

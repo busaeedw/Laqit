@@ -57,7 +57,7 @@ export default function CameraScreen() {
       if (photo?.uri) {
         // For the "Identify Car" request, we'll return a mock result back to the caller
         if (route.params?.onSelectCar) {
-          route.params.onSelectCar({ make: "Toyota", makeAr: "تويوتا", model: "Camry", modelAr: "كامري" });
+          route.params.onSelectCar({ make: "Toyota", makeAr: "تويوتا", model: "Camry", modelAr: "كامري", year: "2023" });
           navigation.goBack();
         } else {
           navigation.navigate("Analysis", {
