@@ -214,60 +214,77 @@ export default function HomeScreen() {
                   {step.description}
                 </ThemedText>
                 {step.id === "1" ? (
-                  <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
-                    <Pressable
-                      onPress={() => navigation.navigate("Camera")}
-                      style={({ pressed }) => [
-                        styles.secondaryButton,
-                        { 
-                          backgroundColor: theme.backgroundSecondary,
-                          transform: [{ scale: pressed ? 0.98 : 1 }],
-                        },
-                      ]}
-                    >
-                      <Feather name="edit-2" size={18} color={theme.text} />
-                      <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                        يدوي
-                      </ThemedText>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => navigation.navigate("Camera")}
-                      style={({ pressed }) => [
-                        styles.primaryButton,
-                        { 
-                          backgroundColor: theme.primary,
-                          transform: [{ scale: pressed ? 0.98 : 1 }],
-                        },
-                      ]}
-                    >
-                      <Feather name="camera" size={18} color="#FFFFFF" />
-                      <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                        تصوير
-                      </ThemedText>
-                    </Pressable>
-                    <Pressable
-                      onPress={handlePickImageForIdentification}
-                      style={({ pressed }) => [
-                        styles.secondaryButton,
-                        { 
-                          backgroundColor: theme.backgroundSecondary,
-                          transform: [{ scale: pressed ? 0.98 : 1 }],
-                        },
-                      ]}
-                    >
-                      <Feather name="image" size={20} color={theme.text} />
-                      <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                        رفع صورة
-                      </ThemedText>
-                    </Pressable>
-                  </View>
-                ) : null}
-                {step.id === "1" && selectedCar ? (
-                  <View style={[styles.resultBox, { backgroundColor: theme.primary + "10", borderColor: theme.primary + "30" }]}>
-                    <Feather name="check-circle" size={16} color={theme.primary} />
-                    <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-                      السيارة المحددة: {selectedCar.makeAr} {selectedCar.modelAr} {selectedCar.year}
-                    </ThemedText>
+                  <View style={styles.stepContent}>
+                    <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
+                      <Pressable
+                        onPress={() => navigation.navigate("CarSelection", {
+                          onSelect: (car) => setSelectedCar(car)
+                        })}
+                        style={({ pressed }) => [
+                          styles.secondaryButton,
+                          { 
+                            backgroundColor: theme.backgroundSecondary,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Feather name="edit-2" size={18} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                          يدوي
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        onPress={handleStartScan}
+                        style={({ pressed }) => [
+                          styles.primaryButton,
+                          { 
+                            backgroundColor: theme.primary,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Feather name="camera" size={18} color="#FFFFFF" />
+                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                          تصوير
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        onPress={handlePickImageForIdentification}
+                        style={({ pressed }) => [
+                          styles.secondaryButton,
+                          { 
+                            backgroundColor: theme.backgroundSecondary,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Feather name="image" size={20} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                          رفع صورة
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                    
+                    <View style={[styles.resultBox, { 
+                      backgroundColor: theme.backgroundSecondary, 
+                      borderColor: theme.primary + "30",
+                      borderStyle: 'dashed',
+                      minHeight: 50,
+                      justifyContent: 'center'
+                    }]}>
+                      {selectedCar ? (
+                        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
+                          <Feather name="check-circle" size={16} color={theme.primary} />
+                          <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                            السيارة المحددة: {selectedCar.makeAr} {selectedCar.modelAr} {selectedCar.year}
+                          </ThemedText>
+                        </View>
+                      ) : (
+                        <ThemedText style={[styles.resultText, { color: theme.textSecondary, textAlign: 'center', opacity: 0.6 }]}>
+                          بانتظار تحديد السيارة...
+                        </ThemedText>
+                      )}
+                    </View>
                   </View>
                 ) : null}
                 {step.id === "2" ? (
