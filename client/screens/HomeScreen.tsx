@@ -142,7 +142,8 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Mock identification result: Brand, Model, Year
+        // Shared identification logic for Step 1 and Step 2
+        // It populates the box in Step 1 with car details
         setSelectedCar({ 
           make: "Toyota", 
           makeAr: "تويوتا", 
