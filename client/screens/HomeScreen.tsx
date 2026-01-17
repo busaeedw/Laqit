@@ -51,15 +51,15 @@ interface HowToStep {
 const howToSteps: HowToStep[] = [
   {
     id: "1",
-    icon: "camera",
-    title: "التقط صورة",
-    description: "صور قطعة السيارة أو اختر صورة من المعرض",
-  },
-  {
-    id: "2",
     icon: "truck",
     title: "حدد السيارة",
     description: "اختر الشركة والموديل وسنة الصنع للحصول على نتائج أدق",
+  },
+  {
+    id: "2",
+    icon: "camera",
+    title: "التقط صورة",
+    description: "صور قطعة السيارة أو اختر صورة من المعرض",
   },
   {
     id: "3",
