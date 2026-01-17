@@ -19,7 +19,7 @@ export default function HomeStackNavigator() {
         name="Home"
         component={HomeScreen}
         options={{
-          headerTitle: () => <HeaderTitle title="راصد القطع" />,
+          headerTitle: () => <HeaderTitle title="راصد قطع السيارات" />,
         }}
       />
     </Stack.Navigator>
