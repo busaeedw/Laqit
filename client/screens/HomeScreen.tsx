@@ -121,7 +121,8 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-    const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string} | null>(null);
+    // Mock initial state for visibility check
+    const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string} | null>({ make: "Toyota", makeAr: "تويوتا" });
 
     const handleStartScan = () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
