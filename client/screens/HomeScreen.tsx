@@ -121,23 +121,27 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const handleStartScan = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("Camera");
-  };
+    const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string} | null>(null);
 
-  const handleSelectBrand = (brand: CarBrand) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate("Camera", {
-      carInfo: {
-        make: brand.name,
-        makeAr: brand.nameAr,
-        model: "",
-        modelAr: "",
-        year: "",
-      },
-    });
-  };
+    const handleStartScan = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setSelectedCar({ make: "Toyota", makeAr: "تويوتا" }); // Mock identification
+      navigation.navigate("Camera");
+    };
+
+    const handleSelectBrand = (brand: CarBrand) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSelectedCar({ make: brand.name, makeAr: brand.nameAr });
+      navigation.navigate("Camera", {
+        carInfo: {
+          make: brand.name,
+          makeAr: brand.nameAr,
+          model: "",
+          modelAr: "",
+          year: "",
+        },
+      });
+    };
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
@@ -230,6 +234,14 @@ export default function HomeScreen() {
                         رفع صورة
                       </ThemedText>
                     </Pressable>
+                  </View>
+                ) : null}
+                {step.id === "1" && selectedCar ? (
+                  <View style={[styles.resultBox, { backgroundColor: theme.primary + "10", borderColor: theme.primary + "30" }]}>
+                    <Feather name="check-circle" size={16} color={theme.primary} />
+                    <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                      السيارة المحددة: {selectedCar.makeAr}
+                    </ThemedText>
                   </View>
                 ) : null}
                 {step.id === "2" ? (
@@ -520,6 +532,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "right",
     lineHeight: 18,
+  },
+  resultBox: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  resultText: {
+    fontSize: 14,
   },
   ctaCard: {
     flexDirection: "row-reverse",
