@@ -152,38 +152,6 @@ export default function HomeScreen() {
                 صور أي قطعة وسنحددها لك فوراً مع تفاصيل كاملة ومستوى الثقة
               </ThemedText>
             </View>
-            <View style={styles.heroButtons}>
-              <Pressable
-                onPress={handleStartScan}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  { 
-                    backgroundColor: theme.primary,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                  },
-                ]}
-              >
-                <Feather name="camera" size={20} color="#FFFFFF" />
-                <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                  التقط صورة
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                onPress={handleStartScan}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  { 
-                    backgroundColor: theme.backgroundSecondary,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                  },
-                ]}
-              >
-                <Feather name="upload" size={20} color={theme.text} />
-                <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                  ارفع صورة
-                </ThemedText>
-              </Pressable>
-            </View>
           </View>
           <View style={[styles.heroDecoration, { backgroundColor: theme.primary + "15" }]}>
             <Feather name="zap" size={60} color={theme.primary} style={{ opacity: 0.3 }} />
@@ -215,6 +183,40 @@ export default function HomeScreen() {
                 <ThemedText style={[styles.stepDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
                   {step.description}
                 </ThemedText>
+                {step.id === "2" ? (
+                  <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
+                    <Pressable
+                      onPress={handleStartScan}
+                      style={({ pressed }) => [
+                        styles.primaryButton,
+                        { 
+                          backgroundColor: theme.primary,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
+                        },
+                      ]}
+                    >
+                      <Feather name="camera" size={20} color="#FFFFFF" />
+                      <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        التقط صورة
+                      </ThemedText>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleStartScan}
+                      style={({ pressed }) => [
+                        styles.secondaryButton,
+                        { 
+                          backgroundColor: theme.backgroundSecondary,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
+                        },
+                      ]}
+                    >
+                      <Feather name="upload" size={20} color={theme.text} />
+                      <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                        ارفع صورة
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             </View>
           ))}
