@@ -134,7 +134,6 @@ export default function HomeScreen() {
 
     const handlePickImageForIdentification = async () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         quality: 0.8,
@@ -142,14 +141,13 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Shared identification logic for Step 1 and Step 2
-        // It populates the box in Step 1 with car details
+        // Identification from album
         setSelectedCar({ 
-          make: "Toyota", 
-          makeAr: "تويوتا", 
-          model: "Camry", 
-          modelAr: "كامري",
-          year: "2024"
+          make: "Honda", 
+          makeAr: "هوندا", 
+          model: "Accord", 
+          modelAr: "أكورد",
+          year: "2022"
         });
       }
     };
@@ -307,7 +305,7 @@ export default function HomeScreen() {
                       </ThemedText>
                     </Pressable>
                     <Pressable
-                      onPress={handlePickImageForIdentification}
+                      onPress={handleStartScan}
                       style={({ pressed }) => [
                         styles.secondaryButton,
                         { 
