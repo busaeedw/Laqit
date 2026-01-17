@@ -195,6 +195,7 @@ export default function HomeScreen() {
                         },
                       ]}
                     >
+                      <Feather name="edit-2" size={18} color={theme.text} />
                       <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
                         يدوي
                       </ThemedText>
@@ -209,6 +210,7 @@ export default function HomeScreen() {
                         },
                       ]}
                     >
+                      <Feather name="camera" size={18} color="#FFFFFF" />
                       <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
                         تصوير
                       </ThemedText>
