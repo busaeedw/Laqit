@@ -55,11 +55,19 @@ export default function CameraScreen() {
       });
       
       if (photo?.uri) {
-        // For the "Identify Car" request, we'll return a mock result back to the caller
+        // For the "Identify Car" request from step 1, just identify and return
         if (route.params?.onSelectCar) {
-          route.params.onSelectCar({ make: "Toyota", makeAr: "تويوتا", model: "Camry", modelAr: "كامري", year: "2023" });
+          // Simulate car identification
+          route.params.onSelectCar({ 
+            make: "Nissan", 
+            makeAr: "نيسان", 
+            model: "Altima", 
+            modelAr: "ألتيما", 
+            year: "2022" 
+          });
           navigation.goBack();
         } else {
+          // For step 2, go to full parts analysis
           navigation.navigate("Analysis", {
             imageUri: photo.uri,
             carInfo: selectedCar,
@@ -83,9 +91,17 @@ export default function CameraScreen() {
 
     if (!result.canceled && result.assets[0]) {
       if (route.params?.onSelectCar) {
-        route.params.onSelectCar({ make: "Toyota", makeAr: "تويوتا", model: "Camry", modelAr: "كامري" });
+        // For step 1, just identify car and return
+        route.params.onSelectCar({ 
+          make: "Honda", 
+          makeAr: "هوندا", 
+          model: "Accord", 
+          modelAr: "أكورد", 
+          year: "2021" 
+        });
         navigation.goBack();
       } else {
+        // For step 2, go to full parts analysis
         navigation.navigate("Analysis", {
           imageUri: result.assets[0].uri,
           carInfo: selectedCar,

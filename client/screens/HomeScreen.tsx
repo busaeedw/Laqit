@@ -124,6 +124,33 @@ export default function HomeScreen() {
 
     const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string, model?: string, modelAr?: string, year?: string} | null>(null);
 
+    const [isIdentifying, setIsIdentifying] = React.useState(false);
+
+    const identifyCarFromImage = async (imageUri: string) => {
+      setIsIdentifying(true);
+      try {
+        // Simulate AI car identification (in production, call actual API)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Mock identified car result
+        const identifiedCar = {
+          make: "Toyota",
+          makeAr: "تويوتا",
+          model: "Camry",
+          modelAr: "كامري",
+          year: "2023"
+        };
+        
+        setSelectedCar(identifiedCar);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        console.error("Failed to identify car:", error);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        setIsIdentifying(false);
+      }
+    };
+
     const handleStartScan = () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       navigation.navigate("Camera", {
@@ -142,16 +169,7 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        navigation.navigate("Analysis", {
-          imageUri: result.assets[0].uri,
-          carInfo: selectedCar ? {
-            make: selectedCar.make,
-            makeAr: selectedCar.makeAr,
-            model: selectedCar.model || "",
-            modelAr: selectedCar.modelAr || "",
-            year: selectedCar.year || "",
-          } : undefined,
-        });
+        await identifyCarFromImage(result.assets[0].uri);
       }
     };
 
@@ -275,7 +293,14 @@ export default function HomeScreen() {
                       minHeight: 50,
                       justifyContent: 'center'
                     }]}>
-                      {selectedCar ? (
+                      {isIdentifying ? (
+                        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
+                          <Feather name="loader" size={16} color={theme.primary} />
+                          <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                            جاري تحديد السيارة...
+                          </ThemedText>
+                        </View>
+                      ) : selectedCar ? (
                         <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
                           <Feather name="check-circle" size={16} color={theme.primary} />
                           <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
