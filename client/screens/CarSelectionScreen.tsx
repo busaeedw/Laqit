@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -17,6 +17,8 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList, CarInfo } from "@/navigation/RootStackNavigator";
+
+type CarSelectionScreenRouteProp = RouteProp<RootStackParamList, "CarSelection">;
 
 type SelectionStep = "make" | "model" | "year";
 
@@ -85,6 +87,7 @@ export default function CarSelectionScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<CarSelectionScreenRouteProp>();
   const { theme } = useTheme();
 
   const [step, setStep] = useState<SelectionStep>("make");
@@ -138,7 +141,11 @@ export default function CarSelectionScreen() {
         modelAr: selectedModel.nameAr,
         year,
       };
-      navigation.navigate("Camera", { carInfo });
+      // Call the onSelect callback to pass the car info back to HomeScreen
+      if (route.params?.onSelect) {
+        route.params.onSelect(carInfo);
+      }
+      navigation.goBack();
     }
   };
 
