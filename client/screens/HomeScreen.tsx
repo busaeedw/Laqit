@@ -615,22 +615,38 @@ export default function HomeScreen() {
                 ) : null}
                 {step.id === "3" ? (
                   <View style={styles.stepContent}>
-                    <Pressable
-                      onPress={() => setIsReviewModalVisible(true)}
-                      style={({ pressed }) => [
-                        styles.primaryButton,
-                        { 
-                          backgroundColor: theme.primary,
-                          transform: [{ scale: pressed ? 0.98 : 1 }],
-                          marginTop: Spacing.md,
-                        },
-                      ]}
-                    >
-                      <Feather name="file-text" size={20} color="#FFFFFF" />
-                      <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                        راجع الطلب
-                      </ThemedText>
-                    </Pressable>
+                    <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
+                      <Pressable
+                        onPress={() => setIsReviewModalVisible(true)}
+                        style={({ pressed }) => [
+                          styles.primaryButton,
+                          { 
+                            backgroundColor: theme.primary,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Feather name="file-text" size={20} color="#FFFFFF" />
+                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                          راجع الطلب
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        disabled={true}
+                        style={[
+                          styles.secondaryButton,
+                          { 
+                            backgroundColor: theme.backgroundSecondary,
+                            opacity: 0.5,
+                          },
+                        ]}
+                      >
+                        <Feather name="package" size={20} color={theme.textSecondary} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
+                          القطع متاحة
+                        </ThemedText>
+                      </Pressable>
+                    </View>
                   </View>
                 ) : null}
               </View>
