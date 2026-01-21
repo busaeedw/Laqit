@@ -271,6 +271,11 @@ export default function HomeScreen() {
       }
     };
 
+    const removePart = (index: number) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setIdentifiedParts(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleSelectBrand = (brand: CarBrand) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setSelectedCar({ make: brand.name, makeAr: brand.nameAr });
@@ -463,18 +468,39 @@ export default function HomeScreen() {
                           </ThemedText>
                         </View>
                       ) : identifiedParts.length > 0 ? (
-                        <View style={{ gap: Spacing.xs }}>
+                        <View style={{ gap: Spacing.sm }}>
                           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
                             <Feather name="check-circle" size={16} color={theme.primary} />
                             <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
                               القطع المحددة:
                             </ThemedText>
                           </View>
-                          {identifiedParts.map((part, index) => (
-                            <ThemedText key={index} style={[styles.resultText, { color: theme.text, fontFamily: "Cairo_400Regular", textAlign: 'right', paddingRight: Spacing.lg }]}>
-                              • {part}
-                            </ThemedText>
-                          ))}
+                          <View style={{ gap: Spacing.xs }}>
+                            {identifiedParts.map((part, index) => (
+                              <View 
+                                key={index} 
+                                style={{ 
+                                  flexDirection: 'row-reverse', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'space-between',
+                                  paddingRight: Spacing.lg 
+                                }}
+                              >
+                                <ThemedText style={[styles.resultText, { color: theme.text, fontFamily: "Cairo_400Regular" }]}>
+                                  {index + 1}. {part}
+                                </ThemedText>
+                                <Pressable 
+                                  onPress={() => removePart(index)}
+                                  style={({ pressed }) => ({
+                                    opacity: pressed ? 0.6 : 1,
+                                    padding: 4
+                                  })}
+                                >
+                                  <Feather name="x-circle" size={16} color={Colors.red[500]} />
+                                </Pressable>
+                              </View>
+                            ))}
+                          </View>
                         </View>
                       ) : (
                         <ThemedText style={[styles.resultText, { color: theme.textSecondary, textAlign: 'center', opacity: 0.6 }]}>
