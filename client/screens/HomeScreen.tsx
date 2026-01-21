@@ -494,13 +494,7 @@ export default function HomeScreen() {
                         </View>
                       ) : identifiedParts.length > 0 ? (
                         <View style={{ gap: Spacing.sm }}>
-                          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
-                              <Feather name="check-circle" size={16} color={theme.primary} />
-                              <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-                                القطع المحددة ({identifiedParts.length}/10):
-                              </ThemedText>
-                            </View>
+                          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
                             {identifiedParts.length < 10 && !isAddingPart ? (
                               <Pressable 
                                 onPress={startAddingPart}
@@ -521,6 +515,12 @@ export default function HomeScreen() {
                                 </ThemedText>
                               </Pressable>
                             ) : null}
+                            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm, flex: 1 }}>
+                              <Feather name="check-circle" size={16} color={theme.primary} />
+                              <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                                القطع المحددة ({identifiedParts.length}/10):
+                              </ThemedText>
+                            </View>
                           </View>
                           <View style={{ gap: Spacing.xs }}>
                             {identifiedParts.map((part, index) => (
