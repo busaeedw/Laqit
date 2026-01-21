@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet, Pressable, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import HomeStackNavigator from "@/navigation/HomeStackNavigator";
 import OrdersStackNavigator from "@/navigation/OrdersStackNavigator";
@@ -23,14 +23,23 @@ export type MainTabParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-function ScanButton() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+function NewOrderButton() {
+  const navigation = useNavigation();
   const { theme } = useTheme();
 
   return (
     <View style={styles.scanButtonContainer}>
       <Pressable
-        onPress={() => navigation.navigate("Camera")}
+        onPress={() => {
+          navigation.dispatch(
+            CommonActions.navigate({
+              name: "HomeTab",
+              params: {
+                screen: "Order",
+              },
+            })
+          );
+        }}
         style={({ pressed }) => [
           styles.scanButton,
           { 
@@ -39,7 +48,7 @@ function ScanButton() {
           },
         ]}
       >
-        <Feather name="camera" size={28} color="#FFFFFF" />
+        <Feather name="plus" size={28} color="#FFFFFF" />
       </Pressable>
     </View>
   );
@@ -116,7 +125,7 @@ export default function MainTabNavigator() {
         component={PlaceholderScreen}
         options={{
           title: "",
-          tabBarButton: () => <ScanButton />,
+          tabBarButton: () => <NewOrderButton />,
         }}
         listeners={{
           tabPress: (e) => {
