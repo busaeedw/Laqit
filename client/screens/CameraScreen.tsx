@@ -11,9 +11,11 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { getApiUrl } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -55,16 +57,40 @@ export default function CameraScreen() {
       });
       
       if (photo?.uri) {
-        // For the "Identify Car" request from step 1, just identify and return
+        // For the "Identify Car" request from step 1, call AI to identify
         if (route.params?.onSelectCar) {
-          // Simulate car identification
-          route.params.onSelectCar({ 
-            make: "Nissan", 
-            makeAr: "نيسان", 
-            model: "Altima", 
-            modelAr: "ألتيما", 
-            year: "2022" 
-          });
+          try {
+            // Convert image to base64
+            const manipulatedImage = await ImageManipulator.manipulateAsync(
+              photo.uri,
+              [{ resize: { width: 800 } }],
+              { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.7 }
+            );
+            
+            if (manipulatedImage.base64) {
+              const base64Image = `data:image/jpeg;base64,${manipulatedImage.base64}`;
+              
+              // Call AI car identification API
+              const response = await fetch(new URL("/api/identify-car", getApiUrl()).href, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageUri: base64Image }),
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                route.params.onSelectCar({
+                  make: result.make,
+                  makeAr: result.makeAr,
+                  model: result.model,
+                  modelAr: result.modelAr,
+                  year: result.year
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Failed to identify car:", error);
+          }
           navigation.goBack();
         } else {
           // For step 2, go to full parts analysis
@@ -91,14 +117,37 @@ export default function CameraScreen() {
 
     if (!result.canceled && result.assets[0]) {
       if (route.params?.onSelectCar) {
-        // For step 1, just identify car and return
-        route.params.onSelectCar({ 
-          make: "Honda", 
-          makeAr: "هوندا", 
-          model: "Accord", 
-          modelAr: "أكورد", 
-          year: "2021" 
-        });
+        // For step 1, call AI to identify car and return
+        try {
+          const manipulatedImage = await ImageManipulator.manipulateAsync(
+            result.assets[0].uri,
+            [{ resize: { width: 800 } }],
+            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.7 }
+          );
+          
+          if (manipulatedImage.base64) {
+            const base64Image = `data:image/jpeg;base64,${manipulatedImage.base64}`;
+            
+            const response = await fetch(new URL("/api/identify-car", getApiUrl()).href, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageUri: base64Image }),
+            });
+
+            if (response.ok) {
+              const carResult = await response.json();
+              route.params.onSelectCar({
+                make: carResult.make,
+                makeAr: carResult.makeAr,
+                model: carResult.model,
+                modelAr: carResult.modelAr,
+                year: carResult.year
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Failed to identify car:", error);
+        }
         navigation.goBack();
       } else {
         // For step 2, go to full parts analysis

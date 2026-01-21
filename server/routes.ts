@@ -8,6 +8,77 @@ const openai = new OpenAI({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Endpoint for identifying car only (brand, model, year) - used by step 1
+  app.post("/api/identify-car", async (req, res) => {
+    try {
+      const { imageUri } = req.body;
+      
+      console.log("Received car identification request");
+
+      const systemPrompt = `You are an expert car identification system. Analyze the image and identify ONLY the car make, model, and year.
+
+Look for:
+- Brand logos/emblems (Toyota, Honda, Ford, BMW, Mercedes, Hyundai, Nissan, etc.)
+- Visible text on the car (model names like "Camry", "Accord", "Altima", etc.)
+- Body shape, distinctive design features, headlights, grille design
+- Estimate the year based on the car's generation/design
+
+You MUST return this exact JSON structure:
+{
+  "make": "Toyota",
+  "makeAr": "تويوتا",
+  "model": "Camry",
+  "modelAr": "كامري",
+  "year": "2023"
+}
+
+Common Arabic translations:
+- Toyota = تويوتا, Honda = هوندا, Nissan = نيسان, Hyundai = هيونداي
+- Ford = فورد, BMW = بي إم دبليو, Mercedes = مرسيدس, Chevrolet = شيفروليه
+- Kia = كيا, Mazda = مازدا, Lexus = لكزس, GMC = جي إم سي
+
+RULES:
+- ALWAYS provide Arabic translations
+- Be as specific as possible about the model
+- Estimate the year based on design features
+- If uncertain, provide your best guess with the most likely match`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Identify this car's make, model, and year." },
+              {
+                type: "image_url",
+                image_url: { url: imageUri },
+              },
+            ],
+          },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content || "{}";
+      console.log("Car identification result:", content);
+      const result = JSON.parse(content);
+
+      res.json(result);
+    } catch (error: any) {
+      console.error("Car identification error:", error?.message);
+      res.status(500).json({
+        make: "Unknown",
+        makeAr: "غير معروف",
+        model: "Unknown",
+        modelAr: "غير معروف",
+        year: "---",
+      });
+    }
+  });
+
   app.post("/api/analyze", async (req, res) => {
     try {
       const { imageUri, carInfo } = req.body;

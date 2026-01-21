@@ -14,10 +14,12 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import Animated, {
   FadeInDown,
   FadeIn,
 } from "react-native-reanimated";
+import { getApiUrl } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -129,19 +131,43 @@ export default function HomeScreen() {
     const identifyCarFromImage = async (imageUri: string) => {
       setIsIdentifying(true);
       try {
-        // Simulate AI car identification (in production, call actual API)
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Convert image to base64
+        let base64Image = "";
+        if (imageUri.startsWith("data:")) {
+          base64Image = imageUri;
+        } else {
+          const manipulatedImage = await ImageManipulator.manipulateAsync(
+            imageUri,
+            [{ resize: { width: 800 } }],
+            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.7 }
+          );
+          if (manipulatedImage.base64) {
+            base64Image = `data:image/jpeg;base64,${manipulatedImage.base64}`;
+          } else {
+            throw new Error("Failed to convert image to base64");
+          }
+        }
+
+        // Call AI car identification API
+        const response = await fetch(new URL("/api/identify-car", getApiUrl()).href, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUri: base64Image }),
+        });
+
+        if (!response.ok) {
+          throw new Error("API request failed");
+        }
+
+        const result = await response.json();
         
-        // Mock identified car result
-        const identifiedCar = {
-          make: "Toyota",
-          makeAr: "تويوتا",
-          model: "Camry",
-          modelAr: "كامري",
-          year: "2023"
-        };
-        
-        setSelectedCar(identifiedCar);
+        setSelectedCar({
+          make: result.make,
+          makeAr: result.makeAr,
+          model: result.model,
+          modelAr: result.modelAr,
+          year: result.year
+        });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (error) {
         console.error("Failed to identify car:", error);
