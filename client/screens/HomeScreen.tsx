@@ -5,6 +5,7 @@ import {
   FlatList,
   Pressable,
   Image,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -130,6 +131,8 @@ export default function HomeScreen() {
     
     const [identifiedParts, setIdentifiedParts] = React.useState<string[]>([]);
     const [isAnalyzingParts, setIsAnalyzingParts] = React.useState(false);
+    const [isAddingPart, setIsAddingPart] = React.useState(false);
+    const [newPartText, setNewPartText] = React.useState("");
 
     const identifyCarFromImage = async (imageUri: string) => {
       setIsIdentifying(true);
@@ -274,6 +277,28 @@ export default function HomeScreen() {
     const removePart = (index: number) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setIdentifiedParts(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const startAddingPart = () => {
+      if (identifiedParts.length >= 10) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setIsAddingPart(true);
+      setNewPartText("");
+    };
+
+    const confirmAddPart = () => {
+      if (newPartText.trim() && identifiedParts.length < 10) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setIdentifiedParts(prev => [...prev, newPartText.trim()]);
+      }
+      setIsAddingPart(false);
+      setNewPartText("");
+    };
+
+    const cancelAddPart = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setIsAddingPart(false);
+      setNewPartText("");
     };
 
     const handleSelectBrand = (brand: CarBrand) => {
@@ -469,11 +494,33 @@ export default function HomeScreen() {
                         </View>
                       ) : identifiedParts.length > 0 ? (
                         <View style={{ gap: Spacing.sm }}>
-                          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
-                            <Feather name="check-circle" size={16} color={theme.primary} />
-                            <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-                              القطع المحددة:
-                            </ThemedText>
+                          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
+                              <Feather name="check-circle" size={16} color={theme.primary} />
+                              <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                                القطع المحددة ({identifiedParts.length}/10):
+                              </ThemedText>
+                            </View>
+                            {identifiedParts.length < 10 && !isAddingPart ? (
+                              <Pressable 
+                                onPress={startAddingPart}
+                                style={({ pressed }) => ({
+                                  opacity: pressed ? 0.6 : 1,
+                                  backgroundColor: theme.primary,
+                                  borderRadius: BorderRadius.xs,
+                                  padding: 4,
+                                  paddingHorizontal: 8,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4
+                                })}
+                              >
+                                <Feather name="plus" size={14} color="#FFFFFF" />
+                                <ThemedText style={{ color: "#FFFFFF", fontSize: 12, fontFamily: "Cairo_600SemiBold" }}>
+                                  إضافة
+                                </ThemedText>
+                              </Pressable>
+                            ) : null}
                           </View>
                           <View style={{ gap: Spacing.xs }}>
                             {identifiedParts.map((part, index) => (
@@ -500,6 +547,59 @@ export default function HomeScreen() {
                                 </Pressable>
                               </View>
                             ))}
+                            {isAddingPart ? (
+                              <View 
+                                style={{ 
+                                  flexDirection: 'row-reverse', 
+                                  alignItems: 'center', 
+                                  gap: Spacing.sm,
+                                  paddingRight: Spacing.lg 
+                                }}
+                              >
+                                <ThemedText style={[styles.resultText, { color: theme.text, fontFamily: "Cairo_400Regular" }]}>
+                                  {identifiedParts.length + 1}.
+                                </ThemedText>
+                                <TextInput
+                                  value={newPartText}
+                                  onChangeText={setNewPartText}
+                                  placeholder="اسم القطعة..."
+                                  placeholderTextColor={theme.textSecondary}
+                                  maxLength={30}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: "#FFFFFF",
+                                    borderRadius: BorderRadius.xs,
+                                    paddingHorizontal: Spacing.sm,
+                                    paddingVertical: Spacing.xs,
+                                    fontSize: 14,
+                                    fontFamily: "Cairo_400Regular",
+                                    textAlign: 'right',
+                                    color: theme.text,
+                                    borderWidth: 1,
+                                    borderColor: theme.border,
+                                  }}
+                                  autoFocus
+                                />
+                                <Pressable 
+                                  onPress={confirmAddPart}
+                                  style={({ pressed }) => ({
+                                    opacity: pressed ? 0.6 : 1,
+                                    padding: 4
+                                  })}
+                                >
+                                  <Feather name="check-circle" size={20} color="#10B981" />
+                                </Pressable>
+                                <Pressable 
+                                  onPress={cancelAddPart}
+                                  style={({ pressed }) => ({
+                                    opacity: pressed ? 0.6 : 1,
+                                    padding: 4
+                                  })}
+                                >
+                                  <Feather name="x-circle" size={20} color="#EF4444" />
+                                </Pressable>
+                              </View>
+                            ) : null}
                           </View>
                         </View>
                       ) : (
