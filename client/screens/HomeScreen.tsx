@@ -25,7 +25,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, Colors } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 interface CarBrand {
@@ -496,7 +496,7 @@ export default function HomeScreen() {
                                     padding: 4
                                   })}
                                 >
-                                  <Feather name="x-circle" size={16} color={Colors.red[500]} />
+                                  <Feather name="x-circle" size={16} color="#EF4444" />
                                 </Pressable>
                               </View>
                             ))}
