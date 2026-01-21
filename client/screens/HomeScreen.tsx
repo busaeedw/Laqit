@@ -127,6 +127,9 @@ export default function HomeScreen() {
     const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string, model?: string, modelAr?: string, year?: string} | null>(null);
 
     const [isIdentifying, setIsIdentifying] = React.useState(false);
+    
+    const [identifiedParts, setIdentifiedParts] = React.useState<string[]>([]);
+    const [isAnalyzingParts, setIsAnalyzingParts] = React.useState(false);
 
     const identifyCarFromImage = async (imageUri: string) => {
       setIsIdentifying(true);
@@ -196,6 +199,75 @@ export default function HomeScreen() {
 
       if (!result.canceled && result.assets[0]) {
         await identifyCarFromImage(result.assets[0].uri);
+      }
+    };
+
+    const analyzePartsFromImage = async (imageUri: string) => {
+      setIsAnalyzingParts(true);
+      try {
+        let base64Image = "";
+        if (imageUri.startsWith("data:")) {
+          base64Image = imageUri;
+        } else {
+          const manipulatedImage = await ImageManipulator.manipulateAsync(
+            imageUri,
+            [{ resize: { width: 800 } }],
+            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.7 }
+          );
+          if (manipulatedImage.base64) {
+            base64Image = `data:image/jpeg;base64,${manipulatedImage.base64}`;
+          } else {
+            throw new Error("Failed to convert image to base64");
+          }
+        }
+
+        const response = await fetch(new URL("/api/analyze", getApiUrl()).href, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUri: base64Image, carInfo: selectedCar }),
+        });
+
+        if (!response.ok) {
+          throw new Error("API request failed");
+        }
+
+        const result = await response.json();
+        
+        if (result.parts && result.parts.length > 0) {
+          setIdentifiedParts(result.parts.map((part: any) => part.nameAr || part.name));
+        } else {
+          setIdentifiedParts(["لم يتم العثور على قطع"]);
+        }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (error) {
+        console.error("Failed to analyze parts:", error);
+        setIdentifiedParts(["فشل في تحليل الصورة"]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        setIsAnalyzingParts(false);
+      }
+    };
+
+    const handleCapturePartPhoto = () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      navigation.navigate("Camera", {
+        carInfo: selectedCar || undefined,
+        onAnalyzeParts: async (imageUri: string) => {
+          await analyzePartsFromImage(imageUri);
+        }
+      });
+    };
+
+    const handlePickImageForParts = async () => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await analyzePartsFromImage(result.assets[0].uri);
       }
     };
 
@@ -342,37 +414,74 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
                 {step.id === "2" ? (
-                  <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
-                    <Pressable
-                      onPress={handleStartScan}
-                      style={({ pressed }) => [
-                        styles.primaryButton,
-                        { 
-                          backgroundColor: theme.primary,
-                          transform: [{ scale: pressed ? 0.98 : 1 }],
-                        },
-                      ]}
-                    >
-                      <Feather name="camera" size={20} color="#FFFFFF" />
-                      <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                        التقط صورة
-                      </ThemedText>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleStartScan}
-                      style={({ pressed }) => [
-                        styles.secondaryButton,
-                        { 
-                          backgroundColor: theme.backgroundSecondary,
-                          transform: [{ scale: pressed ? 0.98 : 1 }],
-                        },
-                      ]}
-                    >
-                      <Feather name="upload" size={20} color={theme.text} />
-                      <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                        ارفع صورة
-                      </ThemedText>
-                    </Pressable>
+                  <View style={styles.stepContent}>
+                    <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
+                      <Pressable
+                        onPress={handleCapturePartPhoto}
+                        style={({ pressed }) => [
+                          styles.primaryButton,
+                          { 
+                            backgroundColor: theme.primary,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Feather name="camera" size={20} color="#FFFFFF" />
+                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                          التقط صورة
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        onPress={handlePickImageForParts}
+                        style={({ pressed }) => [
+                          styles.secondaryButton,
+                          { 
+                            backgroundColor: theme.backgroundSecondary,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Feather name="upload" size={20} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                          ارفع صورة
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                    
+                    <View style={[styles.resultBox, { 
+                      backgroundColor: theme.backgroundSecondary, 
+                      borderColor: theme.primary + "30",
+                      borderStyle: 'dashed',
+                      minHeight: 50,
+                      justifyContent: 'center'
+                    }]}>
+                      {isAnalyzingParts ? (
+                        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
+                          <Feather name="loader" size={16} color={theme.primary} />
+                          <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                            جاري تحليل القطع...
+                          </ThemedText>
+                        </View>
+                      ) : identifiedParts.length > 0 ? (
+                        <View style={{ gap: Spacing.xs }}>
+                          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
+                            <Feather name="check-circle" size={16} color={theme.primary} />
+                            <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                              القطع المحددة:
+                            </ThemedText>
+                          </View>
+                          {identifiedParts.map((part, index) => (
+                            <ThemedText key={index} style={[styles.resultText, { color: theme.text, fontFamily: "Cairo_400Regular", textAlign: 'right', paddingRight: Spacing.lg }]}>
+                              • {part}
+                            </ThemedText>
+                          ))}
+                        </View>
+                      ) : (
+                        <ThemedText style={[styles.resultText, { color: theme.textSecondary, textAlign: 'center', opacity: 0.6 }]}>
+                          بانتظار تحليل قطع السيارة...
+                        </ThemedText>
+                      )}
+                    </View>
                   </View>
                 ) : null}
               </View>

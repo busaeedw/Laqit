@@ -92,8 +92,12 @@ export default function CameraScreen() {
             console.error("Failed to identify car:", error);
           }
           navigation.goBack();
+        } else if (route.params?.onAnalyzeParts) {
+          // For step 2 with callback, analyze parts and return to home
+          route.params.onAnalyzeParts(photo.uri);
+          navigation.goBack();
         } else {
-          // For step 2, go to full parts analysis
+          // For step 2 without callback, go to full parts analysis
           navigation.navigate("Analysis", {
             imageUri: photo.uri,
             carInfo: selectedCar,
@@ -149,8 +153,12 @@ export default function CameraScreen() {
           console.error("Failed to identify car:", error);
         }
         navigation.goBack();
+      } else if (route.params?.onAnalyzeParts) {
+        // For step 2 with callback, analyze parts and return to home
+        route.params.onAnalyzeParts(result.assets[0].uri);
+        navigation.goBack();
       } else {
-        // For step 2, go to full parts analysis
+        // For step 2 without callback, go to full parts analysis
         navigation.navigate("Analysis", {
           imageUri: result.assets[0].uri,
           carInfo: selectedCar,

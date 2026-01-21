@@ -33,7 +33,11 @@ export type DetectedPart = {
 
 export type RootStackParamList = {
   Main: undefined;
-  Camera: { carInfo?: CarInfo } | undefined;
+  Camera: { 
+    carInfo?: CarInfo;
+    onSelectCar?: (car: CarInfo) => void;
+    onAnalyzeParts?: (imageUri: string) => void;
+  } | undefined;
   CarSelection: { onSelect?: (car: CarInfo) => void } | undefined;
   Analysis: { imageUri: string; carInfo?: CarInfo };
   Results: { imageUri: string; carInfo: CarInfo; parts: DetectedPart[] };
