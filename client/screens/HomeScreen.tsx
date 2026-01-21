@@ -6,6 +6,8 @@ import {
   Pressable,
   Image,
   TextInput,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -133,6 +135,7 @@ export default function HomeScreen() {
     const [isAnalyzingParts, setIsAnalyzingParts] = React.useState(false);
     const [isAddingPart, setIsAddingPart] = React.useState(false);
     const [newPartText, setNewPartText] = React.useState("");
+    const [isReviewModalVisible, setIsReviewModalVisible] = React.useState(false);
 
     const identifyCarFromImage = async (imageUri: string) => {
       setIsIdentifying(true);
@@ -610,11 +613,96 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 ) : null}
+                {step.id === "3" ? (
+                  <View style={styles.stepContent}>
+                    <Pressable
+                      onPress={() => setIsReviewModalVisible(true)}
+                      style={({ pressed }) => [
+                        styles.primaryButton,
+                        { 
+                          backgroundColor: theme.primary,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
+                          marginTop: Spacing.md,
+                        },
+                      ]}
+                    >
+                      <Feather name="file-text" size={20} color="#FFFFFF" />
+                      <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        راجع الطلب
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             </View>
           ))}
         </View>
       </Animated.View>
+
+      <Modal
+        visible={isReviewModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsReviewModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <Pressable
+              onPress={() => setIsReviewModalVisible(false)}
+              style={styles.modalCloseButton}
+            >
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+            
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: Spacing.xl }}
+            >
+              <View style={styles.modalLogoContainer}>
+                <View style={[styles.modalLogo, { backgroundColor: theme.primary + "15" }]}>
+                  <Feather name="zap" size={40} color={theme.primary} />
+                </View>
+              </View>
+              
+              <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold", textAlign: 'center' }]}>
+                طلب قطع غيار للسيارة:
+              </ThemedText>
+              
+              <View style={[styles.modalCarInfo, { backgroundColor: theme.backgroundSecondary }]}>
+                {selectedCar ? (
+                  <ThemedText style={[styles.modalCarText, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
+                    {selectedCar.makeAr} {selectedCar.modelAr} {selectedCar.year}
+                  </ThemedText>
+                ) : (
+                  <ThemedText style={[styles.modalCarText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                    لم يتم تحديد سيارة
+                  </ThemedText>
+                )}
+              </View>
+              
+              <ThemedText style={[styles.modalSectionTitle, { fontFamily: "Cairo_700Bold" }]}>
+                قطع الغيار المطلوبة:
+              </ThemedText>
+              
+              <View style={[styles.modalPartsList, { backgroundColor: theme.backgroundSecondary }]}>
+                {identifiedParts.length > 0 ? (
+                  identifiedParts.map((part, index) => (
+                    <View key={index} style={styles.modalPartItem}>
+                      <ThemedText style={[styles.modalPartText, { fontFamily: "Cairo_400Regular" }]}>
+                        {index + 1}. {part}
+                      </ThemedText>
+                    </View>
+                  ))
+                ) : (
+                  <ThemedText style={[styles.modalPartText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary, textAlign: 'center' }]}>
+                    لم يتم تحديد قطع غيار
+                  </ThemedText>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Animated.View entering={FadeInDown.duration(600).delay(300)}>
         <View style={styles.sectionHeader}>
@@ -903,6 +991,70 @@ const styles = StyleSheet.create({
   },
   ctaSubtitle: {
     fontSize: 12,
+    textAlign: "right",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.lg,
+  },
+  modalContent: {
+    width: "100%",
+    maxHeight: "80%",
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    position: "relative",
+  },
+  modalCloseButton: {
+    position: "absolute",
+    top: Spacing.md,
+    left: Spacing.md,
+    zIndex: 10,
+    padding: Spacing.xs,
+  },
+  modalLogoContainer: {
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+    marginTop: Spacing.md,
+  },
+  modalLogo: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 18,
+    marginBottom: Spacing.md,
+  },
+  modalCarInfo: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
+  },
+  modalCarText: {
+    fontSize: 16,
+    textAlign: "center",
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    textAlign: "right",
+    marginBottom: Spacing.sm,
+  },
+  modalPartsList: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  modalPartItem: {
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.05)",
+  },
+  modalPartText: {
+    fontSize: 14,
     textAlign: "right",
   },
 });
