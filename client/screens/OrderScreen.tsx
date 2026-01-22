@@ -331,6 +331,7 @@ export default function OrderScreen() {
                   <View style={styles.stepContent}>
                     <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
                       <Pressable
+                        testID="button-upload-car-image"
                         onPress={handlePickImageForIdentification}
                         style={({ pressed }) => [
                           styles.primaryButton,
@@ -346,6 +347,7 @@ export default function OrderScreen() {
                         </ThemedText>
                       </Pressable>
                       <Pressable
+                        testID="button-capture-car-image"
                         onPress={handleStartScan}
                         style={({ pressed }) => [
                           styles.secondaryButton,
@@ -361,6 +363,7 @@ export default function OrderScreen() {
                         </ThemedText>
                       </Pressable>
                       <Pressable
+                        testID="button-manual-car-select"
                         onPress={() => navigation.navigate("CarSelection", {
                           onSelect: (car) => setSelectedCar(car)
                         })}
@@ -412,6 +415,7 @@ export default function OrderScreen() {
                   <View style={styles.stepContent}>
                     <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
                       <Pressable
+                        testID="button-upload-parts-image"
                         onPress={handlePickImageForParts}
                         style={({ pressed }) => [
                           styles.primaryButton,
@@ -427,6 +431,7 @@ export default function OrderScreen() {
                         </ThemedText>
                       </Pressable>
                       <Pressable
+                        testID="button-capture-parts-image"
                         onPress={handleCapturePartPhoto}
                         style={({ pressed }) => [
                           styles.secondaryButton,
@@ -579,6 +584,7 @@ export default function OrderScreen() {
                   <View style={styles.stepContent}>
                     <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
                       <Pressable
+                        testID="button-review-order"
                         onPress={() => setIsReviewModalVisible(true)}
                         style={({ pressed }) => [
                           styles.primaryButton,

@@ -88,6 +88,7 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
             <Pressable
+              testID="button-new-order"
               onPress={() => navigation.navigate("Order")}
               style={({ pressed }) => [
                 styles.heroButton,
@@ -137,6 +138,7 @@ export default function HomeScreen() {
 
       <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable
+          testID="button-pricing-cta"
           onPress={() => navigation.navigate("Pricing")}
           style={({ pressed }) => [
             styles.ctaCard,
