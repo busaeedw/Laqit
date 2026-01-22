@@ -611,6 +611,27 @@ export default function OrderScreen() {
                     </View>
                   </View>
                 ) : null}
+                {step.id === "4" ? (
+                  <View style={styles.stepContent}>
+                    <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
+                      <Pressable
+                        disabled={true}
+                        style={[
+                          styles.primaryButton,
+                          { 
+                            backgroundColor: theme.primary,
+                            opacity: 0.5,
+                          },
+                        ]}
+                      >
+                        <Feather name="send" size={20} color="#FFFFFF" />
+                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                          أرسل الطلب للتاجر
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
               </View>
             </View>
           ))}
