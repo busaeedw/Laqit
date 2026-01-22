@@ -412,21 +412,6 @@ export default function OrderScreen() {
                   <View style={styles.stepContent}>
                     <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
                       <Pressable
-                        onPress={handleCapturePartPhoto}
-                        style={({ pressed }) => [
-                          styles.primaryButton,
-                          { 
-                            backgroundColor: theme.primary,
-                            transform: [{ scale: pressed ? 0.98 : 1 }],
-                          },
-                        ]}
-                      >
-                        <Feather name="camera" size={20} color="#FFFFFF" />
-                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                          التقط صورة
-                        </ThemedText>
-                      </Pressable>
-                      <Pressable
                         onPress={handlePickImageForParts}
                         style={({ pressed }) => [
                           styles.secondaryButton,
@@ -439,6 +424,21 @@ export default function OrderScreen() {
                         <Feather name="upload" size={20} color={theme.text} />
                         <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
                           ارفع صورة
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        onPress={handleCapturePartPhoto}
+                        style={({ pressed }) => [
+                          styles.primaryButton,
+                          { 
+                            backgroundColor: theme.primary,
+                            transform: [{ scale: pressed ? 0.98 : 1 }],
+                          },
+                        ]}
+                      >
+                        <Feather name="camera" size={20} color="#FFFFFF" />
+                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                          التقط صورة
                         </ThemedText>
                       </Pressable>
                     </View>
