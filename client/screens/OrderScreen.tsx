@@ -765,15 +765,16 @@ const styles = StyleSheet.create({
   },
   heroButtons: {
     flexDirection: "row-reverse",
+    justifyContent: "flex-end",
     gap: Spacing.md,
   },
   primaryButton: {
-    flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.md,
     shadowColor: "#1E74F2",
     shadowOffset: { width: 0, height: 4 },
@@ -786,12 +787,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   secondaryButton: {
-    flex: 1,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.md,
   },
   secondaryButtonText: {
