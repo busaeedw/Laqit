@@ -137,7 +137,7 @@ export default function HomeScreen() {
 
       <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable
-          onPress={() => navigation.navigate("Order")}
+          onPress={() => navigation.navigate("Pricing")}
           style={({ pressed }) => [
             styles.ctaCard,
             { 
