@@ -333,30 +333,30 @@ export default function OrderScreen() {
                       <Pressable
                         onPress={handlePickImageForIdentification}
                         style={({ pressed }) => [
-                          styles.primaryButton,
+                          styles.secondaryButton,
                           { 
-                            backgroundColor: theme.primary,
+                            backgroundColor: theme.backgroundSecondary,
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
                         ]}
                       >
-                        <Feather name="image" size={20} color="#FFFFFF" />
-                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        <Feather name="image" size={20} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
                           ارفع صورة
                         </ThemedText>
                       </Pressable>
                       <Pressable
                         onPress={handleStartScan}
                         style={({ pressed }) => [
-                          styles.primaryButton,
+                          styles.secondaryButton,
                           { 
-                            backgroundColor: theme.primary,
+                            backgroundColor: theme.backgroundSecondary,
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
                         ]}
                       >
-                        <Feather name="camera" size={18} color="#FFFFFF" />
-                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        <Feather name="camera" size={18} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
                           التقط صورة
                         </ThemedText>
                       </Pressable>
@@ -365,15 +365,15 @@ export default function OrderScreen() {
                           onSelect: (car) => setSelectedCar(car)
                         })}
                         style={({ pressed }) => [
-                          styles.primaryButton,
+                          styles.secondaryButton,
                           { 
-                            backgroundColor: theme.primary,
+                            backgroundColor: theme.backgroundSecondary,
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
                         ]}
                       >
-                        <Feather name="edit-2" size={18} color="#FFFFFF" />
-                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        <Feather name="edit-2" size={18} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
                           اختار يدوي
                         </ThemedText>
                       </Pressable>
@@ -414,30 +414,30 @@ export default function OrderScreen() {
                       <Pressable
                         onPress={handlePickImageForParts}
                         style={({ pressed }) => [
-                          styles.primaryButton,
+                          styles.secondaryButton,
                           { 
-                            backgroundColor: theme.primary,
+                            backgroundColor: theme.backgroundSecondary,
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
                         ]}
                       >
-                        <Feather name="upload" size={20} color="#FFFFFF" />
-                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        <Feather name="upload" size={20} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
                           ارفع صورة
                         </ThemedText>
                       </Pressable>
                       <Pressable
                         onPress={handleCapturePartPhoto}
                         style={({ pressed }) => [
-                          styles.primaryButton,
+                          styles.secondaryButton,
                           { 
-                            backgroundColor: theme.primary,
+                            backgroundColor: theme.backgroundSecondary,
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
                         ]}
                       >
-                        <Feather name="camera" size={20} color="#FFFFFF" />
-                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        <Feather name="camera" size={20} color={theme.text} />
+                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
                           التقط صورة
                         </ThemedText>
                       </Pressable>
