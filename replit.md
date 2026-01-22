@@ -1,4 +1,4 @@
-# راصد القطع (PartScope) - AI Car Parts Identification App
+# راصد قطع غيار السيارات (PartScope) - AI Car Parts Identification App
 
 ## Overview
 

@@ -21,7 +21,7 @@ export default function HomeStackNavigator() {
         name="Home"
         component={HomeScreen}
         options={{
-          headerTitle: () => <HeaderTitle title="راصد قطع السيارات" />,
+          headerTitle: () => <HeaderTitle title="راصد قطع غيار السيارات" />,
         }}
       />
       <Stack.Screen
