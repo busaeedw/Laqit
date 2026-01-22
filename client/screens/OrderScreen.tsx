@@ -333,15 +333,15 @@ export default function OrderScreen() {
                       <Pressable
                         onPress={handlePickImageForIdentification}
                         style={({ pressed }) => [
-                          styles.secondaryButton,
+                          styles.primaryButton,
                           { 
-                            backgroundColor: theme.backgroundSecondary,
+                            backgroundColor: theme.primary,
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
                         ]}
                       >
-                        <Feather name="image" size={20} color={theme.text} />
-                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                        <Feather name="upload" size={20} color="#FFFFFF" />
+                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
                           ارفع صورة
                         </ThemedText>
                       </Pressable>
@@ -414,15 +414,15 @@ export default function OrderScreen() {
                       <Pressable
                         onPress={handlePickImageForParts}
                         style={({ pressed }) => [
-                          styles.secondaryButton,
+                          styles.primaryButton,
                           { 
-                            backgroundColor: theme.backgroundSecondary,
+                            backgroundColor: theme.primary,
                             transform: [{ scale: pressed ? 0.98 : 1 }],
                           },
                         ]}
                       >
-                        <Feather name="upload" size={20} color={theme.text} />
-                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                        <Feather name="upload" size={20} color="#FFFFFF" />
+                        <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
                           ارفع صورة
                         </ThemedText>
                       </Pressable>
