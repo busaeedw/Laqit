@@ -342,7 +342,7 @@ export default function OrderScreen() {
                       >
                         <Feather name="image" size={20} color={theme.text} />
                         <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                          رفع صورة
+                          ارفع صورة
                         </ThemedText>
                       </Pressable>
                       <Pressable
@@ -357,7 +357,7 @@ export default function OrderScreen() {
                       >
                         <Feather name="camera" size={18} color="#FFFFFF" />
                         <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                          تصوير
+                          التقط صورة
                         </ThemedText>
                       </Pressable>
                       <Pressable
@@ -374,7 +374,7 @@ export default function OrderScreen() {
                       >
                         <Feather name="edit-2" size={18} color={theme.text} />
                         <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                          يدوي
+                          اختار يدوي
                         </ThemedText>
                       </Pressable>
                     </View>
