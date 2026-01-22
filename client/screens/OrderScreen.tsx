@@ -331,9 +331,7 @@ export default function OrderScreen() {
                   <View style={styles.stepContent}>
                     <View style={[styles.heroButtons, { marginTop: Spacing.md }]}>
                       <Pressable
-                        onPress={() => navigation.navigate("CarSelection", {
-                          onSelect: (car) => setSelectedCar(car)
-                        })}
+                        onPress={handlePickImageForIdentification}
                         style={({ pressed }) => [
                           styles.secondaryButton,
                           { 
@@ -342,9 +340,9 @@ export default function OrderScreen() {
                           },
                         ]}
                       >
-                        <Feather name="edit-2" size={18} color={theme.text} />
+                        <Feather name="image" size={20} color={theme.text} />
                         <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                          يدوي
+                          رفع صورة
                         </ThemedText>
                       </Pressable>
                       <Pressable
@@ -363,7 +361,9 @@ export default function OrderScreen() {
                         </ThemedText>
                       </Pressable>
                       <Pressable
-                        onPress={handlePickImageForIdentification}
+                        onPress={() => navigation.navigate("CarSelection", {
+                          onSelect: (car) => setSelectedCar(car)
+                        })}
                         style={({ pressed }) => [
                           styles.secondaryButton,
                           { 
@@ -372,9 +372,9 @@ export default function OrderScreen() {
                           },
                         ]}
                       >
-                        <Feather name="image" size={20} color={theme.text} />
+                        <Feather name="edit-2" size={18} color={theme.text} />
                         <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                          رفع صورة
+                          يدوي
                         </ThemedText>
                       </Pressable>
                     </View>
