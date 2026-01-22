@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, I18nManager } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -19,6 +19,7 @@ import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CartProvider } from "@/context/CartContext";
+import { CustomSplash } from "@/components/CustomSplash";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -26,6 +27,7 @@ I18nManager.allowRTL(true);
 I18nManager.forceRTL(true);
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [fontsLoaded, fontError] = useFonts({
     Cairo_400Regular,
     Cairo_600SemiBold,
@@ -35,6 +37,9 @@ export default function App() {
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
+      setTimeout(() => {
+        setShowSplash(false);
+      }, 1500);
     }
   }, [fontsLoaded, fontError]);
 
@@ -52,6 +57,7 @@ export default function App() {
                 <NavigationContainer>
                   <RootStackNavigator />
                 </NavigationContainer>
+                <CustomSplash visible={showSplash} />
                 <StatusBar style="auto" />
               </KeyboardProvider>
             </GestureHandlerRootView>
