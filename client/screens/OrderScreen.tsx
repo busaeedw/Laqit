@@ -611,7 +611,7 @@ export default function OrderScreen() {
                       >
                         <Feather name="package" size={20} color={theme.textSecondary} />
                         <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
-                          القطع متاحة
+                          القطع المتاحة
                         </ThemedText>
                       </Pressable>
                     </View>
