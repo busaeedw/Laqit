@@ -1,4 +1,4 @@
-# راصد قطع غيار السيارات (PartScope) - AI Car Parts Identification App
+# مؤسسة خالد سالم باسنبل (PartScope) - AI Car Parts Identification App
 
 ## Overview
 
