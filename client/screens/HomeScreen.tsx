@@ -79,6 +79,14 @@ export default function HomeScreen() {
       <Animated.View entering={FadeInDown.duration(600).delay(100)}>
         <View style={[styles.heroCard, { backgroundColor: theme.primary }]}>
           <View style={styles.heroContent}>
+            <View style={styles.heroTextContainer}>
+              <ThemedText style={[styles.heroTitle, { color: "#FFFFFF", fontFamily: "Cairo_700Bold" }]}>
+                اطلب قطع غيار سيارتك بسهولة
+              </ThemedText>
+              <ThemedText style={[styles.heroSubtitle, { color: "rgba(255,255,255,0.8)", fontFamily: "Cairo_400Regular" }]}>
+                حدد سيارتك، صور القطعة، واحصل على عروض أسعار فورية
+              </ThemedText>
+            </View>
             <Pressable
               testID="button-new-order"
               onPress={() => navigation.navigate("Order")}
