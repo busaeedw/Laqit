@@ -110,31 +110,6 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.duration(600).delay(300)}>
-        <View style={styles.sectionHeader}>
-          <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
-            مميزات التطبيق
-          </ThemedText>
-        </View>
-        <View style={styles.featuresGrid}>
-          {features.map((feature) => (
-            <View
-              key={feature.id}
-              style={[styles.featureCard, { backgroundColor: theme.backgroundDefault }]}
-            >
-              <View style={[styles.featureIcon, { backgroundColor: feature.color + "20" }]}>
-                <Feather name={feature.icon} size={24} color={feature.color} />
-              </View>
-              <ThemedText style={[styles.featureTitle, { fontFamily: "Cairo_700Bold" }]}>
-                {feature.title}
-              </ThemedText>
-              <ThemedText style={[styles.featureDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {feature.description}
-              </ThemedText>
-            </View>
-          ))}
-        </View>
-      </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable
