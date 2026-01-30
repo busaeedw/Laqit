@@ -481,7 +481,7 @@ export default function OrderScreen() {
                               >
                                 <Feather name="plus" size={14} color="#FFFFFF" />
                                 <ThemedText style={{ color: "#FFFFFF", fontSize: 12, fontFamily: "Cairo_600SemiBold" }}>
-                                  القطع المتاحة
+                                  إضافة
                                 </ThemedText>
                               </Pressable>
                             ) : null}

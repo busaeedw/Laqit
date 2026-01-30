@@ -272,7 +272,7 @@ export default function ResultsScreen() {
               >
                 <Feather name="plus" size={16} color="#FFFFFF" />
                 <ThemedText style={[styles.addButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                  إضافة للسلة
+                  القطع المتاحة
                 </ThemedText>
               </Pressable>
             </View>
