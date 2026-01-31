@@ -55,6 +55,49 @@ export default function AccountScreen() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [formErrors, setFormErrors] = useState<{ name?: string; mobile?: string; terms?: string; general?: string }>({});
 
+  const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
+  const [inspections, setInspections] = useState<any[]>([]);
+  const [isLoadingInspections, setIsLoadingInspections] = useState(false);
+
+  const fetchInspections = async () => {
+    if (!user) return;
+    
+    setIsLoadingInspections(true);
+    try {
+      const response = await fetch(new URL(`/api/inspections/${user.id}`, getApiUrl()).toString());
+      if (response.ok) {
+        const data = await response.json();
+        setInspections(data.inspections || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch inspections:", error);
+    } finally {
+      setIsLoadingInspections(false);
+    }
+  };
+
+  const handleViewHistory = () => {
+    if (!isLoggedIn) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    fetchInspections();
+    setIsHistoryModalVisible(true);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    };
+    return date.toLocaleDateString('ar-SA', options);
+  };
+
   const handleViewPricing = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate("Pricing");
@@ -197,7 +240,7 @@ export default function AccountScreen() {
       { id: "pricing", icon: "credit-card", label: "الباقات والأسعار", onPress: handleViewPricing },
     ],
     [
-      { id: "history", icon: "clock", label: "سجل الفحوصات" },
+      { id: "history", icon: "clock", label: "سجل الفحوصات", onPress: handleViewHistory },
       { id: "favorites", icon: "heart", label: "القطع المحفوظة" },
       { id: "vehicles", icon: "truck", label: "سياراتي" },
     ],
@@ -536,6 +579,99 @@ export default function AccountScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal
+        visible={isHistoryModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsHistoryModalVisible(false)}
+      >
+        <View style={styles.historyModalOverlay}>
+          <View style={[styles.historyModalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.historyModalHeader}>
+              <Pressable
+                onPress={() => setIsHistoryModalVisible(false)}
+                style={styles.historyCloseButton}
+              >
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+              <ThemedText style={[styles.historyModalTitle, { fontFamily: "Cairo_700Bold" }]}>
+                سجل الفحوصات
+              </ThemedText>
+              <View style={{ width: 24 }} />
+            </View>
+
+            {isLoadingInspections ? (
+              <View style={styles.historyLoadingContainer}>
+                <ThemedText style={[styles.historyLoadingText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                  جاري التحميل...
+                </ThemedText>
+              </View>
+            ) : inspections.length === 0 ? (
+              <View style={styles.historyEmptyContainer}>
+                <Feather name="inbox" size={48} color={theme.textSecondary} />
+                <ThemedText style={[styles.historyEmptyText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                  لا توجد فحوصات محفوظة
+                </ThemedText>
+              </View>
+            ) : (
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: Spacing.xl }}
+              >
+                {inspections.map((inspection, index) => (
+                  <Animated.View
+                    key={inspection.id}
+                    entering={FadeInDown.duration(300).delay(50 * index)}
+                    style={[styles.inspectionCard, { backgroundColor: theme.backgroundSecondary }]}
+                  >
+                    <View style={styles.inspectionHeader}>
+                      <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
+                        <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
+                          #{inspection.inspectionNumber}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.inspectionDateContainer}>
+                        <Feather name="calendar" size={14} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
+                        <ThemedText style={[styles.inspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                          {formatDate(inspection.createdAt)}
+                        </ThemedText>
+                      </View>
+                    </View>
+
+                    <View style={styles.inspectionCarInfo}>
+                      <Feather name="truck" size={18} color={theme.primary} style={{ marginLeft: Spacing.sm }} />
+                      <ThemedText style={[styles.inspectionCarText, { fontFamily: "Cairo_600SemiBold" }]}>
+                        {inspection.carMakeAr} {inspection.carModelAr} {inspection.carYear}
+                      </ThemedText>
+                    </View>
+
+                    <View style={styles.inspectionPartsContainer}>
+                      <ThemedText style={[styles.inspectionPartsTitle, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
+                        القطع المحددة:
+                      </ThemedText>
+                      {inspection.parts && inspection.parts.length > 0 ? (
+                        inspection.parts.map((part: string, partIndex: number) => (
+                          <View key={partIndex} style={styles.inspectionPartItem}>
+                            <View style={[styles.partBullet, { backgroundColor: theme.primary }]} />
+                            <ThemedText style={[styles.inspectionPartText, { fontFamily: "Cairo_400Regular" }]}>
+                              {part}
+                            </ThemedText>
+                          </View>
+                        ))
+                      ) : (
+                        <ThemedText style={[styles.inspectionPartText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                          لا توجد قطع
+                        </ThemedText>
+                      )}
+                    </View>
+                  </Animated.View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -737,5 +873,111 @@ const styles = StyleSheet.create({
   },
   switchModeText: {
     fontSize: 14,
+  },
+  historyModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  historyModalContent: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    maxHeight: "85%",
+  },
+  historyModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.1)",
+    marginBottom: Spacing.md,
+  },
+  historyCloseButton: {
+    padding: Spacing.xs,
+  },
+  historyModalTitle: {
+    fontSize: 18,
+    textAlign: "center",
+  },
+  historyLoadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: Spacing["2xl"],
+  },
+  historyLoadingText: {
+    fontSize: 16,
+  },
+  historyEmptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: Spacing["2xl"],
+    gap: Spacing.md,
+  },
+  historyEmptyText: {
+    fontSize: 16,
+    textAlign: "center",
+  },
+  inspectionCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  inspectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  inspectionNumberBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
+  inspectionNumber: {
+    fontSize: 12,
+  },
+  inspectionDateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  inspectionDate: {
+    fontSize: 12,
+  },
+  inspectionCarInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  inspectionCarText: {
+    fontSize: 15,
+  },
+  inspectionPartsContainer: {
+    marginTop: Spacing.xs,
+  },
+  inspectionPartsTitle: {
+    fontSize: 13,
+    marginBottom: Spacing.xs,
+  },
+  inspectionPartItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.xs,
+  },
+  partBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: Spacing.sm,
+  },
+  inspectionPartText: {
+    fontSize: 13,
+    flex: 1,
+    textAlign: "right",
   },
 });
