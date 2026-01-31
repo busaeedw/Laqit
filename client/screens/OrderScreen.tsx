@@ -773,6 +773,7 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     justifyContent: "flex-end",
     gap: Spacing.md,
+    paddingHorizontal: Spacing.sm,
   },
   primaryButton: {
     flexDirection: "row-reverse",
