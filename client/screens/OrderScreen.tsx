@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
   },
   heroButtons: {
     flexDirection: "row-reverse",
-    justifyContent: "center",
+    justifyContent: "flex-end",
     gap: Spacing.md,
   },
   primaryButton: {
