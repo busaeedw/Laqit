@@ -79,8 +79,8 @@ export default function AccountScreen() {
     
     if (!formMobile.trim()) {
       errors.mobile = "رقم الجوال مطلوب";
-    } else if (!/^[0-9]{10}$/.test(formMobile.replace(/\s/g, ""))) {
-      errors.mobile = "رقم الجوال غير صحيح";
+    } else if (!/^05[0-9]{8}$/.test(formMobile.replace(/\s/g, ""))) {
+      errors.mobile = "رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام";
     }
     
     if (!termsAccepted) {
