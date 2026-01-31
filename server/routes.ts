@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import OpenAI from "openai";
 import { db } from "./db";
-import { users } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { users, inspections } from "@shared/schema";
+import { eq, and, desc } from "drizzle-orm";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -62,6 +62,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
     }
   });
+
+  // Save Inspection
+  app.post("/api/inspections", async (req, res) => {
+    try {
+      const { userId, carMake, carMakeAr, carModel, carModelAr, carYear, parts } = req.body;
+
+      if (!userId || !carMake || !carModel || !parts) {
+        return res.status(400).json({ error: "بيانات الفحص غير مكتملة" });
+      }
+
+      // Generate unique inspection number (format: INS-YYYYMMDD-XXXX)
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      const inspectionNumber = `INS-${dateStr}-${randomNum}`;
+
+      const [newInspection] = await db.insert(inspections).values({
+        inspectionNumber,
+        userId,
+        carMake,
+        carMakeAr: carMakeAr || null,
+        carModel,
+        carModelAr: carModelAr || null,
+        carYear: carYear || null,
+        parts: JSON.stringify(parts),
+      }).returning();
+
+      res.json({ 
+        success: true, 
+        inspection: {
+          id: newInspection.id,
+          inspectionNumber: newInspection.inspectionNumber,
+          carMake: newInspection.carMake,
+          carMakeAr: newInspection.carMakeAr,
+          carModel: newInspection.carModel,
+          carModelAr: newInspection.carModelAr,
+          carYear: newInspection.carYear,
+          parts: JSON.parse(newInspection.parts),
+          createdAt: newInspection.createdAt,
+        }
+      });
+    } catch (error: any) {
+      console.error("Save inspection error:", error?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء حفظ الفحص" });
+    }
+  });
+
+  // Get User Inspections
+  app.get("/api/inspections/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      if (!userId) {
+        return res.status(400).json({ error: "معرف المستخدم مطلوب" });
+      }
+
+      const userInspections = await db.select()
+        .from(inspections)
+        .where(eq(inspections.userId, userId))
+        .orderBy(desc(inspections.createdAt));
+
+      const formattedInspections = userInspections.map(inspection => ({
+        id: inspection.id,
+        inspectionNumber: inspection.inspectionNumber,
+        carMake: inspection.carMake,
+        carMakeAr: inspection.carMakeAr,
+        carModel: inspection.carModel,
+        carModelAr: inspection.carModelAr,
+        carYear: inspection.carYear,
+        parts: JSON.parse(inspection.parts),
+        createdAt: inspection.createdAt,
+      }));
+
+      res.json({ success: true, inspections: formattedInspections });
+    } catch (error: any) {
+      console.error("Get inspections error:", error?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء جلب الفحوصات" });
+    }
+  });
+
   // Endpoint for identifying car only (brand, model, year) - used by step 1
   app.post("/api/identify-car", async (req, res) => {
     try {
