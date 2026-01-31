@@ -59,6 +59,10 @@ export default function AccountScreen() {
   const [inspections, setInspections] = useState<any[]>([]);
   const [isLoadingInspections, setIsLoadingInspections] = useState(false);
 
+  const [isCarsModalVisible, setIsCarsModalVisible] = useState(false);
+  const [userCars, setUserCars] = useState<any[]>([]);
+  const [isLoadingCars, setIsLoadingCars] = useState(false);
+
   const fetchInspections = async () => {
     if (!user) return;
     
@@ -84,6 +88,52 @@ export default function AccountScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     fetchInspections();
     setIsHistoryModalVisible(true);
+  };
+
+  const fetchUserCars = async () => {
+    if (!user) return;
+    
+    setIsLoadingCars(true);
+    try {
+      const response = await fetch(new URL(`/api/inspections/${user.id}`, getApiUrl()).toString());
+      if (response.ok) {
+        const data = await response.json();
+        const inspectionsList = data.inspections || [];
+        const carsMap = new Map();
+        inspectionsList.forEach((inspection: any) => {
+          const carKey = `${inspection.carMake}-${inspection.carModel}-${inspection.carYear}`;
+          if (!carsMap.has(carKey)) {
+            carsMap.set(carKey, {
+              carMake: inspection.carMake,
+              carMakeAr: inspection.carMakeAr,
+              carModel: inspection.carModel,
+              carModelAr: inspection.carModelAr,
+              carYear: inspection.carYear,
+              inspections: [],
+            });
+          }
+          carsMap.get(carKey).inspections.push({
+            inspectionNumber: inspection.inspectionNumber,
+            createdAt: inspection.createdAt,
+          });
+        });
+        setUserCars(Array.from(carsMap.values()));
+      }
+    } catch (error) {
+      console.error("Failed to fetch user cars:", error);
+    } finally {
+      setIsLoadingCars(false);
+    }
+  };
+
+  const handleViewCars = () => {
+    if (!isLoggedIn) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    fetchUserCars();
+    setIsCarsModalVisible(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -242,7 +292,7 @@ export default function AccountScreen() {
     [
       { id: "history", icon: "clock", label: "سجل الفحوصات", onPress: handleViewHistory },
       { id: "favorites", icon: "heart", label: "القطع المحفوظة" },
-      { id: "vehicles", icon: "truck", label: "سياراتي" },
+      { id: "vehicles", icon: "truck", label: "سياراتي", onPress: handleViewCars },
     ],
     [
       { id: "notifications", icon: "bell", label: "الإشعارات" },
@@ -672,6 +722,93 @@ export default function AccountScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={isCarsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCarsModalVisible(false)}
+      >
+        <View style={styles.historyModalOverlay}>
+          <View style={[styles.historyModalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.historyModalHeader}>
+              <Pressable
+                onPress={() => setIsCarsModalVisible(false)}
+                style={styles.historyCloseButton}
+              >
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+              <ThemedText style={[styles.historyModalTitle, { fontFamily: "Cairo_700Bold" }]}>
+                سياراتي
+              </ThemedText>
+              <View style={{ width: 24 }} />
+            </View>
+
+            {isLoadingCars ? (
+              <View style={styles.historyLoadingContainer}>
+                <ThemedText style={[styles.historyLoadingText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                  جاري التحميل...
+                </ThemedText>
+              </View>
+            ) : userCars.length === 0 ? (
+              <View style={styles.historyEmptyContainer}>
+                <Feather name="truck" size={48} color={theme.textSecondary} />
+                <ThemedText style={[styles.historyEmptyText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                  لا توجد سيارات محفوظة
+                </ThemedText>
+              </View>
+            ) : (
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: Spacing.xl }}
+              >
+                {userCars.map((car, index) => (
+                  <Animated.View
+                    key={`${car.carMake}-${car.carModel}-${car.carYear}`}
+                    entering={FadeInDown.duration(300).delay(50 * index)}
+                    style={[styles.carCard, { backgroundColor: theme.backgroundSecondary }]}
+                  >
+                    <View style={styles.carCardHeader}>
+                      <View style={[styles.carIconContainer, { backgroundColor: theme.primary + "15" }]}>
+                        <Feather name="truck" size={24} color={theme.primary} />
+                      </View>
+                      <View style={styles.carInfoContainer}>
+                        <ThemedText style={[styles.carName, { fontFamily: "Cairo_700Bold" }]}>
+                          {car.carMakeAr} {car.carModelAr}
+                        </ThemedText>
+                        <ThemedText style={[styles.carYear, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                          موديل {car.carYear}
+                        </ThemedText>
+                      </View>
+                    </View>
+
+                    <View style={styles.carInspectionsContainer}>
+                      <ThemedText style={[styles.carInspectionsTitle, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
+                        الفحوصات ({car.inspections.length}):
+                      </ThemedText>
+                      {car.inspections.map((inspection: any, inspIndex: number) => (
+                        <View key={inspection.inspectionNumber} style={styles.carInspectionItem}>
+                          <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
+                            <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
+                              #{inspection.inspectionNumber}
+                            </ThemedText>
+                          </View>
+                          <View style={styles.inspectionDateContainer}>
+                            <Feather name="calendar" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
+                            <ThemedText style={[styles.carInspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                              {formatDate(inspection.createdAt)}
+                            </ThemedText>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </Animated.View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -979,5 +1116,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     flex: 1,
     textAlign: "right",
+  },
+  carCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  carCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  carIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: Spacing.md,
+  },
+  carInfoContainer: {
+    flex: 1,
+  },
+  carName: {
+    fontSize: 16,
+    textAlign: "right",
+  },
+  carYear: {
+    fontSize: 13,
+    textAlign: "right",
+  },
+  carInspectionsContainer: {
+    marginTop: Spacing.xs,
+  },
+  carInspectionsTitle: {
+    fontSize: 13,
+    marginBottom: Spacing.sm,
+    textAlign: "right",
+  },
+  carInspectionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.05)",
+  },
+  carInspectionDate: {
+    fontSize: 11,
   },
 });
