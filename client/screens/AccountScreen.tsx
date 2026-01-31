@@ -63,6 +63,10 @@ export default function AccountScreen() {
   const [userCars, setUserCars] = useState<any[]>([]);
   const [isLoadingCars, setIsLoadingCars] = useState(false);
 
+  const [isPartsModalVisible, setIsPartsModalVisible] = useState(false);
+  const [userParts, setUserParts] = useState<any[]>([]);
+  const [isLoadingParts, setIsLoadingParts] = useState(false);
+
   const fetchInspections = async () => {
     if (!user) return;
     
@@ -134,6 +138,49 @@ export default function AccountScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     fetchUserCars();
     setIsCarsModalVisible(true);
+  };
+
+  const fetchUserParts = async () => {
+    if (!user) return;
+    
+    setIsLoadingParts(true);
+    try {
+      const response = await fetch(new URL(`/api/inspections/${user.id}`, getApiUrl()).toString());
+      if (response.ok) {
+        const data = await response.json();
+        const inspectionsList = data.inspections || [];
+        const allParts: any[] = [];
+        inspectionsList.forEach((inspection: any) => {
+          if (inspection.parts && inspection.parts.length > 0) {
+            inspection.parts.forEach((part: string) => {
+              allParts.push({
+                partName: part,
+                inspectionNumber: inspection.inspectionNumber,
+                carMakeAr: inspection.carMakeAr,
+                carModelAr: inspection.carModelAr,
+                carYear: inspection.carYear,
+                createdAt: inspection.createdAt,
+              });
+            });
+          }
+        });
+        setUserParts(allParts);
+      }
+    } catch (error) {
+      console.error("Failed to fetch user parts:", error);
+    } finally {
+      setIsLoadingParts(false);
+    }
+  };
+
+  const handleViewParts = () => {
+    if (!isLoggedIn) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    fetchUserParts();
+    setIsPartsModalVisible(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -291,7 +338,7 @@ export default function AccountScreen() {
     ],
     [
       { id: "history", icon: "clock", label: "سجل الفحوصات", onPress: handleViewHistory },
-      { id: "favorites", icon: "heart", label: "القطع المحفوظة" },
+      { id: "favorites", icon: "heart", label: "القطع المحفوظة", onPress: handleViewParts },
       { id: "vehicles", icon: "truck", label: "سياراتي", onPress: handleViewCars },
     ],
     [
@@ -809,6 +856,86 @@ export default function AccountScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={isPartsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsPartsModalVisible(false)}
+      >
+        <View style={styles.historyModalOverlay}>
+          <View style={[styles.historyModalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.historyModalHeader}>
+              <Pressable
+                onPress={() => setIsPartsModalVisible(false)}
+                style={styles.historyCloseButton}
+              >
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+              <ThemedText style={[styles.historyModalTitle, { fontFamily: "Cairo_700Bold" }]}>
+                القطع المحفوظة
+              </ThemedText>
+              <View style={{ width: 24 }} />
+            </View>
+
+            {isLoadingParts ? (
+              <View style={styles.historyLoadingContainer}>
+                <ThemedText style={[styles.historyLoadingText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                  جاري التحميل...
+                </ThemedText>
+              </View>
+            ) : userParts.length === 0 ? (
+              <View style={styles.historyEmptyContainer}>
+                <Feather name="heart" size={48} color={theme.textSecondary} />
+                <ThemedText style={[styles.historyEmptyText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                  لا توجد قطع محفوظة
+                </ThemedText>
+              </View>
+            ) : (
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: Spacing.xl }}
+              >
+                {userParts.map((part, index) => (
+                  <Animated.View
+                    key={`${part.inspectionNumber}-${index}`}
+                    entering={FadeInDown.duration(300).delay(30 * index)}
+                    style={[styles.partCard, { backgroundColor: theme.backgroundSecondary }]}
+                  >
+                    <View style={styles.partCardHeader}>
+                      <View style={[styles.partIconContainer, { backgroundColor: theme.primary + "15" }]}>
+                        <Feather name="settings" size={20} color={theme.primary} />
+                      </View>
+                      <View style={styles.partInfoContainer}>
+                        <ThemedText style={[styles.partName, { fontFamily: "Cairo_600SemiBold" }]}>
+                          {part.partName}
+                        </ThemedText>
+                        <ThemedText style={[styles.partCarInfo, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                          {part.carMakeAr} {part.carModelAr} {part.carYear}
+                        </ThemedText>
+                      </View>
+                    </View>
+
+                    <View style={styles.partInspectionInfo}>
+                      <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
+                        <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
+                          #{part.inspectionNumber}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.inspectionDateContainer}>
+                        <Feather name="calendar" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
+                        <ThemedText style={[styles.partInspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                          {formatDate(part.createdAt)}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  </Animated.View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -1163,6 +1290,46 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(0, 0, 0, 0.05)",
   },
   carInspectionDate: {
+    fontSize: 11,
+  },
+  partCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  partCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  partIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: Spacing.sm,
+  },
+  partInfoContainer: {
+    flex: 1,
+  },
+  partName: {
+    fontSize: 14,
+    textAlign: "right",
+  },
+  partCarInfo: {
+    fontSize: 12,
+    textAlign: "right",
+  },
+  partInspectionInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0, 0, 0, 0.05)",
+  },
+  partInspectionDate: {
     fontSize: 11,
   },
 });
