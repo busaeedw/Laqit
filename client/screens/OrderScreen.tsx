@@ -393,22 +393,6 @@ export default function OrderScreen() {
                         </ThemedText>
                       </Pressable>
                       <Pressable
-                        testID="button-capture-car-image"
-                        onPress={handleStartScan}
-                        style={({ pressed }) => [
-                          styles.secondaryButton,
-                          { 
-                            backgroundColor: theme.backgroundSecondary,
-                            transform: [{ scale: pressed ? 0.98 : 1 }],
-                          },
-                        ]}
-                      >
-                        <Feather name="camera" size={18} color={theme.text} />
-                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                          التقط صورة
-                        </ThemedText>
-                      </Pressable>
-                      <Pressable
                         testID="button-manual-car-select"
                         onPress={() => navigation.navigate("CarSelection", {
                           onSelect: (car) => setSelectedCar(car)
@@ -474,22 +458,6 @@ export default function OrderScreen() {
                         <Feather name="upload" size={20} color="#FFFFFF" />
                         <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
                           ارفع صورة
-                        </ThemedText>
-                      </Pressable>
-                      <Pressable
-                        testID="button-capture-parts-image"
-                        onPress={handleCapturePartPhoto}
-                        style={({ pressed }) => [
-                          styles.secondaryButton,
-                          { 
-                            backgroundColor: theme.backgroundSecondary,
-                            transform: [{ scale: pressed ? 0.98 : 1 }],
-                          },
-                        ]}
-                      >
-                        <Feather name="camera" size={20} color={theme.text} />
-                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                          التقط صورة
                         </ThemedText>
                       </Pressable>
                     </View>
