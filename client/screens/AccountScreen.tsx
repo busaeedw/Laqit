@@ -24,6 +24,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl } from "@/lib/query-client";
+import { useUser } from "@/context/UserContext";
 
 interface MenuItem {
   id: string;
@@ -34,13 +35,6 @@ interface MenuItem {
   color?: string;
 }
 
-interface UserData {
-  id: string;
-  name: string;
-  mobile: string;
-  email: string | null;
-}
-
 type ModalMode = "login" | "register";
 
 export default function AccountScreen() {
@@ -49,12 +43,11 @@ export default function AccountScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
+  const { user, setUser, isLoggedIn } = useUser();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>("login");
   const [isLoading, setIsLoading] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [userData, setUserData] = useState<UserData | null>(null);
   
   const [formName, setFormName] = useState("");
   const [formMobile, setFormMobile] = useState("");
@@ -144,8 +137,7 @@ export default function AccountScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setUserData(data.user);
-      setIsRegistered(true);
+      setUser(data.user);
       setIsModalVisible(false);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
@@ -184,8 +176,7 @@ export default function AccountScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setUserData(data.user);
-      setIsRegistered(true);
+      setUser(data.user);
       setIsModalVisible(false);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
@@ -197,8 +188,7 @@ export default function AccountScreen() {
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsRegistered(false);
-    setUserData(null);
+    setUser(null);
   };
 
   const menuItems: MenuItem[][] = [
@@ -284,13 +274,13 @@ export default function AccountScreen() {
             </View>
             <View style={styles.profileInfo}>
               <ThemedText style={[styles.profileName, { fontFamily: "Cairo_700Bold" }]}>
-                {isRegistered && userData ? userData.name : "مستخدم ضيف"}
+                {isLoggedIn && user ? user.name : "مستخدم ضيف"}
               </ThemedText>
               <ThemedText style={[styles.profileEmail, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {isRegistered && userData ? userData.mobile : "سجل دخول لحفظ بياناتك"}
+                {isLoggedIn && user ? user.mobile : "سجل دخول لحفظ بياناتك"}
               </ThemedText>
             </View>
-            {!isRegistered ? (
+            {!isLoggedIn ? (
               <View style={styles.authButtons}>
                 <Pressable 
                   onPress={() => handleOpenModal("login")}
@@ -323,7 +313,7 @@ export default function AccountScreen() {
           {menuItems.map((section, index) => renderMenuSection(section, index))}
         </View>
 
-        {isRegistered ? (
+        {isLoggedIn ? (
           <Animated.View entering={FadeInDown.duration(400).delay(500)}>
             <Pressable
               onPress={handleLogout}

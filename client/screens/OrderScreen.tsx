@@ -30,6 +30,7 @@ import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useUser } from "@/context/UserContext";
 
 interface CarBrand {
   id: string;
@@ -88,6 +89,7 @@ export default function OrderScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user, isLoggedIn } = useUser();
 
     const [selectedCar, setSelectedCar] = React.useState<{make: string, makeAr: string, model: string, modelAr: string, year: string} | null>(null);
 
@@ -98,6 +100,50 @@ export default function OrderScreen() {
     const [isAddingPart, setIsAddingPart] = React.useState(false);
     const [newPartText, setNewPartText] = React.useState("");
     const [isReviewModalVisible, setIsReviewModalVisible] = React.useState(false);
+    const [isSavingInspection, setIsSavingInspection] = React.useState(false);
+
+    const handleSaveInspection = async () => {
+      if (!isLoggedIn || !user) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
+      
+      if (!selectedCar || identifiedParts.length === 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
+
+      setIsSavingInspection(true);
+      try {
+        const response = await fetch(new URL("/api/inspections", getApiUrl()).href, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            carMake: selectedCar.make,
+            carMakeAr: selectedCar.makeAr,
+            carModel: selectedCar.model,
+            carModelAr: selectedCar.modelAr,
+            carYear: selectedCar.year,
+            parts: identifiedParts,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save inspection");
+        }
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setIsReviewModalVisible(false);
+        setSelectedCar(null);
+        setIdentifiedParts([]);
+      } catch (error) {
+        console.error("Failed to save inspection:", error);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        setIsSavingInspection(false);
+      }
+    };
 
     const identifyCarFromImage = async (imageUri: string) => {
       setIsIdentifying(true);
@@ -704,6 +750,42 @@ export default function OrderScreen() {
                   </ThemedText>
                 )}
               </View>
+
+              {isLoggedIn ? (
+                <Pressable
+                  onPress={handleSaveInspection}
+                  disabled={isSavingInspection || !selectedCar || identifiedParts.length === 0}
+                  style={({ pressed }) => [
+                    styles.saveInspectionButton,
+                    {
+                      backgroundColor: (!selectedCar || identifiedParts.length === 0) 
+                        ? theme.textSecondary 
+                        : theme.primary,
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}
+                >
+                  {isSavingInspection ? (
+                    <ThemedText style={[styles.saveInspectionButtonText, { fontFamily: "Cairo_600SemiBold", color: "#FFFFFF" }]}>
+                      جاري الحفظ...
+                    </ThemedText>
+                  ) : (
+                    <>
+                      <Feather name="save" size={20} color="#FFFFFF" style={{ marginLeft: Spacing.sm }} />
+                      <ThemedText style={[styles.saveInspectionButtonText, { fontFamily: "Cairo_600SemiBold", color: "#FFFFFF" }]}>
+                        حفظ الفحص
+                      </ThemedText>
+                    </>
+                  )}
+                </Pressable>
+              ) : (
+                <View style={[styles.loginPrompt, { backgroundColor: theme.backgroundSecondary }]}>
+                  <Feather name="user" size={20} color={theme.textSecondary} style={{ marginLeft: Spacing.sm }} />
+                  <ThemedText style={[styles.loginPromptText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                    سجل دخول لحفظ الفحوصات
+                  </ThemedText>
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -1008,5 +1090,29 @@ const styles = StyleSheet.create({
   modalPartText: {
     fontSize: 14,
     textAlign: "right",
+  },
+  saveInspectionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.xl,
+  },
+  saveInspectionButtonText: {
+    fontSize: 16,
+  },
+  loginPrompt: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.xl,
+  },
+  loginPromptText: {
+    fontSize: 14,
   },
 });
