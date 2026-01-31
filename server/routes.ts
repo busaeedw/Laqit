@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import OpenAI from "openai";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -8,6 +11,57 @@ const openai = new OpenAI({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // User Registration
+  app.post("/api/register", async (req, res) => {
+    try {
+      const { name, mobile, email } = req.body;
+
+      if (!name || !mobile) {
+        return res.status(400).json({ error: "الاسم ورقم الجوال مطلوبان" });
+      }
+
+      // Check if mobile already exists
+      const existingUser = await db.select().from(users).where(eq(users.mobile, mobile)).limit(1);
+      if (existingUser.length > 0) {
+        return res.status(400).json({ error: "رقم الجوال مسجل مسبقاً" });
+      }
+
+      const [newUser] = await db.insert(users).values({
+        name,
+        mobile,
+        email: email || null,
+      }).returning();
+
+      res.json({ success: true, user: { id: newUser.id, name: newUser.name, mobile: newUser.mobile, email: newUser.email } });
+    } catch (error: any) {
+      console.error("Registration error:", error?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء التسجيل" });
+    }
+  });
+
+  // User Login
+  app.post("/api/login", async (req, res) => {
+    try {
+      const { name, mobile } = req.body;
+
+      if (!name || !mobile) {
+        return res.status(400).json({ error: "الاسم ورقم الجوال مطلوبان" });
+      }
+
+      const [user] = await db.select().from(users).where(
+        and(eq(users.name, name), eq(users.mobile, mobile))
+      ).limit(1);
+
+      if (!user) {
+        return res.status(401).json({ error: "الاسم أو رقم الجوال غير صحيح" });
+      }
+
+      res.json({ success: true, user: { id: user.id, name: user.name, mobile: user.mobile, email: user.email } });
+    } catch (error: any) {
+      console.error("Login error:", error?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
+    }
+  });
   // Endpoint for identifying car only (brand, model, year) - used by step 1
   app.post("/api/identify-car", async (req, res) => {
     try {

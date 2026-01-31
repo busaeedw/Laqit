@@ -8,6 +8,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -22,6 +23,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { getApiUrl } from "@/lib/query-client";
 
 interface MenuItem {
   id: string;
@@ -33,10 +35,13 @@ interface MenuItem {
 }
 
 interface UserData {
+  id: string;
   name: string;
   mobile: string;
-  email: string;
+  email: string | null;
 }
+
+type ModalMode = "login" | "register";
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
@@ -45,32 +50,52 @@ export default function AccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
 
-  const [isRegistrationModalVisible, setIsRegistrationModalVisible] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [modalMode, setModalMode] = useState<ModalMode>("login");
+  const [isLoading, setIsLoading] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
-  const [userData, setUserData] = useState<UserData>({ name: "", mobile: "", email: "" });
+  const [userData, setUserData] = useState<UserData | null>(null);
   
   const [formName, setFormName] = useState("");
   const [formMobile, setFormMobile] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ name?: string; mobile?: string; terms?: string }>({});
+  const [formErrors, setFormErrors] = useState<{ name?: string; mobile?: string; terms?: string; general?: string }>({});
 
   const handleViewPricing = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate("Pricing");
   };
 
-  const handleOpenRegistration = () => {
+  const handleOpenModal = (mode: ModalMode) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setModalMode(mode);
     setFormName("");
     setFormMobile("");
     setFormEmail("");
     setTermsAccepted(false);
     setFormErrors({});
-    setIsRegistrationModalVisible(true);
+    setIsModalVisible(true);
   };
 
-  const validateForm = () => {
+  const validateLoginForm = () => {
+    const errors: { name?: string; mobile?: string } = {};
+    
+    if (!formName.trim()) {
+      errors.name = "الاسم مطلوب";
+    }
+    
+    if (!formMobile.trim()) {
+      errors.mobile = "رقم الجوال مطلوب";
+    } else if (!/^05[0-9]{8}$/.test(formMobile.replace(/\s/g, ""))) {
+      errors.mobile = "رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateRegisterForm = () => {
     const errors: { name?: string; mobile?: string; terms?: string } = {};
     
     if (!formName.trim()) {
@@ -91,25 +116,89 @@ export default function AccountScreen() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmitRegistration = () => {
-    if (validateForm()) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setUserData({
-        name: formName.trim(),
-        mobile: formMobile.trim(),
-        email: formEmail.trim(),
-      });
-      setIsRegistered(true);
-      setIsRegistrationModalVisible(false);
-    } else {
+  const handleLogin = async () => {
+    if (!validateLoginForm()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    setIsLoading(true);
+    setFormErrors({});
+
+    try {
+      const response = await fetch(new URL("/api/login", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formName.trim(),
+          mobile: formMobile.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setFormErrors({ general: data.error || "حدث خطأ أثناء تسجيل الدخول" });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setUserData(data.user);
+      setIsRegistered(true);
+      setIsModalVisible(false);
+    } catch (error) {
+      setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!validateRegisterForm()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    setIsLoading(true);
+    setFormErrors({});
+
+    try {
+      const response = await fetch(new URL("/api/register", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formName.trim(),
+          mobile: formMobile.trim(),
+          email: formEmail.trim() || null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setFormErrors({ general: data.error || "حدث خطأ أثناء التسجيل" });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setUserData(data.user);
+      setIsRegistered(true);
+      setIsModalVisible(false);
+    } catch (error) {
+      setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsRegistered(false);
-    setUserData({ name: "", mobile: "", email: "" });
+    setUserData(null);
   };
 
   const menuItems: MenuItem[][] = [
@@ -195,24 +284,37 @@ export default function AccountScreen() {
             </View>
             <View style={styles.profileInfo}>
               <ThemedText style={[styles.profileName, { fontFamily: "Cairo_700Bold" }]}>
-                {isRegistered ? userData.name : "مستخدم ضيف"}
+                {isRegistered && userData ? userData.name : "مستخدم ضيف"}
               </ThemedText>
               <ThemedText style={[styles.profileEmail, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {isRegistered ? userData.mobile : "سجل دخول لحفظ بياناتك"}
+                {isRegistered && userData ? userData.mobile : "سجل دخول لحفظ بياناتك"}
               </ThemedText>
             </View>
             {!isRegistered ? (
-              <Pressable 
-                onPress={handleOpenRegistration}
-                style={({ pressed }) => [
-                  styles.loginButton, 
-                  { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 }
-                ]}
-              >
-                <ThemedText style={[styles.loginButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
-                  تسجيل الدخول
-                </ThemedText>
-              </Pressable>
+              <View style={styles.authButtons}>
+                <Pressable 
+                  onPress={() => handleOpenModal("login")}
+                  style={({ pressed }) => [
+                    styles.loginButton, 
+                    { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 }
+                  ]}
+                >
+                  <ThemedText style={[styles.loginButtonText, { fontFamily: "Cairo_600SemiBold" }]}>
+                    تسجيل الدخول
+                  </ThemedText>
+                </Pressable>
+                <Pressable 
+                  onPress={() => handleOpenModal("register")}
+                  style={({ pressed }) => [
+                    styles.registerLink,
+                    { opacity: pressed ? 0.6 : 1 }
+                  ]}
+                >
+                  <ThemedText style={[styles.registerLinkText, { color: theme.primary, fontFamily: "Cairo_400Regular" }]}>
+                    ليس لديك حساب؟ سجل الآن
+                  </ThemedText>
+                </Pressable>
+              </View>
             ) : null}
           </View>
         </Animated.View>
@@ -247,10 +349,10 @@ export default function AccountScreen() {
       </ScrollView>
 
       <Modal
-        visible={isRegistrationModalVisible}
+        visible={isModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setIsRegistrationModalVisible(false)}
+        onRequestClose={() => setIsModalVisible(false)}
       >
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -259,10 +361,10 @@ export default function AccountScreen() {
           <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
             <View style={styles.modalHeader}>
               <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
-                تسجيل حساب جديد
+                {modalMode === "login" ? "تسجيل الدخول" : "تسجيل حساب جديد"}
               </ThemedText>
               <Pressable 
-                onPress={() => setIsRegistrationModalVisible(false)}
+                onPress={() => setIsModalVisible(false)}
                 style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
               >
                 <Feather name="x" size={24} color={theme.text} />
@@ -274,6 +376,15 @@ export default function AccountScreen() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
+              {formErrors.general ? (
+                <View style={[styles.errorBanner, { backgroundColor: theme.error + "15" }]}>
+                  <Feather name="alert-circle" size={16} color={theme.error} />
+                  <ThemedText style={[styles.errorBannerText, { color: theme.error, fontFamily: "Cairo_400Regular" }]}>
+                    {formErrors.general}
+                  </ThemedText>
+                </View>
+              ) : null}
+
               <View style={styles.inputGroup}>
                 <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold" }]}>
                   الاسم <ThemedText style={{ color: theme.error }}>*</ThemedText>
@@ -293,6 +404,7 @@ export default function AccountScreen() {
                     },
                   ]}
                   textAlign="right"
+                  editable={!isLoading}
                 />
                 {formErrors.name ? (
                   <ThemedText style={[styles.errorText, { color: theme.error, fontFamily: "Cairo_400Regular" }]}>
@@ -322,6 +434,7 @@ export default function AccountScreen() {
                     },
                   ]}
                   textAlign="right"
+                  editable={!isLoading}
                 />
                 {formErrors.mobile ? (
                   <ThemedText style={[styles.errorText, { color: theme.error, fontFamily: "Cairo_400Regular" }]}>
@@ -330,77 +443,103 @@ export default function AccountScreen() {
                 ) : null}
               </View>
 
-              <View style={styles.inputGroup}>
-                <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold" }]}>
-                  البريد الإلكتروني <ThemedText style={{ color: theme.textSecondary }}>(اختياري)</ThemedText>
-                </ThemedText>
-                <TextInput
-                  value={formEmail}
-                  onChangeText={setFormEmail}
-                  placeholder="example@email.com"
-                  placeholderTextColor={theme.textSecondary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  style={[
-                    styles.textInput,
-                    { 
-                      backgroundColor: theme.backgroundSecondary,
-                      color: theme.text,
-                      borderColor: theme.border,
-                      fontFamily: "Cairo_400Regular",
-                    },
-                  ]}
-                  textAlign="right"
-                />
-              </View>
+              {modalMode === "register" ? (
+                <>
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold" }]}>
+                      البريد الإلكتروني <ThemedText style={{ color: theme.textSecondary }}>(اختياري)</ThemedText>
+                    </ThemedText>
+                    <TextInput
+                      value={formEmail}
+                      onChangeText={setFormEmail}
+                      placeholder="example@email.com"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      style={[
+                        styles.textInput,
+                        { 
+                          backgroundColor: theme.backgroundSecondary,
+                          color: theme.text,
+                          borderColor: theme.border,
+                          fontFamily: "Cairo_400Regular",
+                        },
+                      ]}
+                      textAlign="right"
+                      editable={!isLoading}
+                    />
+                  </View>
+
+                  <Pressable
+                    onPress={() => {
+                      if (!isLoading) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setTermsAccepted(!termsAccepted);
+                      }
+                    }}
+                    style={styles.termsRow}
+                  >
+                    <View 
+                      style={[
+                        styles.checkbox, 
+                        { 
+                          borderColor: formErrors.terms ? theme.error : theme.border,
+                          backgroundColor: termsAccepted ? theme.primary : "transparent",
+                        }
+                      ]}
+                    >
+                      {termsAccepted ? (
+                        <Feather name="check" size={14} color="#FFFFFF" />
+                      ) : null}
+                    </View>
+                    <ThemedText style={[styles.termsText, { fontFamily: "Cairo_400Regular" }]}>
+                      أوافق على{" "}
+                      <ThemedText style={{ color: theme.primary, fontFamily: "Cairo_600SemiBold" }}>
+                        الشروط والأحكام
+                      </ThemedText>
+                      {" "}و{" "}
+                      <ThemedText style={{ color: theme.primary, fontFamily: "Cairo_600SemiBold" }}>
+                        سياسة الخصوصية
+                      </ThemedText>
+                      {" "}<ThemedText style={{ color: theme.error }}>*</ThemedText>
+                    </ThemedText>
+                  </Pressable>
+                  {formErrors.terms ? (
+                    <ThemedText style={[styles.errorText, { color: theme.error, fontFamily: "Cairo_400Regular", marginTop: Spacing.xs }]}>
+                      {formErrors.terms}
+                    </ThemedText>
+                  ) : null}
+                </>
+              ) : null}
+
+              <Pressable
+                onPress={modalMode === "login" ? handleLogin : handleRegister}
+                disabled={isLoading}
+                style={({ pressed }) => [
+                  styles.submitButton,
+                  { backgroundColor: theme.primary, opacity: isLoading ? 0.6 : pressed ? 0.8 : 1 },
+                ]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <ThemedText style={[styles.submitButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                    {modalMode === "login" ? "دخول" : "تسجيل"}
+                  </ThemedText>
+                )}
+              </Pressable>
 
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setTermsAccepted(!termsAccepted);
+                  setModalMode(modalMode === "login" ? "register" : "login");
+                  setFormErrors({});
                 }}
-                style={styles.termsRow}
+                disabled={isLoading}
+                style={({ pressed }) => [styles.switchModeButton, { opacity: pressed ? 0.6 : 1 }]}
               >
-                <View 
-                  style={[
-                    styles.checkbox, 
-                    { 
-                      borderColor: formErrors.terms ? theme.error : theme.border,
-                      backgroundColor: termsAccepted ? theme.primary : "transparent",
-                    }
-                  ]}
-                >
-                  {termsAccepted ? (
-                    <Feather name="check" size={14} color="#FFFFFF" />
-                  ) : null}
-                </View>
-                <ThemedText style={[styles.termsText, { fontFamily: "Cairo_400Regular" }]}>
-                  أوافق على{" "}
-                  <ThemedText style={{ color: theme.primary, fontFamily: "Cairo_600SemiBold" }}>
-                    الشروط والأحكام
-                  </ThemedText>
-                  {" "}و{" "}
-                  <ThemedText style={{ color: theme.primary, fontFamily: "Cairo_600SemiBold" }}>
-                    سياسة الخصوصية
-                  </ThemedText>
-                  {" "}<ThemedText style={{ color: theme.error }}>*</ThemedText>
-                </ThemedText>
-              </Pressable>
-              {formErrors.terms ? (
-                <ThemedText style={[styles.errorText, { color: theme.error, fontFamily: "Cairo_400Regular", marginTop: Spacing.xs }]}>
-                  {formErrors.terms}
-                </ThemedText>
-              ) : null}
-
-              <Pressable
-                onPress={handleSubmitRegistration}
-                style={({ pressed }) => [
-                  styles.submitButton,
-                  { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
-                ]}
-              >
-                <ThemedText style={[styles.submitButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                  تسجيل
+                <ThemedText style={[styles.switchModeText, { color: theme.primary, fontFamily: "Cairo_400Regular" }]}>
+                  {modalMode === "login" ? "ليس لديك حساب؟ سجل الآن" : "لديك حساب؟ سجل دخول"}
                 </ThemedText>
               </Pressable>
             </ScrollView>
@@ -438,6 +577,10 @@ const styles = StyleSheet.create({
   profileEmail: {
     fontSize: 14,
   },
+  authButtons: {
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
   loginButton: {
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.sm,
@@ -446,6 +589,12 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
+  },
+  registerLink: {
+    padding: Spacing.xs,
+  },
+  registerLinkText: {
+    fontSize: 13,
   },
   menuContainer: {
     marginTop: Spacing.xl,
@@ -528,6 +677,19 @@ const styles = StyleSheet.create({
   formContainer: {
     gap: Spacing.md,
   },
+  errorBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 14,
+    textAlign: "right",
+  },
   inputGroup: {
     marginBottom: Spacing.md,
   },
@@ -573,10 +735,17 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     alignItems: "center",
     marginTop: Spacing.xl,
-    marginBottom: Spacing.lg,
   },
   submitButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
+  },
+  switchModeButton: {
+    alignItems: "center",
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  switchModeText: {
+    fontSize: 14,
   },
 });
