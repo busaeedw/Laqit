@@ -32,7 +32,7 @@ export function CustomSplash({ visible }: CustomSplashProps) {
             { fontFamily: "Cairo_700Bold", color: theme.text },
           ]}
         >
-          مؤسسة خالد سالم باسنبل
+          لاقط قطع السيارات
         </ThemedText>
       </View>
     </Animated.View>
