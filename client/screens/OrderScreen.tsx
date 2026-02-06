@@ -66,7 +66,7 @@ const howToSteps: HowToStep[] = [
     id: "2",
     icon: "camera",
     title: "التقط صورة",
-    description: "صور قطعة السيارة أو اختر صورة من المعرض",
+    description: "صور السيارة أو اختر صورة لفحص الأضرار والقطع المفقودة",
   },
   {
     id: "3",
@@ -250,7 +250,7 @@ export default function OrderScreen() {
         if (result.parts && result.parts.length > 0) {
           setIdentifiedParts(result.parts.map((part: any) => part.nameAr || part.name));
         } else {
-          setIdentifiedParts(["لم يتم العثور على قطع"]);
+          setIdentifiedParts(["لم يتم العثور على أضرار أو قطع مفقودة"]);
         }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (error) {
@@ -588,7 +588,7 @@ export default function OrderScreen() {
                         </View>
                       ) : (
                         <ThemedText style={[styles.resultText, { color: theme.textSecondary, textAlign: 'center', opacity: 0.6 }]}>
-                          بانتظار تحليل قطع السيارة...
+                          بانتظار فحص أضرار السيارة...
                         </ThemedText>
                       )}
                     </View>

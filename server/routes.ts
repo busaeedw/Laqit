@@ -221,7 +221,7 @@ RULES:
       console.log("Image URI length:", imageUri?.length || 0);
       console.log("Image starts with:", imageUri?.substring(0, 50));
 
-      const systemPrompt = `You are an expert automotive parts identification system. You MUST analyze the image and identify the car and its parts.
+      const systemPrompt = `You are an expert automotive damage and missing parts detection system. You MUST analyze the image and identify the car, then detect any missing, damaged, broken, or worn parts.
 
 IMPORTANT: You MUST ALWAYS return valid JSON in the exact format specified below. NEVER return error messages or plain text.
 
@@ -229,13 +229,14 @@ STEP 1 - Identify the car:
 - Look for visible text on the car (brand names like "ODYSSEY", "FLEX", "CAMRY", etc.)
 - Look for brand logos/emblems (Honda "H", Ford oval, Toyota logo, etc.)
 - Study the body shape, taillights, and distinctive features
-- If you see "Honda" logo or "ODYSSEY" text, it's a Honda Odyssey
-- If you see "Ford" logo or "FLEX" text, it's a Ford Flex
 - Estimate the year based on the generation/design
 
-STEP 2 - Identify visible parts:
-- Taillights, bumpers, trunk/tailgate, mirrors, windows, etc.
-- Provide realistic prices in Saudi Riyals (SAR)
+STEP 2 - Detect missing or damaged parts:
+- Look carefully for any MISSING parts (e.g., missing bumper, missing mirror, missing headlight, missing trim piece, missing emblem, missing grille)
+- Look for DAMAGED parts (cracked bumpers, broken lights, dented panels, scratched paint, broken mirrors, cracked windshield)
+- Look for WORN parts (faded paint, worn tires, rusted areas, deteriorated rubber seals)
+- For each issue found, describe the condition: "missing", "damaged", "cracked", "broken", "dented", "scratched", "worn", "faded", etc.
+- Provide realistic replacement/repair prices in Saudi Riyals (SAR)
 
 You MUST return this exact JSON structure (no exceptions):
 {
@@ -249,29 +250,42 @@ You MUST return this exact JSON structure (no exceptions):
   "parts": [
     {
       "id": "1",
-      "name": "Tail Light Assembly",
-      "nameAr": "مجموعة المصباح الخلفي",
-      "description": "LED Tail light with turn signal",
-      "descriptionAr": "مصباح خلفي LED مع إشارة الانعطاف",
-      "primaryUse": "Provides visibility and signals to other drivers",
-      "primaryUseAr": "توفير الرؤية والإشارات للسائقين الآخرين",
-      "price": 750,
+      "name": "Front Bumper - Damaged",
+      "nameAr": "الصدام الأمامي - تالف",
+      "description": "Front bumper has visible crack on the left side",
+      "descriptionAr": "الصدام الأمامي به شرخ واضح على الجانب الأيسر",
+      "condition": "damaged",
+      "conditionAr": "تالف",
+      "primaryUse": "Protects the front of the vehicle in low-speed collisions",
+      "primaryUseAr": "حماية مقدمة السيارة في التصادمات منخفضة السرعة",
+      "price": 1200,
       "confidence": 85,
       "boundingBox": { "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.2 }
     }
   ]
 }
 
+CONDITION VALUES:
+- "missing" / "مفقود" - Part is completely absent
+- "damaged" / "تالف" - Part is broken, cracked, or significantly damaged  
+- "scratched" / "مخدوش" - Part has scratches or surface damage
+- "dented" / "مضغوط" - Part has dents
+- "worn" / "متآكل" - Part shows significant wear
+- "faded" / "باهت" - Paint or surface has faded
+- "cracked" / "متشقق" - Part has cracks
+
 RULES:
-- ALWAYS identify at least 2-4 car parts from the image
-- ALWAYS provide Arabic translations (makeAr, modelAr, nameAr, descriptionAr, primaryUseAr)
-- Confidence should reflect how certain you are (60-100)
-- Prices should be realistic estimates in SAR
+- Focus on finding MISSING and DAMAGED parts - this is a damage inspection tool
+- If the car appears in good condition with no visible damage, still check carefully for minor issues like scratches, worn tires, faded paint, etc.
+- If truly no damage is found, return an empty parts array
+- ALWAYS provide Arabic translations (makeAr, modelAr, nameAr, descriptionAr, conditionAr, primaryUseAr)
+- Confidence should reflect how certain you are about the damage (60-100)
+- Prices should be realistic replacement/repair estimates in SAR
 - NEVER return an error message - always return the JSON structure above`;
 
       const userMessage = carInfo
-        ? `The user has selected: ${carInfo.make} ${carInfo.model} ${carInfo.year}. Analyze the car parts visible in the image.`
-        : `Identify the car make, model, year, and all visible parts in the image.`;
+        ? `The user has selected: ${carInfo.make} ${carInfo.model} ${carInfo.year}. Inspect the car image carefully for any missing, damaged, broken, worn, or defective parts.`
+        : `Identify the car make, model, year, then inspect the image carefully for any missing, damaged, broken, worn, or defective parts.`;
 
       console.log("Calling OpenAI API with model gpt-4o...");
       
