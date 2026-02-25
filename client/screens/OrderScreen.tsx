@@ -429,8 +429,9 @@ export default function OrderScreen() {
                       ) : selectedCar ? (
                         <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
                           <Feather name="check-circle" size={16} color={theme.primary} />
-                          <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-                            السيارة المحددة: {selectedCar.makeAr} {selectedCar.modelAr} {selectedCar.year}
+                          <ThemedText style={[styles.resultText, { fontFamily: "Cairo_700Bold" }]}>
+                            <ThemedText style={{ color: theme.primary }}>السيارة المحددة: </ThemedText>
+                            <ThemedText style={{ color: "#000000" }}>{selectedCar.makeAr} {selectedCar.modelAr} {selectedCar.year}</ThemedText>
                           </ThemedText>
                         </View>
                       ) : (
