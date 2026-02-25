@@ -632,7 +632,7 @@ export default function OrderScreen() {
                       >
                         <Feather name="send" size={20} color="#FFFFFF" />
                         <ThemedText style={[styles.primaryButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                          أرسل الطلب للتاجر
+                          ارسل الطلب للتجار
                         </ThemedText>
                       </Pressable>
                     </View>
