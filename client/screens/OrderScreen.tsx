@@ -72,7 +72,7 @@ const howToSteps: HowToStep[] = [
     id: "3",
     icon: "cpu",
     title: "مراجعة الطلب قبل الإرسال",
-    description: "سيقوم الذكاء الاصطناعي بتحليل الصورة وتحديد القطع",
+    description: "راجع المعلومات قبل إرسالها للتجار",
   },
   {
     id: "4",
