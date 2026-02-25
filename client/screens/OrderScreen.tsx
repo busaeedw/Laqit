@@ -65,7 +65,7 @@ const howToSteps: HowToStep[] = [
   {
     id: "2",
     icon: "camera",
-    title: "التقط صورة",
+    title: "تحديد القطع",
     description: "صور السيارة أو اختر صورة لفحص الأضرار والقطع المفقودة",
   },
   {
