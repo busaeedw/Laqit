@@ -614,21 +614,6 @@ export default function OrderScreen() {
                           راجع الطلب
                         </ThemedText>
                       </Pressable>
-                      <Pressable
-                        disabled={true}
-                        style={[
-                          styles.secondaryButton,
-                          { 
-                            backgroundColor: theme.backgroundSecondary,
-                            opacity: 0.5,
-                          },
-                        ]}
-                      >
-                        <Feather name="package" size={20} color={theme.textSecondary} />
-                        <ThemedText style={[styles.secondaryButtonText, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
-                          القطع المتاحة
-                        </ThemedText>
-                      </Pressable>
                     </View>
                   </View>
                 ) : null}
