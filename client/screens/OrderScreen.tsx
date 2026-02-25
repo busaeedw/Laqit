@@ -421,8 +421,8 @@ export default function OrderScreen() {
                     }]}>
                       {isIdentifying ? (
                         <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
-                          <Feather name="loader" size={16} color={theme.primary} />
-                          <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                          <Feather name="loader" size={16} color="#E53935" />
+                          <ThemedText style={[styles.resultText, { color: "#E53935", fontFamily: "Cairo_600SemiBold" }]}>
                             جاري تحديد السيارة...
                           </ThemedText>
                         </View>
@@ -471,8 +471,8 @@ export default function OrderScreen() {
                     }]}>
                       {isAnalyzingParts ? (
                         <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: Spacing.sm }}>
-                          <Feather name="loader" size={16} color={theme.primary} />
-                          <ThemedText style={[styles.resultText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                          <Feather name="loader" size={16} color="#E53935" />
+                          <ThemedText style={[styles.resultText, { color: "#E53935", fontFamily: "Cairo_600SemiBold" }]}>
                             جاري تحليل القطع...
                           </ThemedText>
                         </View>
