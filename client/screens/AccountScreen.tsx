@@ -165,28 +165,26 @@ export default function AccountScreen() {
   };
 
   const fetchUserParts = async () => {
-    if (!user) return;
-    
+    if (!user?.customerId) return;
+
     setIsLoadingParts(true);
     try {
-      const response = await fetch(new URL(`/api/inspections/${user.id}`, getApiUrl()).toString());
+      const response = await fetch(
+        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString()
+      );
       if (response.ok) {
         const data = await response.json();
-        const inspectionsList = data.inspections || [];
+        const inspectionsList: any[] = data.inspections || [];
         const allParts: any[] = [];
         inspectionsList.forEach((inspection: any) => {
-          if (inspection.parts && inspection.parts.length > 0) {
-            inspection.parts.forEach((part: string) => {
-              allParts.push({
-                partName: part,
-                inspectionNumber: inspection.inspectionNumber,
-                carMakeAr: inspection.carMakeAr,
-                carModelAr: inspection.carModelAr,
-                carYear: inspection.carYear,
-                createdAt: inspection.createdAt,
-              });
-            });
-          }
+          allParts.push({
+            partName: [inspection.makeName, inspection.modelName, inspection.carYear].filter(Boolean).join(" "),
+            inspectionNumber: inspection.inspectionNo,
+            carMakeAr: inspection.makeName,
+            carModelAr: inspection.modelName,
+            carYear: inspection.carYear,
+            createdAt: inspection.createdAt,
+          });
         });
         setUserParts(allParts);
       }
