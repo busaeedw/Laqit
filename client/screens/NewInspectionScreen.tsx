@@ -781,22 +781,38 @@ export default function NewInspectionScreen() {
             <Feather name="arrow-left" size={18} color="#fff" />
           </Pressable>
         ) : (
-          <Pressable
-            onPress={handleSubmit}
-            disabled={submitting}
-            style={[styles.nextBtn, { backgroundColor: submitting ? theme.textSecondary : theme.success }]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                  إرسال الطلب
-                </ThemedText>
-                <Feather name="send" size={18} color="#fff" />
-              </>
+          <>
+            {!user?.customerId && (
+              <ThemedText style={[styles.loginNudge, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                يجب تسجيل الدخول أولاً لإرسال الطلب
+              </ThemedText>
             )}
-          </Pressable>
+            <Pressable
+              onPress={user?.customerId ? handleSubmit : undefined}
+              disabled={submitting || !user?.customerId}
+              style={[
+                styles.nextBtn,
+                {
+                  backgroundColor: submitting
+                    ? theme.textSecondary
+                    : !user?.customerId
+                    ? theme.success + "50"
+                    : theme.success,
+                },
+              ]}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold", opacity: user?.customerId ? 1 : 0.5 }]}>
+                    إرسال الطلب
+                  </ThemedText>
+                  <Feather name="send" size={18} color="#fff" style={{ opacity: user?.customerId ? 1 : 0.5 }} />
+                </>
+              )}
+            </Pressable>
+          </>
         )}
       </View>
     </View>
@@ -943,6 +959,11 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   nextBtnText: { color: "#fff", fontSize: 15 },
+  loginNudge: {
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: 6,
+  },
   successContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.xl },
   successCard: { alignItems: "center", gap: Spacing.lg, maxWidth: 360 },
   successIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center" },
