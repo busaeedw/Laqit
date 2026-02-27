@@ -40,7 +40,7 @@ async function seed() {
   const makesData = [
     "Toyota", "Honda", "Nissan", "Hyundai", "Kia",
     "Renault", "Mercedes-Benz", "BMW", "Lexus", "Chevrolet",
-    "Ford", "GMC", "Audi", "Mitsubishi",
+    "Ford", "GMC", "Audi", "Mitsubishi", "Cadillac",
   ];
 
   await db
@@ -70,6 +70,7 @@ async function seed() {
     { make: "GMC", models: ["Yukon", "Sierra", "Terrain", "Acadia"] },
     { make: "Audi", models: ["A4", "A6", "Q5", "Q7"] },
     { make: "Mitsubishi", models: ["Pajero", "L200", "Eclipse Cross", "ASX"] },
+    { make: "Cadillac", models: ["Escalade", "Escalade ESV", "CT4", "CT5", "CT6", "XT4", "XT5", "XT6", "ATS", "CTS", "SRX", "STS", "DTS"] },
   ];
 
   const modelInserts: { makeId: string; modelName: string }[] = [];
