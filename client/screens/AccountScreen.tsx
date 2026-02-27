@@ -99,32 +99,50 @@ export default function AccountScreen() {
   };
 
   const fetchUserCars = async () => {
-    if (!user) return;
-    
+    if (!user?.customerId) return;
+
     setIsLoadingCars(true);
     try {
-      const response = await fetch(new URL(`/api/inspections/${user.id}`, getApiUrl()).toString());
+      const response = await fetch(
+        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString()
+      );
       if (response.ok) {
         const data = await response.json();
-        const inspectionsList = data.inspections || [];
-        const carsMap = new Map();
-        inspectionsList.forEach((inspection: any) => {
-          const carKey = `${inspection.carMake}-${inspection.carModel}-${inspection.carYear}`;
-          if (!carsMap.has(carKey)) {
-            carsMap.set(carKey, {
-              carMake: inspection.carMake,
-              carMakeAr: inspection.carMakeAr,
-              carModel: inspection.carModel,
-              carModelAr: inspection.carModelAr,
-              carYear: inspection.carYear,
-              inspections: [],
+        const inspectionsList: any[] = data.inspections || [];
+
+        // Deduplicate by carModelId — show each car once with inspection count
+        const carsMap = new Map<string, {
+          carModelId: string;
+          makeName: string;
+          modelName: string;
+          carYear: number | null;
+          inspectionCount: number;
+          lastInspectionNo: string;
+          lastInspectionDate: string;
+        }>();
+
+        inspectionsList.forEach((insp: any) => {
+          const key = insp.carModelId;
+          if (!carsMap.has(key)) {
+            carsMap.set(key, {
+              carModelId: insp.carModelId,
+              makeName: insp.makeName ?? "",
+              modelName: insp.modelName ?? "",
+              carYear: insp.carYear ?? null,
+              inspectionCount: 0,
+              lastInspectionNo: insp.inspectionNo,
+              lastInspectionDate: insp.createdAt,
             });
           }
-          carsMap.get(carKey).inspections.push({
-            inspectionNumber: inspection.inspectionNumber,
-            createdAt: inspection.createdAt,
-          });
+          const entry = carsMap.get(key)!;
+          entry.inspectionCount += 1;
+          // Keep most recent inspection info (list is ordered desc)
+          if (!entry.lastInspectionNo) {
+            entry.lastInspectionNo = insp.inspectionNo;
+            entry.lastInspectionDate = insp.createdAt;
+          }
         });
+
         setUserCars(Array.from(carsMap.values()));
       }
     } catch (error) {
@@ -912,7 +930,7 @@ export default function AccountScreen() {
               >
                 {userCars.map((car, index) => (
                   <Animated.View
-                    key={`${car.carMake}-${car.carModel}-${car.carYear}`}
+                    key={car.carModelId}
                     entering={FadeInDown.duration(300).delay(50 * index)}
                     style={[styles.carCard, { backgroundColor: theme.backgroundSecondary }]}
                   >
@@ -922,33 +940,26 @@ export default function AccountScreen() {
                       </View>
                       <View style={styles.carInfoContainer}>
                         <ThemedText style={[styles.carName, { fontFamily: "Cairo_700Bold" }]}>
-                          {car.carMakeAr} {car.carModelAr}
+                          {car.makeName} {car.modelName}
                         </ThemedText>
-                        <ThemedText style={[styles.carYear, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
-                          موديل {car.carYear}
-                        </ThemedText>
+                        {car.carYear ? (
+                          <ThemedText style={[styles.carYear, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                            سنة {car.carYear}
+                          </ThemedText>
+                        ) : null}
                       </View>
                     </View>
 
-                    <View style={styles.carInspectionsContainer}>
-                      <ThemedText style={[styles.carInspectionsTitle, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
-                        الفحوصات ({car.inspections.length}):
+                    <View style={[styles.carInspectionsContainer, { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }]}>
+                      <View style={[styles.inspectionCountBadge, { backgroundColor: theme.primary + "15" }]}>
+                        <Feather name="clipboard" size={13} color={theme.primary} />
+                        <ThemedText style={[styles.inspectionCountText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                          {car.inspectionCount} {car.inspectionCount === 1 ? "طلب" : "طلبات"}
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={[styles.carInspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                        آخر طلب: {formatDate(car.lastInspectionDate)}
                       </ThemedText>
-                      {car.inspections.map((inspection: any, inspIndex: number) => (
-                        <View key={inspection.inspectionNumber} style={styles.carInspectionItem}>
-                          <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
-                            <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
-                              #{inspection.inspectionNumber}
-                            </ThemedText>
-                          </View>
-                          <View style={styles.inspectionDateContainer}>
-                            <Feather name="calendar" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
-                            <ThemedText style={[styles.carInspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
-                              {formatDate(inspection.createdAt)}
-                            </ThemedText>
-                          </View>
-                        </View>
-                      ))}
                     </View>
                   </Animated.View>
                 ))}
@@ -1392,6 +1403,17 @@ const styles = StyleSheet.create({
   },
   carInspectionDate: {
     fontSize: 11,
+  },
+  inspectionCountBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  inspectionCountText: {
+    fontSize: 12,
   },
   partCard: {
     borderRadius: BorderRadius.lg,

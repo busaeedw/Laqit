@@ -600,12 +600,34 @@ RULES:
 
   app.get("/api/laqit-inspections/customer/:customerId", async (req, res) => {
     try {
-      const result = await db
+      const rows = await db
         .select()
         .from(laqitInspections)
         .where(eq(laqitInspections.customerId, req.params.customerId))
         .orderBy(desc(laqitInspections.createdAt));
-      res.json({ inspections: result });
+
+      // Enrich with car model + make names
+      const uniqueModelIds = [...new Set(rows.map((r) => r.carModelId))];
+      const modelRows = uniqueModelIds.length > 0
+        ? await db.select().from(carModels).where(inArray(carModels.carModelId, uniqueModelIds))
+        : [];
+      const uniqueMakeIds = [...new Set(modelRows.map((m) => m.makeId))];
+      const makeRows = uniqueMakeIds.length > 0
+        ? await db.select().from(carMakes).where(inArray(carMakes.makeId, uniqueMakeIds))
+        : [];
+
+      const modelMap: Record<string, { modelName: string; makeId: string }> = {};
+      modelRows.forEach((m) => { modelMap[m.carModelId] = { modelName: m.modelName, makeId: m.makeId }; });
+      const makeMap: Record<string, string> = {};
+      makeRows.forEach((m) => { makeMap[m.makeId] = m.makeName; });
+
+      const enriched = rows.map((r) => ({
+        ...r,
+        modelName: modelMap[r.carModelId]?.modelName ?? null,
+        makeName: makeMap[modelMap[r.carModelId]?.makeId ?? ""] ?? null,
+      }));
+
+      res.json({ inspections: enriched });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }
