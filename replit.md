@@ -69,6 +69,23 @@ Key features:
 
 **Database**: PostgreSQL with Drizzle ORM. Schema in `/shared/schema.ts`.
 
+Full Laqit RFQ schema is implemented alongside the original tables. New tables:
+- `cities` — city master data
+- `customers` — customer accounts with city FK and E.164 mobile
+- `vendors` / `vendor_users` — vendor companies and their staff (WhatsApp-primary partial unique index)
+- `car_makes` / `car_models` — car catalog
+- `vendor_locations` / `vendor_supported_models` — vendor coverage and compatibility
+- `laqit_inspections` — full inspection table with inspection_no, status enum, city/model FKs
+- `inspection_media` / `inspection_parts` — photos and parts per inspection
+- `rfq_documents` / `rfq_recipients` — generated PDFs and delivery audit log
+- `whatsapp_messages` — inbound/outbound WhatsApp message log
+- `quotes` — vendor quotes with OCR-extracted total amount
+- `payments` — payment records per accepted quote
+- `notifications` — multi-channel notification log
+- `audit_log` — general actor/entity audit trail
+
+PostgreSQL enum types: `inspection_status`, `delivery_status`, `message_direction`, `quote_status`, `payment_status`, `user_role`, `user_status`, `vendor_status`, `customer_status`, `media_type`, `part_source`, `notification_channel`, `notification_status`
+
 ### Build System
 
 **Development**: 
