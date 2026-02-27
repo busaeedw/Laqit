@@ -166,76 +166,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Endpoint for identifying car only (brand, model, year) - used by step 1
-  app.post("/api/identify-car", async (req, res) => {
-    try {
-      const { imageUri } = req.body;
-      
-      console.log("Received car identification request");
-
-      const systemPrompt = `You are an expert car identification system. Analyze the image and identify ONLY the car make, model, and year.
-
-Look for:
-- Brand logos/emblems (Toyota, Honda, Ford, BMW, Mercedes, Hyundai, Nissan, etc.)
-- Visible text on the car (model names like "Camry", "Accord", "Altima", etc.)
-- Body shape, distinctive design features, headlights, grille design
-- Estimate the year based on the car's generation/design
-
-You MUST return this exact JSON structure:
-{
-  "make": "Toyota",
-  "makeAr": "تويوتا",
-  "model": "Camry",
-  "modelAr": "كامري",
-  "year": "2023"
-}
-
-Common Arabic translations:
-- Toyota = تويوتا, Honda = هوندا, Nissan = نيسان, Hyundai = هيونداي
-- Ford = فورد, BMW = بي إم دبليو, Mercedes = مرسيدس, Chevrolet = شيفروليه
-- Kia = كيا, Mazda = مازدا, Lexus = لكزس, GMC = جي إم سي
-
-RULES:
-- ALWAYS provide Arabic translations
-- Be as specific as possible about the model
-- Estimate the year based on design features
-- If uncertain, provide your best guess with the most likely match`;
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Identify this car's make, model, and year." },
-              {
-                type: "image_url",
-                image_url: { url: imageUri },
-              },
-            ],
-          },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 500,
-      });
-
-      const content = response.choices[0]?.message?.content || "{}";
-      console.log("Car identification result:", content);
-      const result = JSON.parse(content);
-
-      res.json(result);
-    } catch (error: any) {
-      console.error("Car identification error:", error?.message);
-      res.status(500).json({
-        make: "Unknown",
-        makeAr: "غير معروف",
-        model: "Unknown",
-        modelAr: "غير معروف",
-        year: "---",
-      });
-    }
-  });
 
   app.post("/api/analyze", async (req, res) => {
     try {
@@ -373,6 +303,53 @@ RULES:
         },
         parts: [],
       });
+    }
+  });
+
+  // ─── Car Identification by Photo ─────────────────────────────────────────
+
+  app.post("/api/identify-car", async (req, res) => {
+    try {
+      const { imageUri } = req.body;
+      if (!imageUri) return res.status(400).json({ error: "imageUri required" });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an automotive expert. Analyze the car in the image and identify its make, model, and year. Return ONLY valid JSON in this exact format:
+{
+  "makeName": "Toyota",
+  "modelName": "Camry",
+  "year": "2022",
+  "confidence": 85
+}
+Rules:
+- makeName: the manufacturer brand name in English (e.g. Toyota, Hyundai, Nissan, Ford, GMC, Kia, Honda, BMW)
+- modelName: the model name in English (e.g. Camry, Corolla, Accent)
+- year: 4-digit year as a string, estimate if not certain
+- confidence: integer 0-100 reflecting certainty
+- If the image has no car, return { "makeName": null, "modelName": null, "year": null, "confidence": 0 }`,
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Identify the make, model, and year of this car." },
+              { type: "image_url", image_url: { url: imageUri } },
+            ],
+          },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 256,
+      });
+
+      const raw = response.choices[0]?.message?.content ?? "{}";
+      const result = JSON.parse(raw);
+      res.json(result);
+    } catch (err: any) {
+      console.error("identify-car error:", err?.message);
+      res.status(500).json({ error: "فشل في تحليل صورة السيارة" });
     }
   });
 

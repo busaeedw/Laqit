@@ -66,6 +66,7 @@ export default function NewInspectionScreen() {
   const [selectedYear, setSelectedYear] = useState<string>("");
   const [makesLoading, setMakesLoading] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [carIdentifying, setCarIdentifying] = useState(false);
 
   // Step 2 – photos
   const [carPhotoUri, setCarPhotoUri] = useState<string | null>(null);
@@ -116,6 +117,85 @@ export default function NewInspectionScreen() {
     },
     [apiUrl]
   );
+
+  const handleIdentifyByCar = async () => {
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      base64: true,
+    });
+    if (picked.canceled || !picked.assets[0]) return;
+    const asset = picked.assets[0];
+    const dataUri = `data:image/jpeg;base64,${asset.base64}`;
+
+    setCarIdentifying(true);
+    try {
+      const resp = await fetch(new URL("/api/identify-car", apiUrl).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUri: dataUri }),
+      });
+      const data = await resp.json();
+      if (!data.makeName) {
+        Alert.alert("", "تعذر تحديد نوع السيارة من الصورة، يرجى الاختيار يدوياً");
+        return;
+      }
+
+      // Load makes if not already loaded
+      let allMakes = makes;
+      if (allMakes.length === 0) {
+        setMakesLoading(true);
+        const makesResp = await fetch(new URL("/api/car-makes", apiUrl).toString());
+        const makesData = await makesResp.json();
+        allMakes = makesData.makes ?? [];
+        setMakes(allMakes);
+        setMakesLoading(false);
+      }
+
+      // Match make (case-insensitive fuzzy)
+      const idMake = (data.makeName ?? "").toLowerCase();
+      const matchedMake = allMakes.find(
+        (m) =>
+          m.makeName.toLowerCase() === idMake ||
+          m.makeName.toLowerCase().includes(idMake) ||
+          idMake.includes(m.makeName.toLowerCase())
+      );
+
+      if (!matchedMake) {
+        Alert.alert("", `تم تعرف على الماركة كـ "${data.makeName}" لكنها غير موجودة في القائمة، يرجى الاختيار يدوياً`);
+        return;
+      }
+      setSelectedMake(matchedMake);
+
+      // Load models for matched make
+      setModelsLoading(true);
+      const modelsResp = await fetch(new URL(`/api/car-models/${matchedMake.makeId}`, apiUrl).toString());
+      const modelsData = await modelsResp.json();
+      const allModels: ApiModel[] = modelsData.models ?? [];
+      setModels(allModels);
+      setModelsLoading(false);
+
+      // Match model
+      const idModel = (data.modelName ?? "").toLowerCase();
+      const matchedModel = allModels.find(
+        (m) =>
+          m.modelName.toLowerCase() === idModel ||
+          m.modelName.toLowerCase().includes(idModel) ||
+          idModel.includes(m.modelName.toLowerCase())
+      );
+      if (matchedModel) setSelectedModel(matchedModel);
+
+      // Set year
+      if (data.year) setSelectedYear(String(data.year));
+
+      const label = [matchedMake.makeName, matchedModel?.modelName, data.year].filter(Boolean).join(" ");
+      Alert.alert("تم التحديد", `تم التعرف على السيارة: ${label}`);
+    } catch {
+      Alert.alert("خطأ", "تعذر تحليل صورة السيارة، يرجى المحاولة مرة أخرى");
+    } finally {
+      setCarIdentifying(false);
+    }
+  };
 
   const createInspection = async (): Promise<string | null> => {
     if (!user?.customerId || !selectedModel) return null;
@@ -363,17 +443,37 @@ export default function NewInspectionScreen() {
             </ThemedText>
 
             {/* Makes */}
-            {makes.length === 0 && !makesLoading ? (
-              <Pressable
-                style={[styles.loadBtn, { backgroundColor: theme.primary }]}
-                onPress={loadMakes}
-              >
-                <ThemedText style={[styles.loadBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                  تحميل قائمة الماركات
-                </ThemedText>
-              </Pressable>
-            ) : makesLoading ? (
-              <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.xl }} />
+            {makes.length === 0 && !makesLoading && !carIdentifying ? (
+              <View style={styles.loadBtnsRow}>
+                <Pressable
+                  style={[styles.loadBtn, styles.loadBtnFlex, { backgroundColor: theme.primary }]}
+                  onPress={loadMakes}
+                  testID="button-load-makes"
+                >
+                  <ThemedText style={[styles.loadBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                    تحميل قائمة الماركات
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.loadBtn, styles.loadBtnFlex, { backgroundColor: theme.backgroundDefault, borderWidth: 1.5, borderColor: theme.primary }]}
+                  onPress={handleIdentifyByCar}
+                  testID="button-identify-car"
+                >
+                  <Feather name="camera" size={15} color={theme.primary} style={{ marginBottom: 2 }} />
+                  <ThemedText style={[styles.loadBtnText, { fontFamily: "Cairo_700Bold", color: theme.primary, fontSize: 13 }]}>
+                    تحديد نوع السيارة بالصورة
+                  </ThemedText>
+                </Pressable>
+              </View>
+            ) : makesLoading || carIdentifying ? (
+              <View style={{ alignItems: "center", marginTop: Spacing.xl, gap: Spacing.sm }}>
+                <ActivityIndicator color={theme.primary} />
+                {carIdentifying ? (
+                  <ThemedText style={{ fontFamily: "Cairo_400Regular", color: theme.textSecondary, fontSize: 13 }}>
+                    جاري تحليل الصورة...
+                  </ThemedText>
+                ) : null}
+              </View>
             ) : (
               <>
                 <ThemedText style={[styles.fieldLabel, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
@@ -724,13 +824,22 @@ const styles = StyleSheet.create({
   stepLabel: { fontSize: 11 },
   sectionTitle: { fontSize: 20, textAlign: "right", marginBottom: Spacing.lg },
   fieldLabel: { fontSize: 13, textAlign: "right", marginBottom: Spacing.xs },
-  loadBtn: {
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
+  loadBtnsRow: {
+    flexDirection: "row-reverse",
+    gap: Spacing.sm,
     marginTop: Spacing.md,
   },
-  loadBtnText: { color: "#fff", fontSize: 16 },
+  loadBtnFlex: {
+    flex: 1,
+  },
+  loadBtn: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  loadBtnText: { color: "#fff", fontSize: 15, textAlign: "center" },
   chipsRow: { flexDirection: "row", marginBottom: Spacing.sm },
   chip: {
     paddingHorizontal: Spacing.md,
