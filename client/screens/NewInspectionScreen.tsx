@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -85,18 +85,25 @@ export default function NewInspectionScreen() {
 
   const apiUrl = getApiUrl();
 
-  const loadMakes = useCallback(async () => {
+  const loadMakes = useCallback(async (): Promise<ApiMake[]> => {
     setMakesLoading(true);
     try {
       const resp = await fetch(new URL("/api/car-makes", apiUrl).toString());
       const data = await resp.json();
-      setMakes(data.makes ?? []);
+      const list: ApiMake[] = data.makes ?? [];
+      setMakes(list);
+      return list;
     } catch {
-      // fallback silently
+      return [];
     } finally {
       setMakesLoading(false);
     }
   }, [apiUrl]);
+
+  // Auto-load makes on mount so identification always has data available
+  useEffect(() => {
+    loadMakes();
+  }, [loadMakes]);
 
   const loadModels = useCallback(
     async (makeId: string) => {
@@ -141,28 +148,32 @@ export default function NewInspectionScreen() {
         return;
       }
 
-      // Load makes if not already loaded
+      // Ensure makes are loaded (auto-loads on mount, but fetch again if still empty)
       let allMakes = makes;
       if (allMakes.length === 0) {
-        setMakesLoading(true);
-        const makesResp = await fetch(new URL("/api/car-makes", apiUrl).toString());
-        const makesData = await makesResp.json();
-        allMakes = makesData.makes ?? [];
-        setMakes(allMakes);
-        setMakesLoading(false);
+        allMakes = await loadMakes();
+      }
+      if (allMakes.length === 0) {
+        Alert.alert("خطأ", "تعذر تحميل قائمة الماركات، يرجى التحقق من الاتصال والمحاولة مجدداً");
+        return;
       }
 
-      // Match make (case-insensitive fuzzy)
-      const idMake = (data.makeName ?? "").toLowerCase();
+      // Match make — exact, then substring, then token-level
+      const idMake = (data.makeName ?? "").toLowerCase().trim();
       const matchedMake = allMakes.find(
-        (m) =>
-          m.makeName.toLowerCase() === idMake ||
-          m.makeName.toLowerCase().includes(idMake) ||
-          idMake.includes(m.makeName.toLowerCase())
+        (m) => {
+          const name = m.makeName.toLowerCase().trim();
+          return (
+            name === idMake ||
+            name.includes(idMake) ||
+            idMake.includes(name) ||
+            idMake.split(/[\s-]+/).some((token) => name.includes(token) && token.length >= 3)
+          );
+        }
       );
 
       if (!matchedMake) {
-        Alert.alert("", `تم تعرف على الماركة كـ "${data.makeName}" لكنها غير موجودة في القائمة، يرجى الاختيار يدوياً`);
+        Alert.alert("", `تم التعرف على الماركة كـ "${data.makeName}" لكنها غير موجودة في القائمة، يرجى الاختيار يدوياً`);
         return;
       }
       setSelectedMake(matchedMake);
