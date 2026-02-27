@@ -666,17 +666,37 @@ export default function AccountScreen() {
                       المدينة <ThemedText style={{ color: theme.error }}>*</ThemedText>
                     </ThemedText>
                     <Pressable
-                      onPress={() => setIsCityPickerVisible(true)}
+                      onPress={() => setIsCityPickerVisible(!isCityPickerVisible)}
                       style={[
                         styles.textInput,
-                        { backgroundColor: theme.backgroundSecondary, borderColor: theme.border, justifyContent: "center", flexDirection: "row-reverse", alignItems: "center" },
+                        { backgroundColor: theme.backgroundSecondary, borderColor: isCityPickerVisible ? theme.primary : theme.border, justifyContent: "center", flexDirection: "row-reverse", alignItems: "center" },
                       ]}
                     >
                       <ThemedText style={{ flex: 1, textAlign: "right", color: selectedCityId ? theme.text : theme.textSecondary, fontFamily: "Cairo_400Regular" }}>
                         {selectedCityId ? (cities.find((c) => c.cityId === selectedCityId)?.nameAr ?? "اختر المدينة") : "اختر مدينتك"}
                       </ThemedText>
-                      <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                      <Feather name={isCityPickerVisible ? "chevron-up" : "chevron-down"} size={18} color={theme.textSecondary} />
                     </Pressable>
+                    {isCityPickerVisible ? (
+                      <View style={[styles.cityDropdown, { backgroundColor: theme.backgroundDefault, borderColor: theme.primary }]}>
+                        <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+                          {cities.map((city) => (
+                            <Pressable
+                              key={city.cityId}
+                              onPress={() => { setSelectedCityId(city.cityId); setIsCityPickerVisible(false); }}
+                              style={[styles.cityItem, { borderBottomColor: theme.border, backgroundColor: selectedCityId === city.cityId ? theme.primary + "12" : "transparent" }]}
+                            >
+                              <ThemedText style={[styles.cityItemText, { fontFamily: selectedCityId === city.cityId ? "Cairo_700Bold" : "Cairo_400Regular", color: selectedCityId === city.cityId ? theme.primary : theme.text }]}>
+                                {city.nameAr}
+                              </ThemedText>
+                              {selectedCityId === city.cityId ? (
+                                <Feather name="check" size={16} color={theme.primary} />
+                              ) : null}
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    ) : null}
                   </View>
 
                   <Pressable
@@ -756,40 +776,6 @@ export default function AccountScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* City picker modal */}
-      <Modal
-        visible={isCityPickerVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsCityPickerVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setIsCityPickerVisible(false)}>
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault, maxHeight: "70%" }]}>
-            <View style={styles.modalHeader}>
-              <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>اختر مدينتك</ThemedText>
-              <Pressable onPress={() => setIsCityPickerVisible(false)}>
-                <Feather name="x" size={24} color={theme.text} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {cities.map((city) => (
-                <Pressable
-                  key={city.cityId}
-                  onPress={() => { setSelectedCityId(city.cityId); setIsCityPickerVisible(false); }}
-                  style={[styles.cityItem, { borderBottomColor: theme.border }]}
-                >
-                  <ThemedText style={[styles.cityItemText, { fontFamily: selectedCityId === city.cityId ? "Cairo_700Bold" : "Cairo_400Regular", color: selectedCityId === city.cityId ? theme.primary : theme.text }]}>
-                    {city.nameAr}
-                  </ThemedText>
-                  {selectedCityId === city.cityId ? (
-                    <Feather name="check" size={18} color={theme.primary} />
-                  ) : null}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
 
       <Modal
         visible={isHistoryModalVisible}
@@ -1466,6 +1452,12 @@ const styles = StyleSheet.create({
   },
   partInspectionDate: {
     fontSize: 11,
+  },
+  cityDropdown: {
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.md,
+    marginTop: 4,
+    overflow: "hidden",
   },
   cityItem: {
     flexDirection: "row-reverse",
