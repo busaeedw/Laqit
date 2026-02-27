@@ -666,7 +666,7 @@ export default function AccountScreen() {
                       المدينة <ThemedText style={{ color: theme.error }}>*</ThemedText>
                     </ThemedText>
                     <Pressable
-                      onPress={() => setIsCityPickerVisible(!isCityPickerVisible)}
+                      onPress={() => { loadCities(); setIsCityPickerVisible(!isCityPickerVisible); }}
                       style={[
                         styles.textInput,
                         { backgroundColor: theme.backgroundSecondary, borderColor: isCityPickerVisible ? theme.primary : theme.border, justifyContent: "center", flexDirection: "row-reverse", alignItems: "center" },
@@ -761,8 +761,10 @@ export default function AccountScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setModalMode(modalMode === "login" ? "register" : "login");
+                  const nextMode = modalMode === "login" ? "register" : "login";
+                  setModalMode(nextMode);
                   setFormErrors({});
+                  if (nextMode === "register") loadCities();
                 }}
                 disabled={isLoading}
                 style={({ pressed }) => [styles.switchModeButton, { opacity: pressed ? 0.6 : 1 }]}
