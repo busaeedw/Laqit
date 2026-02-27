@@ -453,38 +453,43 @@ export default function NewInspectionScreen() {
               اختر السيارة
             </ThemedText>
 
+            {/* Identify by photo — always visible */}
+            <Pressable
+              style={[
+                styles.identifyPhotoBtn,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: carIdentifying ? theme.textSecondary : theme.primary,
+                  opacity: carIdentifying ? 0.6 : 1,
+                },
+              ]}
+              onPress={handleIdentifyByCar}
+              disabled={carIdentifying}
+              testID="button-identify-car"
+            >
+              {carIdentifying ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Feather name="camera" size={16} color={theme.primary} />
+              )}
+              <ThemedText style={[styles.identifyPhotoBtnText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                {carIdentifying ? "جاري تحليل الصورة..." : "تحديد نوع السيارة بالصورة"}
+              </ThemedText>
+            </Pressable>
+
             {/* Makes */}
-            {makes.length === 0 && !makesLoading && !carIdentifying ? (
-              <View style={styles.loadBtnsRow}>
-                <Pressable
-                  style={[styles.loadBtn, styles.loadBtnFlex, { backgroundColor: theme.primary }]}
-                  onPress={loadMakes}
-                  testID="button-load-makes"
-                >
-                  <ThemedText style={[styles.loadBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                    تحميل قائمة الماركات
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  style={[styles.loadBtn, styles.loadBtnFlex, { backgroundColor: theme.backgroundDefault, borderWidth: 1.5, borderColor: theme.primary }]}
-                  onPress={handleIdentifyByCar}
-                  testID="button-identify-car"
-                >
-                  <Feather name="camera" size={15} color={theme.primary} style={{ marginBottom: 2 }} />
-                  <ThemedText style={[styles.loadBtnText, { fontFamily: "Cairo_700Bold", color: theme.primary, fontSize: 13 }]}>
-                    تحديد نوع السيارة بالصورة
-                  </ThemedText>
-                </Pressable>
-              </View>
-            ) : makesLoading || carIdentifying ? (
-              <View style={{ alignItems: "center", marginTop: Spacing.xl, gap: Spacing.sm }}>
-                <ActivityIndicator color={theme.primary} />
-                {carIdentifying ? (
-                  <ThemedText style={{ fontFamily: "Cairo_400Regular", color: theme.textSecondary, fontSize: 13 }}>
-                    جاري تحليل الصورة...
-                  </ThemedText>
-                ) : null}
-              </View>
+            {makesLoading ? (
+              <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.lg }} />
+            ) : makes.length === 0 ? (
+              <Pressable
+                style={[styles.loadBtn, { backgroundColor: theme.primary, marginTop: Spacing.md }]}
+                onPress={loadMakes}
+                testID="button-load-makes"
+              >
+                <ThemedText style={[styles.loadBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                  تحميل قائمة الماركات
+                </ThemedText>
+              </Pressable>
             ) : (
               <>
                 <ThemedText style={[styles.fieldLabel, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
@@ -867,6 +872,19 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   loadBtnText: { color: "#fff", fontSize: 15, textAlign: "center" },
+  identifyPhotoBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  identifyPhotoBtnText: { fontSize: 14, textAlign: "center" },
   chipsRow: { flexDirection: "row", marginBottom: Spacing.sm },
   chip: {
     paddingHorizontal: Spacing.md,
