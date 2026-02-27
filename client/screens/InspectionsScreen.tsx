@@ -19,6 +19,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
+import { formatDualDate } from "@/utils/dateFormat";
 import { useUser } from "@/context/UserContext";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -62,12 +63,7 @@ export default function InspectionsScreen() {
 
   const inspectionsList = data?.inspections ?? [];
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString("ar-SA", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  const formatDate = (dateStr: string) => formatDualDate(dateStr).combined;
 
   const renderItem = ({ item }: { item: any }) => {
     const statusCfg = STATUS_LABELS[item.status] ?? STATUS_LABELS.draft;

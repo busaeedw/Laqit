@@ -22,6 +22,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
+import { formatDate } from "@/utils/dateFormat";
 import { useUser } from "@/context/UserContext";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -156,7 +157,7 @@ export default function QuotesListScreen() {
         </View>
 
         <ThemedText style={[styles.dateText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-          {new Date(item.createdAt).toLocaleString("ar-SA")}
+          {formatDate(item.createdAt, true)}
         </ThemedText>
       </View>
     );

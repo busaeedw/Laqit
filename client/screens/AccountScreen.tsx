@@ -24,6 +24,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl } from "@/lib/query-client";
+import { formatDualDate } from "@/utils/dateFormat";
 import { useUser } from "@/context/UserContext";
 
 interface MenuItem {
@@ -206,15 +207,8 @@ export default function AccountScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    };
-    return date.toLocaleDateString('ar-SA', options);
+    const { gregorian, hijri } = formatDualDate(dateString, true);
+    return `${gregorian}\n${hijri}`;
   };
 
   const handleViewPricing = () => {
