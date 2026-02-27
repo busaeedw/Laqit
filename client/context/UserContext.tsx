@@ -5,6 +5,8 @@ export interface UserData {
   name: string;
   mobile: string;
   email: string | null;
+  customerId?: string;
+  cityId?: string;
 }
 
 interface UserContextType {

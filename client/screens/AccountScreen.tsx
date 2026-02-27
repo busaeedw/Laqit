@@ -67,6 +67,10 @@ export default function AccountScreen() {
   const [userParts, setUserParts] = useState<any[]>([]);
   const [isLoadingParts, setIsLoadingParts] = useState(false);
 
+  const [cities, setCities] = useState<{ cityId: string; nameAr: string; nameEn: string }[]>([]);
+  const [selectedCityId, setSelectedCityId] = useState("");
+  const [isCityPickerVisible, setIsCityPickerVisible] = useState(false);
+
   const fetchInspections = async () => {
     if (!user) return;
     
@@ -200,15 +204,26 @@ export default function AccountScreen() {
     navigation.navigate("Pricing");
   };
 
+  const loadCities = async () => {
+    if (cities.length > 0) return;
+    try {
+      const resp = await fetch(new URL("/api/cities", getApiUrl()).toString());
+      const data = await resp.json();
+      setCities(data.cities ?? []);
+    } catch { /* ignore */ }
+  };
+
   const handleOpenModal = (mode: ModalMode) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setModalMode(mode);
     setFormName("");
     setFormMobile("");
     setFormEmail("");
+    setSelectedCityId("");
     setTermsAccepted(false);
     setFormErrors({});
     setIsModalVisible(true);
+    if (mode === "register") loadCities();
   };
 
   const validateLoginForm = () => {
@@ -259,14 +274,18 @@ export default function AccountScreen() {
     setFormErrors({});
 
     try {
-      const response = await fetch(new URL("/api/login", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formName.trim(),
-          mobile: formMobile.trim(),
-        }),
-      });
+      const mobileE164 = formMobile.trim().startsWith("+")
+        ? formMobile.trim()
+        : `+966${formMobile.trim().replace(/^0/, "")}`;
+
+      const response = await fetch(
+        new URL("/api/customers/login", getApiUrl()).toString(),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mobileE164 }),
+        }
+      );
 
       const data = await response.json();
 
@@ -276,8 +295,16 @@ export default function AccountScreen() {
         return;
       }
 
+      const customer = data.customer;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setUser(data.user);
+      setUser({
+        id: customer.customerId,
+        name: customer.fullName ?? formName.trim(),
+        mobile: customer.mobileE164,
+        email: customer.email,
+        customerId: customer.customerId,
+        cityId: customer.cityId,
+      });
       setIsModalVisible(false);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
@@ -292,31 +319,52 @@ export default function AccountScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
+    if (!selectedCityId) {
+      setFormErrors({ general: "يرجى اختيار المدينة" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
 
     setIsLoading(true);
     setFormErrors({});
 
     try {
-      const response = await fetch(new URL("/api/register", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formName.trim(),
-          mobile: formMobile.trim(),
-          email: formEmail.trim() || null,
-        }),
-      });
+      const mobileE164 = formMobile.trim().startsWith("+")
+        ? formMobile.trim()
+        : `+966${formMobile.trim().replace(/^0/, "")}`;
 
-      const data = await response.json();
+      // Register in new customers table
+      const custResponse = await fetch(
+        new URL("/api/customers/register", getApiUrl()).toString(),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: formName.trim(),
+            mobileE164,
+            email: formEmail.trim(),
+            cityId: selectedCityId,
+          }),
+        }
+      );
+      const custData = await custResponse.json();
 
-      if (!response.ok) {
-        setFormErrors({ general: data.error || "حدث خطأ أثناء التسجيل" });
+      if (!custResponse.ok) {
+        setFormErrors({ general: custData.error || "حدث خطأ أثناء التسجيل" });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
 
+      const customer = custData.customer;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setUser(data.user);
+      setUser({
+        id: customer.customerId,
+        name: customer.fullName ?? formName.trim(),
+        mobile: mobileE164,
+        email: customer.email,
+        customerId: customer.customerId,
+        cityId: customer.cityId,
+      });
       setIsModalVisible(false);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
@@ -577,7 +625,7 @@ export default function AccountScreen() {
                 <>
                   <View style={styles.inputGroup}>
                     <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold" }]}>
-                      البريد الإلكتروني <ThemedText style={{ color: theme.textSecondary }}>(اختياري)</ThemedText>
+                      البريد الإلكتروني <ThemedText style={{ color: theme.error }}>*</ThemedText>
                     </ThemedText>
                     <TextInput
                       value={formEmail}
@@ -598,6 +646,24 @@ export default function AccountScreen() {
                       textAlign="right"
                       editable={!isLoading}
                     />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold" }]}>
+                      المدينة <ThemedText style={{ color: theme.error }}>*</ThemedText>
+                    </ThemedText>
+                    <Pressable
+                      onPress={() => setIsCityPickerVisible(true)}
+                      style={[
+                        styles.textInput,
+                        { backgroundColor: theme.backgroundSecondary, borderColor: theme.border, justifyContent: "center", flexDirection: "row-reverse", alignItems: "center" },
+                      ]}
+                    >
+                      <ThemedText style={{ flex: 1, textAlign: "right", color: selectedCityId ? theme.text : theme.textSecondary, fontFamily: "Cairo_400Regular" }}>
+                        {selectedCityId ? (cities.find((c) => c.cityId === selectedCityId)?.nameAr ?? "اختر المدينة") : "اختر مدينتك"}
+                      </ThemedText>
+                      <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                    </Pressable>
                   </View>
 
                   <Pressable
@@ -675,6 +741,41 @@ export default function AccountScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* City picker modal */}
+      <Modal
+        visible={isCityPickerVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCityPickerVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setIsCityPickerVisible(false)}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault, maxHeight: "70%" }]}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>اختر مدينتك</ThemedText>
+              <Pressable onPress={() => setIsCityPickerVisible(false)}>
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {cities.map((city) => (
+                <Pressable
+                  key={city.cityId}
+                  onPress={() => { setSelectedCityId(city.cityId); setIsCityPickerVisible(false); }}
+                  style={[styles.cityItem, { borderBottomColor: theme.border }]}
+                >
+                  <ThemedText style={[styles.cityItemText, { fontFamily: selectedCityId === city.cityId ? "Cairo_700Bold" : "Cairo_400Regular", color: selectedCityId === city.cityId ? theme.primary : theme.text }]}>
+                    {city.nameAr}
+                  </ThemedText>
+                  {selectedCityId === city.cityId ? (
+                    <Feather name="check" size={18} color={theme.primary} />
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
       </Modal>
 
       <Modal
@@ -1331,5 +1432,17 @@ const styles = StyleSheet.create({
   },
   partInspectionDate: {
     fontSize: 11,
+  },
+  cityItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderBottomWidth: 1,
+  },
+  cityItemText: {
+    fontSize: 15,
+    textAlign: "right",
   },
 });

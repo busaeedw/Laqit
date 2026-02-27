@@ -2,8 +2,32 @@ import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import OpenAI from "openai";
 import { db } from "./db";
-import { users, inspections } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import {
+  users,
+  inspections,
+  cities,
+  carMakes,
+  carModels,
+  customers,
+  vendors,
+  vendorUsers,
+  vendorLocations,
+  vendorSupportedModels,
+  laqitInspections,
+  inspectionMedia,
+  inspectionParts,
+  rfqDocuments,
+  rfqRecipients,
+  whatsappMessages,
+  quotes,
+  payments,
+  notifications,
+} from "@shared/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { sendWhatsAppMessage } from "./services/whatsapp";
+import { sendSms } from "./services/sms";
+import { extractTotalPrice } from "./services/ocr";
+import { createPaymentIntent } from "./services/payment";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -349,6 +373,777 @@ RULES:
         },
         parts: [],
       });
+    }
+  });
+
+  // ─── Reference Data ──────────────────────────────────────────────────────
+
+  app.get("/api/cities", async (_req, res) => {
+    try {
+      const result = await db.select().from(cities).orderBy(cities.nameAr);
+      res.json({ cities: result });
+    } catch (err: any) {
+      console.error("GET /api/cities error:", err?.message);
+      res.status(500).json({ error: "خطأ في جلب المدن" });
+    }
+  });
+
+  app.get("/api/car-makes", async (_req, res) => {
+    try {
+      const result = await db.select().from(carMakes).orderBy(carMakes.makeName);
+      res.json({ makes: result });
+    } catch (err: any) {
+      console.error("GET /api/car-makes error:", err?.message);
+      res.status(500).json({ error: "خطأ في جلب الماركات" });
+    }
+  });
+
+  app.get("/api/car-models/:makeId", async (req, res) => {
+    try {
+      const { makeId } = req.params;
+      const result = await db
+        .select()
+        .from(carModels)
+        .where(eq(carModels.makeId, makeId))
+        .orderBy(carModels.modelName);
+      res.json({ models: result });
+    } catch (err: any) {
+      console.error("GET /api/car-models error:", err?.message);
+      res.status(500).json({ error: "خطأ في جلب الموديلات" });
+    }
+  });
+
+  // ─── Customers ────────────────────────────────────────────────────────────
+
+  app.post("/api/customers/register", async (req, res) => {
+    try {
+      const { fullName, mobileE164, email, cityId } = req.body;
+      if (!mobileE164 || !email || !cityId) {
+        return res.status(400).json({ error: "رقم الجوال والبريد والمدينة مطلوبة" });
+      }
+      const [customer] = await db
+        .insert(customers)
+        .values({ fullName: fullName ?? null, mobileE164, email, cityId })
+        .returning();
+      res.json({ success: true, customer });
+    } catch (err: any) {
+      if (err?.code === "23505") {
+        return res.status(400).json({ error: "رقم الجوال أو البريد الإلكتروني مسجل مسبقاً" });
+      }
+      console.error("Customer register error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء التسجيل" });
+    }
+  });
+
+  app.post("/api/customers/login", async (req, res) => {
+    try {
+      const { mobileE164 } = req.body;
+      if (!mobileE164) return res.status(400).json({ error: "رقم الجوال مطلوب" });
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.mobileE164, mobileE164))
+        .limit(1);
+      if (!customer) return res.status(404).json({ error: "المستخدم غير موجود" });
+      await db
+        .update(customers)
+        .set({ lastLoginAt: new Date() })
+        .where(eq(customers.customerId, customer.customerId));
+      res.json({ success: true, customer });
+    } catch (err: any) {
+      console.error("Customer login error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
+    }
+  });
+
+  app.get("/api/customers/:id", async (req, res) => {
+    try {
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.customerId, req.params.id))
+        .limit(1);
+      if (!customer) return res.status(404).json({ error: "غير موجود" });
+      res.json({ customer });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.patch("/api/customers/:id", async (req, res) => {
+    try {
+      const { fullName, cityId } = req.body;
+      const [updated] = await db
+        .update(customers)
+        .set({ ...(fullName && { fullName }), ...(cityId && { cityId }) })
+        .where(eq(customers.customerId, req.params.id))
+        .returning();
+      res.json({ success: true, customer: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // ─── Vendors (admin / self-registration) ─────────────────────────────────
+
+  app.get("/api/vendors", async (_req, res) => {
+    try {
+      const result = await db.select().from(vendors).orderBy(vendors.createdAt);
+      res.json({ vendors: result });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.post("/api/vendors", async (req, res) => {
+    try {
+      const { vendorName, legalName, crNumber, vatNumber } = req.body;
+      if (!vendorName) return res.status(400).json({ error: "اسم المورد مطلوب" });
+      const [vendor] = await db
+        .insert(vendors)
+        .values({ vendorName, legalName, crNumber, vatNumber })
+        .returning();
+      res.json({ success: true, vendor });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.get("/api/vendor-users", async (_req, res) => {
+    try {
+      const result = await db.select().from(vendorUsers).orderBy(vendorUsers.createdAt);
+      res.json({ vendorUsers: result });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.post("/api/vendor-users", async (req, res) => {
+    try {
+      const { vendorId, fullName, mobileE164, email, whatsappE164, role } = req.body;
+      if (!vendorId || !mobileE164 || !whatsappE164) {
+        return res.status(400).json({ error: "معرف المورد والجوال والواتساب مطلوبة" });
+      }
+      const existing = await db
+        .select()
+        .from(vendorUsers)
+        .where(and(eq(vendorUsers.vendorId, vendorId), eq(vendorUsers.isWhatsappPrimary, true)))
+        .limit(1);
+      const isFirst = existing.length === 0;
+      const [vu] = await db
+        .insert(vendorUsers)
+        .values({ vendorId, fullName, mobileE164, email, whatsappE164, isWhatsappPrimary: isFirst, role: role ?? "owner" })
+        .returning();
+      res.json({ success: true, vendorUser: vu });
+    } catch (err: any) {
+      if (err?.code === "23505") {
+        return res.status(400).json({ error: "رقم الجوال أو الواتساب مسجل مسبقاً" });
+      }
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // ─── Laqit Inspections ────────────────────────────────────────────────────
+
+  function generateInspectionNo(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const seq = Math.floor(100000 + Math.random() * 900000);
+    return `INS-${year}-${seq}`;
+  }
+
+  app.post("/api/laqit-inspections", async (req, res) => {
+    try {
+      const { customerId, carModelId, carYear, carType } = req.body;
+      if (!customerId || !carModelId) {
+        return res.status(400).json({ error: "معرف العميل والموديل مطلوبان" });
+      }
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.customerId, customerId))
+        .limit(1);
+      if (!customer) return res.status(404).json({ error: "العميل غير موجود" });
+
+      let inspectionNo = generateInspectionNo();
+      let attempts = 0;
+      while (attempts < 5) {
+        const clash = await db
+          .select()
+          .from(laqitInspections)
+          .where(eq(laqitInspections.inspectionNo, inspectionNo))
+          .limit(1);
+        if (clash.length === 0) break;
+        inspectionNo = generateInspectionNo();
+        attempts++;
+      }
+
+      const [inspection] = await db
+        .insert(laqitInspections)
+        .values({
+          inspectionNo,
+          customerId,
+          cityId: customer.cityId,
+          carModelId,
+          carYear: carYear ? Number(carYear) : null,
+          carType: carType ?? null,
+          status: "draft",
+        })
+        .returning();
+
+      res.json({ success: true, inspection });
+    } catch (err: any) {
+      console.error("Create inspection error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إنشاء الفحص" });
+    }
+  });
+
+  app.get("/api/laqit-inspections/customer/:customerId", async (req, res) => {
+    try {
+      const result = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.customerId, req.params.customerId))
+        .orderBy(desc(laqitInspections.createdAt));
+      res.json({ inspections: result });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.get("/api/laqit-inspections/:id", async (req, res) => {
+    try {
+      const [inspection] = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, req.params.id))
+        .limit(1);
+      if (!inspection) return res.status(404).json({ error: "غير موجود" });
+
+      const media = await db
+        .select()
+        .from(inspectionMedia)
+        .where(eq(inspectionMedia.inspectionId, req.params.id));
+
+      const parts = await db
+        .select()
+        .from(inspectionParts)
+        .where(eq(inspectionParts.inspectionId, req.params.id));
+
+      const quotesList = await db
+        .select()
+        .from(quotes)
+        .where(eq(quotes.inspectionId, req.params.id))
+        .orderBy(desc(quotes.createdAt));
+
+      res.json({ inspection, media, parts, quotes: quotesList });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.post("/api/laqit-inspections/:id/media", async (req, res) => {
+    try {
+      const { fileUrl, mediaType } = req.body;
+      if (!fileUrl || !mediaType) {
+        return res.status(400).json({ error: "fileUrl و mediaType مطلوبان" });
+      }
+      const [media] = await db
+        .insert(inspectionMedia)
+        .values({ inspectionId: req.params.id, fileUrl, mediaType })
+        .returning();
+      res.json({ success: true, media });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.post("/api/laqit-inspections/:id/parts", async (req, res) => {
+    try {
+      const { parts: partsList } = req.body as { parts: { partName: string; quantity?: number; source?: string }[] };
+      if (!Array.isArray(partsList) || partsList.length === 0) {
+        return res.status(400).json({ error: "قائمة القطع مطلوبة" });
+      }
+      const inserted = await db
+        .insert(inspectionParts)
+        .values(
+          partsList.map((p) => ({
+            inspectionId: req.params.id,
+            partName: p.partName,
+            quantity: p.quantity ?? 1,
+            source: (p.source as "ai" | "user") ?? "user",
+          }))
+        )
+        .returning();
+      res.json({ success: true, parts: inserted });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.patch("/api/laqit-inspections/:id/status", async (req, res) => {
+    try {
+      const { status } = req.body;
+      const [updated] = await db
+        .update(laqitInspections)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(laqitInspections.inspectionId, req.params.id))
+        .returning();
+      res.json({ success: true, inspection: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // ─── RFQ Submit: targets eligible vendors and sends WhatsApp ─────────────
+
+  app.post("/api/laqit-inspections/:id/submit", async (req, res) => {
+    try {
+      const inspectionId = req.params.id;
+
+      const [inspection] = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, inspectionId))
+        .limit(1);
+      if (!inspection) return res.status(404).json({ error: "الفحص غير موجود" });
+
+      // Find eligible vendors: same city + supports car model
+      const locationRows = await db
+        .select({ vendorId: vendorLocations.vendorId })
+        .from(vendorLocations)
+        .where(eq(vendorLocations.cityId, inspection.cityId));
+
+      const cityVendorIds = locationRows.map((r) => r.vendorId);
+      if (cityVendorIds.length === 0) {
+        await db
+          .update(laqitInspections)
+          .set({ status: "rfq_sent", updatedAt: new Date() })
+          .where(eq(laqitInspections.inspectionId, inspectionId));
+        return res.json({ success: true, vendorsNotified: 0, message: "لا يوجد موردون في مدينتك بعد" });
+      }
+
+      const modelRows = await db
+        .select({ vendorId: vendorSupportedModels.vendorId })
+        .from(vendorSupportedModels)
+        .where(
+          and(
+            eq(vendorSupportedModels.carModelId, inspection.carModelId),
+            inArray(vendorSupportedModels.vendorId, cityVendorIds)
+          )
+        );
+
+      const eligibleVendorIds = modelRows.map((r) => r.vendorId);
+
+      // Get parts for RFQ text
+      const parts = await db
+        .select()
+        .from(inspectionParts)
+        .where(eq(inspectionParts.inspectionId, inspectionId));
+
+      const partsText = parts.map((p) => `- ${p.partName} (${p.quantity})`).join("\n");
+
+      let vendorsNotified = 0;
+
+      for (const vendorId of eligibleVendorIds) {
+        const [primaryUser] = await db
+          .select()
+          .from(vendorUsers)
+          .where(
+            and(eq(vendorUsers.vendorId, vendorId), eq(vendorUsers.isWhatsappPrimary, true))
+          )
+          .limit(1);
+
+        if (!primaryUser) continue;
+
+        const rfqText =
+          `طلب عرض سعر - لاقط\n` +
+          `رقم الفحص: ${inspection.inspectionNo}\n` +
+          `الموديل: ${inspection.carModelId}\n` +
+          `السنة: ${inspection.carYear ?? "غير محدد"}\n\n` +
+          `القطع المطلوبة:\n${partsText}\n\n` +
+          `للرد: أرسل رقم الفحص ${inspection.inspectionNo} مع صورة عرض السعر الإجمالي`;
+
+        const rfqDoc = await db
+          .select()
+          .from(rfqDocuments)
+          .where(eq(rfqDocuments.inspectionId, inspectionId))
+          .limit(1);
+
+        const sendResult = await sendWhatsAppMessage(
+          primaryUser.whatsappE164,
+          rfqText,
+          rfqDoc[0]?.pdfUrl,
+          inspectionId
+        );
+
+        await db.insert(rfqRecipients).values({
+          inspectionId,
+          vendorId,
+          vendorUserId: primaryUser.vendorUserId,
+          channel: "whatsapp",
+          status: sendResult.success ? "sent" : "failed",
+          providerMessageId: sendResult.providerMessageId ?? null,
+          sentAt: sendResult.success ? new Date() : null,
+        });
+
+        if (sendResult.success) vendorsNotified++;
+      }
+
+      await db
+        .update(laqitInspections)
+        .set({ status: "rfq_sent", updatedAt: new Date() })
+        .where(eq(laqitInspections.inspectionId, inspectionId));
+
+      res.json({ success: true, vendorsNotified });
+    } catch (err: any) {
+      console.error("Submit RFQ error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إرسال طلب العرض" });
+    }
+  });
+
+  // ─── Inbound WhatsApp Webhook ─────────────────────────────────────────────
+
+  app.post("/api/webhooks/whatsapp", async (req, res) => {
+    try {
+      const body = req.body;
+
+      // Meta/WhatsApp Business API webhook verification
+      if (req.method === "GET" && req.query["hub.mode"] === "subscribe") {
+        const challenge = req.query["hub.challenge"];
+        return res.send(challenge);
+      }
+
+      const entry = body?.entry?.[0];
+      const change = entry?.changes?.[0];
+      const message = change?.value?.messages?.[0];
+
+      if (!message) return res.sendStatus(200);
+
+      const fromE164 = `+${message.from}`;
+      const textBody: string = message?.text?.body ?? "";
+      const mediaUrl: string | undefined = message?.image?.link ?? message?.document?.link;
+      const providerMessageId: string = message.id ?? undefined;
+
+      // Find vendor user by WhatsApp number
+      const [vendorUser] = await db
+        .select()
+        .from(vendorUsers)
+        .where(eq(vendorUsers.whatsappE164, fromE164))
+        .limit(1);
+
+      // Extract inspection_no from text using regex
+      const match = textBody.match(/INS-\d{4}-\d{6}/i);
+      const inspectionNoExtracted = match ? match[0].toUpperCase() : null;
+
+      let inspectionId: string | null = null;
+      let linkedInspection: typeof laqitInspections.$inferSelect | undefined;
+
+      if (inspectionNoExtracted) {
+        const [found] = await db
+          .select()
+          .from(laqitInspections)
+          .where(eq(laqitInspections.inspectionNo, inspectionNoExtracted))
+          .limit(1);
+        if (found) {
+          linkedInspection = found;
+          inspectionId = found.inspectionId;
+        }
+      }
+
+      // Store inbound message
+      await db.insert(whatsappMessages).values({
+        direction: "inbound",
+        vendorId: vendorUser?.vendorId ?? null,
+        vendorUserId: vendorUser?.vendorUserId ?? null,
+        vendorWhatsappE164: fromE164,
+        inspectionId,
+        inspectionNoExtracted,
+        textBody: textBody || null,
+        mediaUrl: mediaUrl ?? null,
+        providerMessageId: providerMessageId ?? null,
+        receivedAt: new Date(),
+      });
+
+      // If no inspection_no → send auto-reply and exit
+      if (!inspectionNoExtracted || !linkedInspection) {
+        if (vendorUser) {
+          await sendWhatsAppMessage(
+            fromE164,
+            "شكراً لك. لم نتمكن من ربط رسالتك بفحص. يرجى إرسال رقم الفحص (مثال: INS-2026-123456) مع صورة عرض السعر.",
+            undefined
+          );
+        }
+        return res.sendStatus(200);
+      }
+
+      // If media attached → run OCR and create quote
+      if (mediaUrl && vendorUser) {
+        const ocrResult = await extractTotalPrice(mediaUrl);
+
+        await db.insert(quotes).values({
+          inspectionId: linkedInspection.inspectionId,
+          vendorId: vendorUser.vendorId,
+          vendorUserId: vendorUser.vendorUserId,
+          quoteImageUrl: mediaUrl,
+          totalAmount: ocrResult.totalAmount !== null ? String(ocrResult.totalAmount) : null,
+          currency: ocrResult.currency,
+          status: ocrResult.totalAmount !== null ? "parsed" : "unparsed",
+          ocrRawText: ocrResult.rawText,
+        });
+
+        // Update inspection status if first quote
+        if (linkedInspection.status === "rfq_sent" || linkedInspection.status === "waiting_quotes") {
+          await db
+            .update(laqitInspections)
+            .set({ status: "quotes_received", updatedAt: new Date() })
+            .where(eq(laqitInspections.inspectionId, linkedInspection.inspectionId));
+        }
+
+        // Notify customer via SMS
+        const [customer] = await db
+          .select()
+          .from(customers)
+          .where(eq(customers.customerId, linkedInspection.customerId))
+          .limit(1);
+
+        if (customer) {
+          const smsText = ocrResult.totalAmount
+            ? `لقيت - وصل عرض سعر جديد لفحص ${linkedInspection.inspectionNo}: ${ocrResult.totalAmount} ${ocrResult.currency}. افتح التطبيق لمراجعة العروض.`
+            : `لقيت - وصل عرض سعر جديد لفحص ${linkedInspection.inspectionNo}. افتح التطبيق لمراجعة العروض.`;
+          await sendSms(customer.mobileE164, smsText);
+
+          await db.insert(notifications).values({
+            recipientType: "customer",
+            customerId: customer.customerId,
+            channel: "sms",
+            status: "sent",
+            inspectionId: linkedInspection.inspectionId,
+            body: smsText,
+            sentAt: new Date(),
+          });
+        }
+      }
+
+      res.sendStatus(200);
+    } catch (err: any) {
+      console.error("WhatsApp webhook error:", err?.message);
+      res.sendStatus(200); // Always return 200 to WhatsApp
+    }
+  });
+
+  // ─── Quotes ───────────────────────────────────────────────────────────────
+
+  app.get("/api/laqit-inspections/:id/quotes", async (req, res) => {
+    try {
+      const quotesList = await db
+        .select()
+        .from(quotes)
+        .where(eq(quotes.inspectionId, req.params.id))
+        .orderBy(desc(quotes.createdAt));
+
+      const enriched = await Promise.all(
+        quotesList.map(async (q) => {
+          const [vendor] = await db
+            .select()
+            .from(vendors)
+            .where(eq(vendors.vendorId, q.vendorId))
+            .limit(1);
+          return { ...q, vendorName: vendor?.vendorName ?? "" };
+        })
+      );
+
+      res.json({ quotes: enriched });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.get("/api/quotes/:quoteId", async (req, res) => {
+    try {
+      const [quote] = await db
+        .select()
+        .from(quotes)
+        .where(eq(quotes.quoteId, req.params.quoteId))
+        .limit(1);
+      if (!quote) return res.status(404).json({ error: "غير موجود" });
+      const [vendor] = await db
+        .select()
+        .from(vendors)
+        .where(eq(vendors.vendorId, quote.vendorId))
+        .limit(1);
+      res.json({ quote: { ...quote, vendorName: vendor?.vendorName ?? "" } });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.post("/api/laqit-inspections/:id/quotes/:quoteId/accept", async (req, res) => {
+    try {
+      const { id: inspectionId, quoteId } = req.params;
+
+      // Reject all other quotes
+      const allQuotes = await db
+        .select()
+        .from(quotes)
+        .where(eq(quotes.inspectionId, inspectionId));
+
+      for (const q of allQuotes) {
+        if (q.quoteId !== quoteId) {
+          await db.update(quotes).set({ status: "rejected" }).where(eq(quotes.quoteId, q.quoteId));
+        }
+      }
+
+      // Accept the selected quote
+      await db
+        .update(quotes)
+        .set({ status: "accepted", acceptedAt: new Date() })
+        .where(eq(quotes.quoteId, quoteId));
+
+      // Update inspection status
+      await db
+        .update(laqitInspections)
+        .set({ status: "quote_accepted", updatedAt: new Date() })
+        .where(eq(laqitInspections.inspectionId, inspectionId));
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // ─── Payments ─────────────────────────────────────────────────────────────
+
+  app.post("/api/payments", async (req, res) => {
+    try {
+      const { inspectionId, quoteId, customerId } = req.body;
+      if (!inspectionId || !quoteId || !customerId) {
+        return res.status(400).json({ error: "بيانات الدفع غير مكتملة" });
+      }
+
+      const [quote] = await db
+        .select()
+        .from(quotes)
+        .where(eq(quotes.quoteId, quoteId))
+        .limit(1);
+      if (!quote) return res.status(404).json({ error: "العرض غير موجود" });
+
+      const amount = parseFloat(quote.totalAmount ?? "0");
+      const intent = await createPaymentIntent(amount, quote.currency, {
+        inspectionId,
+        quoteId,
+        customerId,
+      });
+
+      const [payment] = await db
+        .insert(payments)
+        .values({
+          inspectionId,
+          quoteId,
+          customerId,
+          amount: String(amount),
+          currency: quote.currency,
+          status: "initiated",
+          gateway: "stripe",
+          gatewayRef: intent.id,
+        })
+        .returning();
+
+      await db
+        .update(laqitInspections)
+        .set({ status: "payment_pending", updatedAt: new Date() })
+        .where(eq(laqitInspections.inspectionId, inspectionId));
+
+      res.json({ success: true, payment, clientSecret: intent.clientSecret });
+    } catch (err: any) {
+      console.error("Create payment error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إنشاء الدفع" });
+    }
+  });
+
+  // Payment webhook (Stripe or mock)
+  app.post("/api/webhooks/payment", async (req, res) => {
+    try {
+      const event = req.body;
+      const eventType: string = event?.type ?? event?.status ?? "";
+
+      if (eventType === "payment_intent.succeeded" || eventType === "captured") {
+        const gatewayRef: string =
+          event?.data?.object?.id ?? event?.gatewayRef ?? "";
+
+        if (!gatewayRef) return res.sendStatus(200);
+
+        const [payment] = await db
+          .select()
+          .from(payments)
+          .where(eq(payments.gatewayRef, gatewayRef))
+          .limit(1);
+
+        if (!payment) return res.sendStatus(200);
+
+        await db
+          .update(payments)
+          .set({ status: "captured", paidAt: new Date() })
+          .where(eq(payments.paymentId, payment.paymentId));
+
+        await db
+          .update(laqitInspections)
+          .set({ status: "paid", updatedAt: new Date() })
+          .where(eq(laqitInspections.inspectionId, payment.inspectionId));
+
+        // Notify vendor via WhatsApp
+        const [acceptedQuote] = await db
+          .select()
+          .from(quotes)
+          .where(eq(quotes.quoteId, payment.quoteId))
+          .limit(1);
+
+        if (acceptedQuote) {
+          const [primaryUser] = await db
+            .select()
+            .from(vendorUsers)
+            .where(
+              and(
+                eq(vendorUsers.vendorId, acceptedQuote.vendorId),
+                eq(vendorUsers.isWhatsappPrimary, true)
+              )
+            )
+            .limit(1);
+
+          if (primaryUser) {
+            const [inspection] = await db
+              .select()
+              .from(laqitInspections)
+              .where(eq(laqitInspections.inspectionId, payment.inspectionId))
+              .limit(1);
+
+            if (inspection) {
+              const msg = `لقيت - تم الدفع لفحص رقم ${inspection.inspectionNo}. يرجى تجهيز القطع للاستلام. شكراً لتعاملكم معنا.`;
+              await sendWhatsAppMessage(
+                primaryUser.whatsappE164,
+                msg,
+                undefined,
+                payment.inspectionId
+              );
+
+              await db.insert(notifications).values({
+                recipientType: "vendor",
+                vendorUserId: primaryUser.vendorUserId,
+                channel: "whatsapp",
+                status: "sent",
+                inspectionId: payment.inspectionId,
+                body: msg,
+                sentAt: new Date(),
+              });
+            }
+          }
+        }
+      }
+
+      res.sendStatus(200);
+    } catch (err: any) {
+      console.error("Payment webhook error:", err?.message);
+      res.sendStatus(200);
     }
   });
 

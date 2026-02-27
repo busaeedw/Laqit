@@ -1,151 +1,159 @@
-# مؤسسة خالد سالم باسنبل (PartScope) - AI Car Parts Identification App
+# Laqit — Arabic RFQ Platform for Car Spare Parts
 
 ## Overview
 
-PartScope is a production-ready React Native/Expo mobile application that uses AI to identify car parts from photographs. Users capture or upload images of car parts, and the app analyzes them using OpenAI's vision capabilities to detect the vehicle's make, model, year, and visible parts. The app is designed for Arabic-speaking users with full RTL (Right-to-Left) layout support.
+Laqit is a production-grade Arabic RTL React Native/Expo mobile app (with Express backend) for car spare parts sourcing via RFQ (Request for Quotation). Customers photograph their car damage, get AI-identified parts, and receive quotes from vendors via WhatsApp. The platform manages the full end-to-end workflow.
 
-### App Status: Production Ready
+**Full workflow:**
+Customer inspection creation → AI part identification → RFQ broadcast to vendors (WhatsApp) → Inbound quote intake via WhatsApp webhook → OCR price extraction (GPT-4o Vision) → Customer quote review & acceptance → Payment → Vendor post-payment notification
 
-Key features:
-- **AI-powered car identification** - Upload or capture photos to identify car make/model/year
-- **AI-powered parts detection** - Scan parts and get AI identification (up to 10 parts)
-- **Manual car selection** - Choose from 6 major car brands with models and years
-- **Manual parts entry** - Add parts manually with 30-character limit
-- **Order review modal** - Review car info and parts list before submission
-- **Subscription pricing** - 3 tiers (Basic: 9 SAR, Pro: 19 SAR, Workshop: 79 SAR)
-- **Order history tracking** - View past orders (empty state when no orders)
-- **Account management** - Profile, settings, and subscription management
+### App Status: Production-Ready (Stub External Services)
 
 ## User Preferences
 
-- Preferred communication style: Simple, everyday language
-- UI Language: Arabic with RTL layout
-- Design: Blue/white theme for primary actions, grey/black for secondary
-- Upload buttons use blue theme with upload icon
-- Camera/manual buttons use grey theme
+- UI Language: Arabic with RTL layout (all text in Arabic)
+- Design: Blue (#1E74F2) primary, Cairo font family
+- No emojis in UI
+- Mobile-first (iOS 26 Liquid Glass aesthetic)
 
 ## System Architecture
 
 ### Frontend (Expo/React Native)
+- **Entry**: `client/App.tsx` → `RootStackNavigator`
+- **Navigation**: Tab navigator (HomeTab, ScanTab/+, OrdersTab, AccountTab) with full stack navigators
+- **Key screens**:
+  - `HomeScreen` — hero card with "طلب جديد" button → navigates to `NewInspection`
+  - `NewInspectionScreen` — 4-step wizard: Car → Photos → AI Parts → Review & Submit
+  - `InspectionsScreen` — list of customer inspections with status badges
+  - `InspectionDetailScreen` — timeline + parts + quotes CTA
+  - `QuotesListScreen` — vendor quotes with image modal + accept button
+  - `AccountScreen` — login/register (with city selection) + profile
 
-**Structure**: The client code lives in `/client` with path alias `@/`. Components follow a modular pattern with themed variants (`ThemedText`, `ThemedView`) that adapt to dark/light modes.
+### Backend (Express + Drizzle ORM + PostgreSQL)
+- **Port**: 5000
+- **Entry**: `server/index.ts` → `server/routes.ts`
+- **Database**: PostgreSQL via `shared/schema.ts` (22 tables)
 
-**Screens**:
-- `HomeScreen` - Landing page with hero card, feature highlights, and subscription CTA
-- `OrderScreen` - 4-step workflow: car selection → parts scan → review → submit
-- `OrdersScreen` - Order history with empty state
-- `AccountScreen` - Profile and settings menu
-- `PricingScreen` - 3 subscription tiers with selection
-- `CarSelectionScreen` - Manual brand/model/year picker
-- `CameraScreen` - Camera capture for car/parts photos
+### External Service Stubs (production-ready integration points)
+All stubs log in development; wire real providers via env vars:
+- `server/services/whatsapp.ts` — `sendWhatsAppMessage()` uses `WHATSAPP_API_KEY` + `WHATSAPP_PHONE_NUMBER_ID`
+- `server/services/sms.ts` — `sendSms()` uses `SMS_API_KEY`
+- `server/services/payment.ts` — `createPaymentIntent()` uses `PAYMENT_SECRET_KEY` (Stripe-compatible)
+- `server/services/ocr.ts` — `extractTotalPrice()` uses OpenAI GPT-4o Vision (real, no stub)
 
-**Navigation**: Uses React Navigation with tab-based main interface:
-- `RootStackNavigator` - Top-level containing main tabs plus modal screens
-- `MainTabNavigator` - Bottom tabs: الرئيسية (Home), طلباتي (Orders), الحساب (Account)
-- Floating "+" button for quick order access
+## Database Schema (22 tables)
 
-**State Management**: 
-- React Query (`@tanstack/react-query`) for server state and API calls
-- React Context for cart state (`CartContext`)
-- Local component state for form inputs
+### Reference data
+- `cities` — Saudi cities (10 seeded)
+- `car_makes` — 14 car brands (seeded)
+- `car_models` — 77 models (seeded)
 
-**Styling Approach**: Uses a centralized theme system in `/client/constants/theme.ts` with:
-- Colors object with light/dark variants
-- Spacing, BorderRadius, Typography constants
-- Blue primary color (#1E74F2) for main actions
-- Cairo Google Font for Arabic typography
+### Customers & Vendors
+- `customers` — customer accounts (mobile_e164, email, city_id)
+- `vendors` — vendor businesses
+- `vendor_users` — vendor staff with WhatsApp numbers
+- `vendor_locations` — vendor cities
+- `vendor_supported_models` — which car models each vendor serves
 
-**Arabic/RTL Support**: Forced RTL layout via `I18nManager.forceRTL(true)` in App.tsx.
+### Inspection workflow
+- `laqit_inspections` — core inspection record (INS-YYYY-NNNNNN format, status machine)
+- `inspection_media` — car_photo / damage_photo URLs
+- `inspection_parts` — AI-suggested or user-added parts
+- `rfq_documents` — generated PDF (optional)
+- `rfq_recipients` — which vendors received the RFQ
 
-### Backend (Express)
+### Quote & payment
+- `whatsapp_messages` — inbound + outbound messages logged
+- `quotes` — vendor quotes with OCR-extracted total_amount
+- `payments` — payment records (Stripe-compatible)
+- `notifications` — SMS/WhatsApp notifications log
 
-**Structure**: Server code in `/server` with Express.js API.
+### Legacy (backward compat)
+- `users` / `inspections` / `conversations` / `messages`
 
-**API Endpoints**:
-- `POST /api/identify-car` - AI car identification from image
-- `POST /api/analyze` - AI parts detection from image
+## API Endpoints
 
-**AI Integration**: OpenAI API via Replit AI Integrations for GPT-4 vision capabilities.
+### Reference
+- `GET /api/cities`
+- `GET /api/car-makes`
+- `GET /api/car-models/:makeId`
 
-**Database**: PostgreSQL with Drizzle ORM. Schema in `/shared/schema.ts`.
+### Customers
+- `POST /api/customers/register` — { fullName, mobileE164, email, cityId }
+- `POST /api/customers/login` — { mobileE164 }
+- `GET /api/customers/:id`
+- `PATCH /api/customers/:id`
 
-Full Laqit RFQ schema is implemented alongside the original tables. New tables:
-- `cities` — city master data
-- `customers` — customer accounts with city FK and E.164 mobile
-- `vendors` / `vendor_users` — vendor companies and their staff (WhatsApp-primary partial unique index)
-- `car_makes` / `car_models` — car catalog
-- `vendor_locations` / `vendor_supported_models` — vendor coverage and compatibility
-- `laqit_inspections` — full inspection table with inspection_no, status enum, city/model FKs
-- `inspection_media` / `inspection_parts` — photos and parts per inspection
-- `rfq_documents` / `rfq_recipients` — generated PDFs and delivery audit log
-- `whatsapp_messages` — inbound/outbound WhatsApp message log
-- `quotes` — vendor quotes with OCR-extracted total amount
-- `payments` — payment records per accepted quote
-- `notifications` — multi-channel notification log
-- `audit_log` — general actor/entity audit trail
+### Inspections
+- `POST /api/laqit-inspections` — { customerId, carModelId, carYear }
+- `GET /api/laqit-inspections/customer/:customerId`
+- `GET /api/laqit-inspections/:id`
+- `POST /api/laqit-inspections/:id/media` — { fileUrl, mediaType }
+- `POST /api/laqit-inspections/:id/parts` — { parts: [{partName, quantity, source}] }
+- `PATCH /api/laqit-inspections/:id/status`
+- `POST /api/laqit-inspections/:id/submit` — triggers RFQ broadcast
 
-PostgreSQL enum types: `inspection_status`, `delivery_status`, `message_direction`, `quote_status`, `payment_status`, `user_role`, `user_status`, `vendor_status`, `customer_status`, `media_type`, `part_source`, `notification_channel`, `notification_status`
+### Quotes
+- `GET /api/laqit-inspections/:id/quotes`
+- `POST /api/laqit-inspections/:id/quotes/:quoteId/accept`
+- `GET /api/quotes/:quoteId`
 
-### Build System
+### Payments
+- `POST /api/payments` — { inspectionId, quoteId, customerId }
 
-**Development**: 
-- `npm run expo:dev` - Starts Expo dev server (port 8081)
-- `npm run server:dev` - Runs Express server (port 5000)
+### Vendors (admin)
+- `GET /api/vendors`
+- `POST /api/vendors`
+- `GET /api/vendor-users`
+- `POST /api/vendor-users`
 
-**Production**:
-- `npm run expo:static:build` - Builds static web bundle
-- `npm run server:build` - Bundles server with esbuild
-- `npm run server:prod` - Runs production server
+### Webhooks
+- `POST /api/webhooks/whatsapp` — inbound WhatsApp, OCR, quote creation, SMS notification
+- `POST /api/webhooks/payment` — payment captured, vendor WhatsApp notification
 
-**Database**: `npm run db:push` - Pushes Drizzle schema to PostgreSQL
+### Legacy
+- `POST /api/register` / `POST /api/login` (users table)
+- `POST /api/analyze` — AI car/part analysis
 
-## Testing
+## Seeded Data
 
-**TestIDs for automated testing**:
-- `button-new-order` - New order button on home
-- `button-upload-car-image` - Upload image for car identification
-- `button-capture-car-image` - Capture photo for car identification
-- `button-manual-car-select` - Open manual car selection
-- `button-upload-parts-image` - Upload image for parts
-- `button-capture-parts-image` - Capture photo for parts
-- `button-review-order` - Open review modal
-- `button-pricing-cta` - CTA to pricing screen
+Run `npx tsx server/seed.ts` to seed:
+- 10 Saudi cities
+- 14 car brands, 77 models
+- 4 sample vendors (2 Riyadh, 1 Jeddah, 1 Dammam) with WhatsApp numbers and supported models
 
-## External Dependencies
+## Navigation Structure
 
-### AI Services
-- **OpenAI API** - Used via Replit AI Integrations for vision-based identification
+```
+RootStackNavigator
+├── Main → MainTabNavigator
+│     ├── HomeTab → HomeStackNavigator (Home, Order, Pricing)
+│     ├── ScanTab → floating + → navigates to NewInspection
+│     ├── OrdersTab → OrdersStackNavigator (Inspections)
+│     └── AccountTab → AccountStackNavigator (Account)
+├── Camera (fullscreen modal)
+├── CarSelection (modal)
+├── Analysis (fullscreen modal)
+├── Results
+├── Cart (modal)
+├── Pricing
+├── Expert (modal)
+├── NewInspection ← new
+├── InspectionDetail ← new
+└── QuotesList ← new
+```
 
-### Database
-- **PostgreSQL** - Primary database via `DATABASE_URL`
-- **Drizzle ORM** - Type-safe database queries
+## UserContext Fields
+- `id` — customer UUID (same as customerId)
+- `name` — full name
+- `mobile` — E.164 mobile
+- `email`
+- `customerId` — UUID in customers table
+- `cityId` — UUID in cities table
 
-### Mobile/Expo
-- **expo-camera** - Camera access for photography
-- **expo-image-picker** - Gallery image selection
-- **expo-haptics** - Tactile feedback for UI interactions
-- **expo-image-manipulator** - Image resizing and base64 conversion
-
-### Key Libraries
-- **React Navigation** - Native navigation with bottom tabs and stack navigators
-- **React Native Reanimated** - Smooth animations for UI transitions
-- **TanStack React Query** - Data fetching and caching
-- **Cairo Google Font** - Arabic typography
-
-### Environment Variables Required
-- `DATABASE_URL` - PostgreSQL connection string
-- `AI_INTEGRATIONS_OPENAI_API_KEY` - OpenAI API key via Replit
-- `AI_INTEGRATIONS_OPENAI_BASE_URL` - OpenAI base URL via Replit
-- `EXPO_PUBLIC_DOMAIN` - Domain for API calls from client
-- `REPLIT_DEV_DOMAIN` - Replit development domain
-
-## Recent Updates
-
-- Added testIDs to all key interactive elements for automated testing
-- Polished UI with consistent blue/white theme for upload buttons
-- Grey/black theme for camera and manual selection buttons
-- All 4 workflow steps implemented in OrderScreen
-- Review modal shows app logo, car info, and numbered parts list
-- Empty states implemented for Orders screen
-- Pricing screen with 3 subscription tiers
-- Production-ready error handling with ErrorBoundary
+## Environment Variables Required for Production
+- `DATABASE_URL` — PostgreSQL connection string
+- `AI_INTEGRATIONS_OPENAI_API_KEY` + `AI_INTEGRATIONS_OPENAI_BASE_URL` — OpenAI (already integrated)
+- `WHATSAPP_API_KEY` + `WHATSAPP_PHONE_NUMBER_ID` — WhatsApp Business API
+- `SMS_API_KEY` — SMS provider (Unifonic or similar)
+- `PAYMENT_SECRET_KEY` — Stripe secret key

@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet, Pressable, View } from "react-native";
-import { useNavigation, CommonActions } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import HomeStackNavigator from "@/navigation/HomeStackNavigator";
 import OrdersStackNavigator from "@/navigation/OrdersStackNavigator";
@@ -24,21 +24,14 @@ export type MainTabParamList = {
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 function NewOrderButton() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
 
   return (
     <View style={styles.scanButtonContainer}>
       <Pressable
         onPress={() => {
-          navigation.dispatch(
-            CommonActions.navigate({
-              name: "HomeTab",
-              params: {
-                screen: "Order",
-              },
-            })
-          );
+          navigation.navigate("NewInspection");
         }}
         style={({ pressed }) => [
           styles.scanButton,

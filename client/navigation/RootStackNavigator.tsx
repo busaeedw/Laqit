@@ -8,6 +8,9 @@ import ResultsScreen from "@/screens/ResultsScreen";
 import CartScreen from "@/screens/CartScreen";
 import PricingScreen from "@/screens/PricingScreen";
 import ExpertScreen from "@/screens/ExpertScreen";
+import NewInspectionScreen from "@/screens/NewInspectionScreen";
+import InspectionDetailScreen from "@/screens/InspectionDetailScreen";
+import QuotesListScreen from "@/screens/QuotesListScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 
 export type CarInfo = {
@@ -33,7 +36,7 @@ export type DetectedPart = {
 
 export type RootStackParamList = {
   Main: undefined;
-  Camera: { 
+  Camera: {
     carInfo?: CarInfo;
     onSelectCar?: (car: CarInfo) => void;
     onAnalyzeParts?: (imageUri: string) => void;
@@ -44,6 +47,9 @@ export type RootStackParamList = {
   Cart: undefined;
   Pricing: undefined;
   Expert: { partName?: string } | undefined;
+  NewInspection: undefined;
+  InspectionDetail: { inspectionId: string };
+  QuotesList: { inspectionId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -61,7 +67,7 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="Camera"
         component={CameraScreen}
-        options={{ 
+        options={{
           headerShown: false,
           presentation: "fullScreenModal",
         }}
@@ -77,7 +83,7 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="Analysis"
         component={AnalysisScreen}
-        options={{ 
+        options={{
           headerShown: false,
           presentation: "fullScreenModal",
           gestureEnabled: false,
@@ -111,6 +117,27 @@ export default function RootStackNavigator() {
         options={{
           presentation: "modal",
           headerTitle: "تواصل مع خبير",
+        }}
+      />
+      <Stack.Screen
+        name="NewInspection"
+        component={NewInspectionScreen}
+        options={{
+          headerTitle: "طلب عرض سعر جديد",
+        }}
+      />
+      <Stack.Screen
+        name="InspectionDetail"
+        component={InspectionDetailScreen}
+        options={{
+          headerTitle: "تفاصيل الطلب",
+        }}
+      />
+      <Stack.Screen
+        name="QuotesList"
+        component={QuotesListScreen}
+        options={{
+          headerTitle: "عروض الأسعار",
         }}
       />
     </Stack.Navigator>

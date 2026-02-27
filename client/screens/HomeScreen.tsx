@@ -18,6 +18,9 @@ import Animated, {
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
+import { useNavigation as useRootNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp as RootNavProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 
 interface Feature {
@@ -65,6 +68,7 @@ export default function HomeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
+  const rootNavigation = useRootNavigation<RootNavProp<RootStackParamList>>();
 
   return (
     <ScrollView
@@ -89,7 +93,7 @@ export default function HomeScreen() {
             </View>
             <Pressable
               testID="button-new-order"
-              onPress={() => navigation.navigate("Order")}
+              onPress={() => rootNavigation.navigate("NewInspection")}
               style={({ pressed }) => [
                 styles.heroButton,
                 { 
