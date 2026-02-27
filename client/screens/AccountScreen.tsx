@@ -181,6 +181,7 @@ export default function AccountScreen() {
           allParts.push({
             partName: [inspection.makeName, inspection.modelName, inspection.carYear].filter(Boolean).join(" "),
             inspectionNumber: inspection.inspectionNo,
+            inspectionId: inspection.inspectionId,
             carMakeAr: inspection.makeName,
             carModelAr: inspection.modelName,
             carYear: inspection.carYear,
@@ -1003,35 +1004,47 @@ export default function AccountScreen() {
                   <Animated.View
                     key={`${part.inspectionNumber}-${index}`}
                     entering={FadeInDown.duration(300).delay(30 * index)}
-                    style={[styles.partCard, { backgroundColor: theme.backgroundSecondary }]}
                   >
-                    <View style={styles.partCardHeader}>
-                      <View style={[styles.partIconContainer, { backgroundColor: theme.primary + "15" }]}>
-                        <Feather name="settings" size={20} color={theme.primary} />
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.partCard,
+                        { backgroundColor: theme.backgroundSecondary, opacity: pressed ? 0.75 : 1 },
+                      ]}
+                      onPress={() => {
+                        if (!part.inspectionId) return;
+                        setIsPartsModalVisible(false);
+                        navigation.navigate("InspectionDetail", { inspectionId: part.inspectionId });
+                      }}
+                    >
+                      <View style={styles.partCardHeader}>
+                        <View style={[styles.partIconContainer, { backgroundColor: theme.primary + "15" }]}>
+                          <Feather name="settings" size={20} color={theme.primary} />
+                        </View>
+                        <View style={styles.partInfoContainer}>
+                          <ThemedText style={[styles.partName, { fontFamily: "Cairo_600SemiBold" }]}>
+                            {part.partName}
+                          </ThemedText>
+                          <ThemedText style={[styles.partCarInfo, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                            {part.carMakeAr} {part.carModelAr} {part.carYear}
+                          </ThemedText>
+                        </View>
+                        <Feather name="chevron-left" size={16} color={theme.textSecondary} />
                       </View>
-                      <View style={styles.partInfoContainer}>
-                        <ThemedText style={[styles.partName, { fontFamily: "Cairo_600SemiBold" }]}>
-                          {part.partName}
-                        </ThemedText>
-                        <ThemedText style={[styles.partCarInfo, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
-                          {part.carMakeAr} {part.carModelAr} {part.carYear}
-                        </ThemedText>
-                      </View>
-                    </View>
 
-                    <View style={styles.partInspectionInfo}>
-                      <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
-                        <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
-                          #{part.inspectionNumber}
-                        </ThemedText>
+                      <View style={styles.partInspectionInfo}>
+                        <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
+                          <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
+                            #{part.inspectionNumber}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.inspectionDateContainer}>
+                          <Feather name="calendar" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
+                          <ThemedText style={[styles.partInspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                            {formatDate(part.createdAt)}
+                          </ThemedText>
+                        </View>
                       </View>
-                      <View style={styles.inspectionDateContainer}>
-                        <Feather name="calendar" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
-                        <ThemedText style={[styles.partInspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
-                          {formatDate(part.createdAt)}
-                        </ThemedText>
-                      </View>
-                    </View>
+                    </Pressable>
                   </Animated.View>
                 ))}
               </ScrollView>
