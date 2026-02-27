@@ -66,7 +66,7 @@ async function seed() {
     { make: "BMW", models: ["3 Series", "5 Series", "7 Series", "X5", "X6"] },
     { make: "Lexus", models: ["LX", "GX", "RX", "ES", "IS"] },
     { make: "Chevrolet", models: ["Malibu", "Tahoe", "Suburban", "Silverado", "Captiva"] },
-    { make: "Ford", models: ["F-150", "Explorer", "Escape", "Fusion", "Edge"] },
+    { make: "Ford", models: ["F-150", "F-250", "F-350", "Explorer", "Expedition", "Expedition MAX", "Escape", "Fusion", "Edge", "Flex", "Bronco", "Bronco Sport", "Maverick", "Ranger", "Mustang", "Mustang Mach-E", "EcoSport", "Kuga", "Everest", "Focus", "Fiesta", "Mondeo", "Taurus", "Transit", "Transit Connect", "Galaxy", "S-Max", "Puma", "Territory"] },
     { make: "GMC", models: ["Yukon", "Sierra", "Terrain", "Acadia"] },
     { make: "Audi", models: ["A4", "A6", "Q5", "Q7"] },
     { make: "Mitsubishi", models: ["Pajero", "L200", "Eclipse Cross", "ASX"] },
