@@ -72,11 +72,13 @@ export default function AccountScreen() {
   const [isCityPickerVisible, setIsCityPickerVisible] = useState(false);
 
   const fetchInspections = async () => {
-    if (!user) return;
-    
+    if (!user?.customerId) return;
+
     setIsLoadingInspections(true);
     try {
-      const response = await fetch(new URL(`/api/inspections/${user.id}`, getApiUrl()).toString());
+      const response = await fetch(
+        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString()
+      );
       if (response.ok) {
         const data = await response.json();
         setInspections(data.inspections || []);
@@ -831,58 +833,55 @@ export default function AccountScreen() {
                 </ThemedText>
               </View>
             ) : (
-              <ScrollView 
+              <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: Spacing.xl }}
               >
-                {inspections.map((inspection, index) => (
-                  <Animated.View
-                    key={inspection.id}
-                    entering={FadeInDown.duration(300).delay(50 * index)}
-                    style={[styles.inspectionCard, { backgroundColor: theme.backgroundSecondary }]}
-                  >
-                    <View style={styles.inspectionHeader}>
-                      <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
-                        <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
-                          #{inspection.inspectionNumber}
+                {inspections.map((inspection: any, index: number) => {
+                  const statusMap: Record<string, { label: string; color: string }> = {
+                    draft:          { label: "مسودة",          color: theme.textSecondary },
+                    rfq_sent:       { label: "أُرسل للموردين", color: theme.primary },
+                    quotes_received:{ label: "عروض واردة",     color: theme.accentYellow },
+                    quote_accepted: { label: "تم القبول",      color: theme.success },
+                    paid:           { label: "مدفوع",          color: theme.success },
+                  };
+                  const st = statusMap[inspection.status] ?? { label: inspection.status, color: theme.textSecondary };
+
+                  return (
+                    <Animated.View
+                      key={inspection.inspectionId}
+                      entering={FadeInDown.duration(300).delay(50 * index)}
+                      style={[styles.inspectionCard, { backgroundColor: theme.backgroundSecondary }]}
+                    >
+                      <View style={styles.inspectionHeader}>
+                        <View style={[styles.inspectionNumberBadge, { backgroundColor: theme.primary + "20" }]}>
+                          <ThemedText style={[styles.inspectionNumber, { fontFamily: "Cairo_600SemiBold", color: theme.primary }]}>
+                            {inspection.inspectionNo}
+                          </ThemedText>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: st.color + "20" }]}>
+                          <ThemedText style={[styles.statusBadgeText, { color: st.color, fontFamily: "Cairo_600SemiBold" }]}>
+                            {st.label}
+                          </ThemedText>
+                        </View>
+                      </View>
+
+                      <View style={styles.inspectionCarInfo}>
+                        <Feather name="truck" size={18} color={theme.primary} style={{ marginLeft: Spacing.sm }} />
+                        <ThemedText style={[styles.inspectionCarText, { fontFamily: "Cairo_600SemiBold" }]}>
+                          {[inspection.makeName, inspection.modelName, inspection.carYear].filter(Boolean).join(" ")}
                         </ThemedText>
                       </View>
+
                       <View style={styles.inspectionDateContainer}>
-                        <Feather name="calendar" size={14} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
+                        <Feather name="calendar" size={13} color={theme.textSecondary} style={{ marginLeft: 4 }} />
                         <ThemedText style={[styles.inspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
                           {formatDate(inspection.createdAt)}
                         </ThemedText>
                       </View>
-                    </View>
-
-                    <View style={styles.inspectionCarInfo}>
-                      <Feather name="truck" size={18} color={theme.primary} style={{ marginLeft: Spacing.sm }} />
-                      <ThemedText style={[styles.inspectionCarText, { fontFamily: "Cairo_600SemiBold" }]}>
-                        {inspection.carMakeAr} {inspection.carModelAr} {inspection.carYear}
-                      </ThemedText>
-                    </View>
-
-                    <View style={styles.inspectionPartsContainer}>
-                      <ThemedText style={[styles.inspectionPartsTitle, { fontFamily: "Cairo_600SemiBold", color: theme.textSecondary }]}>
-                        القطع المحددة:
-                      </ThemedText>
-                      {inspection.parts && inspection.parts.length > 0 ? (
-                        inspection.parts.map((part: string, partIndex: number) => (
-                          <View key={partIndex} style={styles.inspectionPartItem}>
-                            <View style={[styles.partBullet, { backgroundColor: theme.primary }]} />
-                            <ThemedText style={[styles.inspectionPartText, { fontFamily: "Cairo_400Regular" }]}>
-                              {part}
-                            </ThemedText>
-                          </View>
-                        ))
-                      ) : (
-                        <ThemedText style={[styles.inspectionPartText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
-                          لا توجد قطع
-                        </ThemedText>
-                      )}
-                    </View>
-                  </Animated.View>
-                ))}
+                    </Animated.View>
+                  );
+                })}
               </ScrollView>
             )}
           </View>
@@ -1316,6 +1315,14 @@ const styles = StyleSheet.create({
   },
   inspectionNumber: {
     fontSize: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  statusBadgeText: {
+    fontSize: 11,
   },
   inspectionDateContainer: {
     flexDirection: "row",
