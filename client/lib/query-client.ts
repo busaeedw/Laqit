@@ -1,10 +1,27 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Platform } from "react-native";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
+ *
+ * On web in production the app and the API are served from the same Express
+ * server (same origin), so API calls must target the current origin rather
+ * than a baked-in deployment domain — which may differ from the public domain
+ * the user actually visits. In development (web) and on native, fall back to
+ * the EXPO_PUBLIC_DOMAIN baked at build time.
+ *
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
+  if (
+    Platform.OS === "web" &&
+    !__DEV__ &&
+    typeof window !== "undefined" &&
+    window.location?.origin
+  ) {
+    return new URL(window.location.origin).href;
+  }
+
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {
