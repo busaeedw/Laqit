@@ -1,17 +1,37 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
+import { View, ActivityIndicator } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import MainTabNavigator from "@/navigation/MainTabNavigator";
-import CameraScreen from "@/screens/CameraScreen";
-import CarSelectionScreen from "@/screens/CarSelectionScreen";
-import AnalysisScreen from "@/screens/AnalysisScreen";
-import ResultsScreen from "@/screens/ResultsScreen";
-import CartScreen from "@/screens/CartScreen";
-import PricingScreen from "@/screens/PricingScreen";
-import ExpertScreen from "@/screens/ExpertScreen";
-import NewInspectionScreen from "@/screens/NewInspectionScreen";
-import InspectionDetailScreen from "@/screens/InspectionDetailScreen";
-import QuotesListScreen from "@/screens/QuotesListScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
+import MainTabNavigator from "@/navigation/MainTabNavigator";
+
+const CameraScreen = lazy(() => import("@/screens/CameraScreen"));
+const CarSelectionScreen = lazy(() => import("@/screens/CarSelectionScreen"));
+const AnalysisScreen = lazy(() => import("@/screens/AnalysisScreen"));
+const ResultsScreen = lazy(() => import("@/screens/ResultsScreen"));
+const CartScreen = lazy(() => import("@/screens/CartScreen"));
+const PricingScreen = lazy(() => import("@/screens/PricingScreen"));
+const ExpertScreen = lazy(() => import("@/screens/ExpertScreen"));
+const NewInspectionScreen = lazy(() => import("@/screens/NewInspectionScreen"));
+const InspectionDetailScreen = lazy(() => import("@/screens/InspectionDetailScreen"));
+const QuotesListScreen = lazy(() => import("@/screens/QuotesListScreen"));
+
+function ScreenFallback() {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <ActivityIndicator size="large" color="#1E74F2" />
+    </View>
+  );
+}
+
+function withSuspense<T extends object>(Component: React.ComponentType<T>) {
+  return function SuspenseWrapper(props: T) {
+    return (
+      <Suspense fallback={<ScreenFallback />}>
+        <Component {...props} />
+      </Suspense>
+    );
+  };
+}
 
 export type CarInfo = {
   make: string;
@@ -66,7 +86,7 @@ export default function RootStackNavigator() {
       />
       <Stack.Screen
         name="Camera"
-        component={CameraScreen}
+        component={withSuspense(CameraScreen)}
         options={{
           headerShown: false,
           presentation: "fullScreenModal",
@@ -74,7 +94,7 @@ export default function RootStackNavigator() {
       />
       <Stack.Screen
         name="CarSelection"
-        component={CarSelectionScreen}
+        component={withSuspense(CarSelectionScreen)}
         options={{
           presentation: "modal",
           headerTitle: "اختر السيارة",
@@ -82,7 +102,7 @@ export default function RootStackNavigator() {
       />
       <Stack.Screen
         name="Analysis"
-        component={AnalysisScreen}
+        component={withSuspense(AnalysisScreen)}
         options={{
           headerShown: false,
           presentation: "fullScreenModal",
@@ -91,14 +111,14 @@ export default function RootStackNavigator() {
       />
       <Stack.Screen
         name="Results"
-        component={ResultsScreen}
+        component={withSuspense(ResultsScreen)}
         options={{
           headerTitle: "نتائج الفحص",
         }}
       />
       <Stack.Screen
         name="Cart"
-        component={CartScreen}
+        component={withSuspense(CartScreen)}
         options={{
           presentation: "modal",
           headerTitle: "السلة",
@@ -106,14 +126,14 @@ export default function RootStackNavigator() {
       />
       <Stack.Screen
         name="Pricing"
-        component={PricingScreen}
+        component={withSuspense(PricingScreen)}
         options={{
           headerTitle: "الباقات والأسعار",
         }}
       />
       <Stack.Screen
         name="Expert"
-        component={ExpertScreen}
+        component={withSuspense(ExpertScreen)}
         options={{
           presentation: "modal",
           headerTitle: "تواصل مع خبير",
@@ -121,21 +141,21 @@ export default function RootStackNavigator() {
       />
       <Stack.Screen
         name="NewInspection"
-        component={NewInspectionScreen}
+        component={withSuspense(NewInspectionScreen)}
         options={{
           headerTitle: "طلب عرض سعر جديد",
         }}
       />
       <Stack.Screen
         name="InspectionDetail"
-        component={InspectionDetailScreen}
+        component={withSuspense(InspectionDetailScreen)}
         options={{
           headerTitle: "تفاصيل الطلب",
         }}
       />
       <Stack.Screen
         name="QuotesList"
-        component={QuotesListScreen}
+        component={withSuspense(QuotesListScreen)}
         options={{
           headerTitle: "عروض الأسعار",
         }}

@@ -162,10 +162,68 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 
+function getSeoLandingHtml(req: Request): string {
+  const forwardedProto = req.header("x-forwarded-proto");
+  const protocol = forwardedProto || req.protocol || "https";
+  const forwardedHost = req.header("x-forwarded-host");
+  const host = forwardedHost || req.get("host");
+  const baseUrl = `${protocol}://${host}`;
+
+  const templatePath = path.resolve(process.cwd(), "server", "templates", "seo-landing.html");
+  const template = fs.readFileSync(templatePath, "utf-8");
+  return template.replace(/BASE_URL_PLACEHOLDER/g, baseUrl);
+}
+
 function configureExpoAndLanding(app: express.Application) {
   const isDev = process.env.NODE_ENV === "development";
 
   log("Serving static Expo files with dynamic manifest routing");
+
+  // robots.txt — must appear before static file serving so it is never
+  // shadowed by a missing file falling through to the SPA catch-all.
+  app.get("/robots.txt", (req: Request, res: Response) => {
+    const forwardedProto = req.header("x-forwarded-proto");
+    const protocol = forwardedProto || req.protocol || "https";
+    const forwardedHost = req.header("x-forwarded-host");
+    const host = forwardedHost || req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(
+      `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml\n`
+    );
+  });
+
+  // sitemap.xml — canonical public URLs for the browser-facing site
+  app.get("/sitemap.xml", (req: Request, res: Response) => {
+    const forwardedProto = req.header("x-forwarded-proto");
+    const protocol = forwardedProto || req.protocol || "https";
+    const forwardedHost = req.header("x-forwarded-host");
+    const host = forwardedHost || req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+    const now = new Date().toISOString().split("T")[0];
+
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.send(
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n` +
+      `        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n` +
+      `  <url>\n` +
+      `    <loc>${baseUrl}/</loc>\n` +
+      `    <lastmod>${now}</lastmod>\n` +
+      `    <changefreq>weekly</changefreq>\n` +
+      `    <priority>1.0</priority>\n` +
+      `    <xhtml:link rel="alternate" hreflang="ar" href="${baseUrl}/"/>\n` +
+      `  </url>\n` +
+      `  <url>\n` +
+      `    <loc>${baseUrl}/web-app</loc>\n` +
+      `    <lastmod>${now}</lastmod>\n` +
+      `    <changefreq>monthly</changefreq>\n` +
+      `    <priority>0.8</priority>\n` +
+      `  </url>\n` +
+      `</urlset>\n`
+    );
+  });
 
   // Handle native Expo manifest requests (iOS/Android via Expo Go)
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -205,10 +263,41 @@ function configureExpoAndLanding(app: express.Application) {
       expoProxy(req, res, next);
     });
   } else {
-    // In production: serve static web build from static-build/web,
-    // with SPA fallback for client-side routing
+    // In production: serve the SEO landing page at the root, the Expo SPA
+    // under /web-app, and static assets from static-build/web.
     const webDir = path.resolve(process.cwd(), "static-build", "web");
+
+    // Root "/" → pre-rendered Arabic landing page (visible to bots without JS)
+    app.get("/", (req: Request, res: Response) => {
+      try {
+        const html = getSeoLandingHtml(req);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.status(200).send(html);
+      } catch {
+        // Fallback to Expo SPA if template is missing
+        const indexPath = path.join(webDir, "index.html");
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.status(404).send("Not found");
+        }
+      }
+    });
+
+    // Serve static assets (JS bundles, images, etc.) from the web build
     app.use(express.static(webDir));
+
+    // "/web-app" and any sub-routes → Expo SPA shell
+    app.get("/web-app", (req: Request, res: Response, next: NextFunction) => {
+      const indexPath = path.join(webDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        next();
+      }
+    });
+
+    // All other non-API routes → Expo SPA shell (client-side routing)
     app.get("*", (req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith("/api")) return next();
       const indexPath = path.join(webDir, "index.html");
