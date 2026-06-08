@@ -205,12 +205,13 @@ function configureExpoAndLanding(app: express.Application) {
       expoProxy(req, res, next);
     });
   } else {
-    // In production: serve static web build, with SPA fallback for client-side routing
-    const staticDir = path.resolve(process.cwd(), "static-build");
-    app.use(express.static(staticDir));
+    // In production: serve static web build from static-build/web,
+    // with SPA fallback for client-side routing
+    const webDir = path.resolve(process.cwd(), "static-build", "web");
+    app.use(express.static(webDir));
     app.get("*", (req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith("/api")) return next();
-      const indexPath = path.join(staticDir, "index.html");
+      const indexPath = path.join(webDir, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {

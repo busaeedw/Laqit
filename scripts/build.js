@@ -545,12 +545,43 @@ async function main() {
   console.log("Updating manifests and creating landing page...");
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
 
-  console.log("Build complete! Deploy to:", baseUrl);
-
+  // Kill the Metro process used for iOS/Android before web export
   if (metroProcess) {
     metroProcess.kill();
+    metroProcess = null;
   }
+
+  // Build the web version for browser access
+  await buildWebVersion(domain);
+
+  console.log("Build complete! Deploy to:", baseUrl);
   process.exit(0);
+}
+
+async function buildWebVersion(domain) {
+  console.log("Building web version for browser...");
+  return new Promise((resolve, reject) => {
+    const webProcess = spawn(
+      "npx",
+      ["expo", "export", "--platform", "web", "--output-dir", "static-build/web"],
+      {
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          EXPO_PUBLIC_DOMAIN: domain,
+        },
+      }
+    );
+    webProcess.on("close", (code) => {
+      if (code === 0) {
+        console.log("Web build complete");
+        resolve();
+      } else {
+        reject(new Error(`Web build failed with exit code ${code}`));
+      }
+    });
+    webProcess.on("error", reject);
+  });
 }
 
 main().catch((error) => {
