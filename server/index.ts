@@ -1,5 +1,6 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
@@ -162,17 +163,11 @@ function serveLandingPage({
 }
 
 function configureExpoAndLanding(app: express.Application) {
-  const templatePath = path.resolve(
-    process.cwd(),
-    "server",
-    "templates",
-    "landing-page.html",
-  );
-  const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
-  const appName = getAppName();
+  const isDev = process.env.NODE_ENV === "development";
 
   log("Serving static Expo files with dynamic manifest routing");
 
+  // Handle native Expo manifest requests (iOS/Android via Expo Go)
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) {
       return next();
@@ -187,20 +182,42 @@ function configureExpoAndLanding(app: express.Application) {
       return serveExpoManifest(platform, res);
     }
 
-    if (req.path === "/") {
-      return serveLandingPage({
-        req,
-        res,
-        landingPageTemplate,
-        appName,
-      });
-    }
-
     next();
   });
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
+
+  if (isDev) {
+    // In development: proxy all non-API browser requests to the Expo web dev server
+    const expoProxy = createProxyMiddleware({
+      target: "http://localhost:8081",
+      changeOrigin: false,
+      ws: true,
+      on: {
+        error: (_err, _req, res) => {
+          (res as Response).status(502).send("Expo web server not ready yet. Please wait a moment and refresh.");
+        },
+      },
+    });
+
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api")) return next();
+      expoProxy(req, res, next);
+    });
+  } else {
+    // In production: serve static web build, with SPA fallback for client-side routing
+    const staticDir = path.resolve(process.cwd(), "static-build");
+    app.use(express.static(staticDir));
+    app.get("*", (req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api")) return next();
+      const indexPath = path.join(staticDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        next();
+      }
+    });
+  }
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
