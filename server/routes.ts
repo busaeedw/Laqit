@@ -118,12 +118,17 @@ STEP 1 - Identify the car:
 - Study the body shape, taillights, and distinctive features
 - Estimate the year based on the generation/design
 
-STEP 2 - Detect missing or damaged parts:
-- Look carefully for any MISSING parts (e.g., missing bumper, missing mirror, missing headlight, missing trim piece, missing emblem, missing grille)
-- Look for DAMAGED parts (cracked bumpers, broken lights, dented panels, scratched paint, broken mirrors, cracked windshield)
-- Look for WORN parts (faded paint, worn tires, rusted areas, deteriorated rubber seals)
-- For each issue found, describe the condition: "missing", "damaged", "cracked", "broken", "dented", "scratched", "worn", "faded", etc.
-- Provide realistic replacement/repair prices in Saudi Riyals (SAR)
+STEP 2 - Systematically inspect for damage (scan EVERY zone):
+This is a damage inspection tool; missing real damage is the worst possible outcome. Work zone by zone and report EVERY visible defect as its own separate part entry:
+- FRONT: bumper, grille, headlights, fog lights, hood, emblem, license plate area
+- REAR: bumper, tail lights, trunk/tailgate, exhaust tip, emblem
+- SIDES: front/rear doors, fenders, side mirrors, door handles, side moldings/trim, rocker panels
+- GLASS: windshield, rear window, side windows (look for chips, cracks, shattering)
+- WHEELS & TIRES: rims (scuffs, bends, curb rash), tires (wear, flats, sidewall cuts)
+- LIGHTS: any cracked, broken, fogged, hazed, or missing lamp/lens
+- PAINT & BODY: scratches, scuffs, dents, dings, rust, faded/peeling/chipped paint, paint transfer, misaligned panels or uneven gaps
+
+For EACH defect, create a SEPARATE entry. Report damage even when minor (small scratches, light scuffs, paint chips, curb rash). Describe the condition precisely: "missing", "damaged", "cracked", "broken", "dented", "scratched", "worn", "faded", etc. Provide a realistic replacement/repair price in Saudi Riyals (SAR) for each.
 
 You MUST return this exact JSON structure (no exceptions):
 {
@@ -162,9 +167,11 @@ CONDITION VALUES:
 - "cracked" / "متشقق" - Part has cracks
 
 RULES:
-- Focus on finding MISSING and DAMAGED parts - this is a damage inspection tool
-- If the car appears in good condition with no visible damage, still check carefully for minor issues like scratches, worn tires, faded paint, etc.
-- If truly no damage is found, return an empty parts array
+- Be thorough: report EVERY visible defect as its own part entry. Err on the side of reporting borderline or minor damage rather than missing it.
+- Examine the whole image methodically; do not stop after finding one issue. A single photo often shows several separate damaged parts.
+- Only return an empty parts array if the image clearly shows an undamaged car in pristine condition, or if there is genuinely no car in the image.
+- If the image is blurry or a region is partly unclear, still report what is visibly wrong and lower the confidence accordingly instead of skipping it.
+- boundingBox must tightly frame the damaged area using normalized 0-1 coordinates (x,y = top-left corner; width,height = size). Provide one for every part.
 - ALWAYS provide Arabic translations (makeAr, modelAr, nameAr, descriptionAr, conditionAr, primaryUseAr)
 - Confidence should reflect how certain you are about the damage (60-100)
 - Prices should be realistic replacement/repair estimates in SAR
@@ -186,21 +193,26 @@ RULES:
               { type: "text", text: userMessage },
               {
                 type: "image_url",
-                image_url: { url: imageUri },
+                image_url: { url: imageUri, detail: "high" },
               },
             ],
           },
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 4096,
+        reasoning_effort: "medium",
+        max_completion_tokens: 8192,
       });
 
-      console.log("OpenAI API response received");
+      const finishReason = response.choices[0]?.finish_reason;
+      console.log(`OpenAI API response received (finish_reason=${finishReason})`);
+      if (finishReason === "length") {
+        console.warn("Analyze response was truncated (hit max_completion_tokens)");
+      }
       const content = response.choices[0]?.message?.content || "{}";
       const result = JSON.parse(content);
 
       // Validate the response has the expected structure
-      if (!result.carInfo || !result.parts) {
+      if (!result.carInfo || !Array.isArray(result.parts)) {
         console.log("Invalid response structure, returning default");
         return res.json({
           carInfo: {
