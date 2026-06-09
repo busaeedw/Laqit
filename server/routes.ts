@@ -65,107 +65,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User Login
-  app.post("/api/login", async (req, res) => {
-    try {
-      const { name, mobile } = req.body;
-
-      if (!name || !mobile) {
-        return res.status(400).json({ error: "الاسم ورقم الجوال مطلوبان" });
-      }
-
-      const [user] = await db.select().from(users).where(
-        and(eq(users.name, name), eq(users.mobile, mobile))
-      ).limit(1);
-
-      if (!user) {
-        return res.status(401).json({ error: "الاسم أو رقم الجوال غير صحيح" });
-      }
-
-      res.json({ success: true, user: { id: user.id, name: user.name, mobile: user.mobile, email: user.email } });
-    } catch (error: any) {
-      console.error("Login error:", error?.message);
-      res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
-    }
+  // Legacy login endpoint removed — authenticated only by name+mobile (no credential proof).
+  // Use POST /api/customers/login instead.
+  app.post("/api/login", (_req, res) => {
+    res.status(410).json({ error: "هذه الخدمة لم تعد متاحة" });
   });
 
-  // Save Inspection
-  app.post("/api/inspections", async (req, res) => {
-    try {
-      const { userId, carMake, carMakeAr, carModel, carModelAr, carYear, parts } = req.body;
-
-      if (!userId || !carMake || !carModel || !parts) {
-        return res.status(400).json({ error: "بيانات الفحص غير مكتملة" });
-      }
-
-      // Generate unique inspection number (format: INS-YYYYMMDD-XXXX)
-      const now = new Date();
-      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      const inspectionNumber = `INS-${dateStr}-${randomNum}`;
-
-      const [newInspection] = await db.insert(inspections).values({
-        inspectionNumber,
-        userId,
-        carMake,
-        carMakeAr: carMakeAr || null,
-        carModel,
-        carModelAr: carModelAr || null,
-        carYear: carYear || null,
-        parts: JSON.stringify(parts),
-      }).returning();
-
-      res.json({ 
-        success: true, 
-        inspection: {
-          id: newInspection.id,
-          inspectionNumber: newInspection.inspectionNumber,
-          carMake: newInspection.carMake,
-          carMakeAr: newInspection.carMakeAr,
-          carModel: newInspection.carModel,
-          carModelAr: newInspection.carModelAr,
-          carYear: newInspection.carYear,
-          parts: JSON.parse(newInspection.parts),
-          createdAt: newInspection.createdAt,
-        }
-      });
-    } catch (error: any) {
-      console.error("Save inspection error:", error?.message);
-      res.status(500).json({ error: "حدث خطأ أثناء حفظ الفحص" });
-    }
+  // Legacy inspection endpoints removed — no authentication or ownership checks.
+  // Use POST /api/laqit-inspections and GET /api/laqit-inspections/customer/:customerId instead.
+  app.post("/api/inspections", (_req, res) => {
+    res.status(410).json({ error: "هذه الخدمة لم تعد متاحة" });
   });
 
-  // Get User Inspections
-  app.get("/api/inspections/:userId", async (req, res) => {
-    try {
-      const { userId } = req.params;
-
-      if (!userId) {
-        return res.status(400).json({ error: "معرف المستخدم مطلوب" });
-      }
-
-      const userInspections = await db.select()
-        .from(inspections)
-        .where(eq(inspections.userId, userId))
-        .orderBy(desc(inspections.createdAt));
-
-      const formattedInspections = userInspections.map(inspection => ({
-        id: inspection.id,
-        inspectionNumber: inspection.inspectionNumber,
-        carMake: inspection.carMake,
-        carMakeAr: inspection.carMakeAr,
-        carModel: inspection.carModel,
-        carModelAr: inspection.carModelAr,
-        carYear: inspection.carYear,
-        parts: JSON.parse(inspection.parts),
-        createdAt: inspection.createdAt,
-      }));
-
-      res.json({ success: true, inspections: formattedInspections });
-    } catch (error: any) {
-      console.error("Get inspections error:", error?.message);
-      res.status(500).json({ error: "حدث خطأ أثناء جلب الفحوصات" });
-    }
+  app.get("/api/inspections/:userId", (_req, res) => {
+    res.status(410).json({ error: "هذه الخدمة لم تعد متاحة" });
   });
 
 
