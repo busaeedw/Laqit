@@ -107,8 +107,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { imageUri, carInfo } = req.body;
       
       console.log("Received analyze request");
-      console.log("Image URI length:", imageUri?.length || 0);
-      console.log("Image starts with:", imageUri?.substring(0, 50));
 
       const systemPrompt = `You are an expert automotive damage and missing parts detection system. You MUST analyze the image and identify the car, then detect any missing, damaged, broken, or worn parts.
 
@@ -199,7 +197,6 @@ RULES:
 
       console.log("OpenAI API response received");
       const content = response.choices[0]?.message?.content || "{}";
-      console.log("Response content:", content.substring(0, 300));
       const result = JSON.parse(content);
 
       // Validate the response has the expected structure
