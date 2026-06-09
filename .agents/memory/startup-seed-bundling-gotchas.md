@@ -76,6 +76,27 @@ the `Start Frontend` workflow so Metro picks up the new native module.
 imports actually installed. After such merges, verify the iOS bundle returns 200,
 not just that the web app runs.
 
+## Build tools invoked by npm scripts must be declared, not hoist-borrowed
+`server:build` calls a bare `esbuild` binary. esbuild was undeclared and only
+worked because a transitive dep happened to hoist it to top-level `.bin`.
+**Rule:** any tool a script invokes by bare name must be a first-class
+dependency. **Why:** changing an unrelated transitive (e.g. via an override) can
+re-trigger npm's hoist/dedupe and silently delete the borrowed top-level binary,
+breaking the build with `sh: <tool>: not found`. Keep such build tools in
+`dependencies` (not devDependencies) so they survive any deploy install mode;
+bundled output doesn't import them so there's no runtime cost.
+
+## Bumping transitive-dep vulns: scoped overrides, never `audit fix --force`
+`npm audit fix --force` proposes major downgrades of expo/drizzle-kit here —
+never run it. Fix transitive vulns with npm `overrides` **scoped to the direct
+parent** (`"parentPkg": { "vuln": "^x" }`), never a bare global override of a
+package that multiple tools depend on — a global pin can drag an unrelated tool
+(e.g. the one running the dev server) onto an incompatible version.
+**Why:** scoping changes exactly one path and leaves the rest of the tree intact.
+**Apply:** edit package.json overrides, then reinstall — bash `npm install` is
+blocked, so use code-execution `installLanguagePackages` (it re-resolves with the
+new overrides; note it also adds the named pkg to `dependencies`, so clean up).
+
 ## Deduping a table with FK references safely
 When collapsing duplicate rows (e.g. `cities` with no unique constraint) keep the
 canonical row and, in one transaction: (1) for any child table with a UNIQUE that

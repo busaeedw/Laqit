@@ -52,6 +52,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 
 // server/routes.ts
 import { createServer } from "node:http";
+import { createHmac as createHmac2, timingSafeEqual as timingSafeEqual2 } from "crypto";
 import OpenAI2 from "openai";
 
 // server/db.ts
@@ -656,8 +657,7 @@ function signToken(customerId) {
 }
 function verifyToken(token) {
   const parts = token.split(".");
-  if (parts.length !== 3)
-    return null;
+  if (parts.length !== 3) return null;
   const [header, payload, sig] = parts;
   const expected = createHmac("sha256", jwtSecret).update(`${header}.${payload}`).digest("base64url");
   try {
@@ -667,14 +667,34 @@ function verifyToken(token) {
       return null;
     }
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
-    if (!claims.sub || typeof claims.sub !== "string")
-      return null;
-    if (typeof claims.exp === "number" && claims.exp < Math.floor(Date.now() / 1e3))
-      return null;
+    if (!claims.sub || typeof claims.sub !== "string") return null;
+    if (typeof claims.exp === "number" && claims.exp < Math.floor(Date.now() / 1e3)) return null;
     return { customerId: claims.sub };
   } catch {
     return null;
   }
+}
+function requireAdmin(req, res, next) {
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey) {
+    res.status(503).json({ error: "\u062E\u062F\u0645\u0629 \u0627\u0644\u0625\u062F\u0627\u0631\u0629 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D\u0629" });
+    return;
+  }
+  const provided = req.headers["x-admin-api-key"];
+  if (typeof provided !== "string" || provided.length !== adminKey.length) {
+    res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+    return;
+  }
+  try {
+    if (!timingSafeEqual(Buffer.from(provided, "utf-8"), Buffer.from(adminKey, "utf-8"))) {
+      res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      return;
+    }
+  } catch {
+    res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+    return;
+  }
+  next();
 }
 function requireCustomer(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -752,8 +772,7 @@ async function sendWhatsAppMessage(toE164, text2, pdfUrl, inspectionId) {
   if (!apiKey || !phoneNumberId) {
     console.log(`[WhatsApp STUB] Would send to ${toE164}:`);
     console.log(`  Text: ${text2.substring(0, 100)}...`);
-    if (pdfUrl)
-      console.log(`  PDF: ${pdfUrl}`);
+    if (pdfUrl) console.log(`  PDF: ${pdfUrl}`);
     const mockId = `mock_wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await db.insert(whatsappMessages).values({
       direction: "outbound",
@@ -931,86 +950,14 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0633\u062C\u064A\u0644" });
     }
   });
-  app2.post("/api/login", async (req, res) => {
-    try {
-      const { name, mobile } = req.body;
-      if (!name || !mobile) {
-        return res.status(400).json({ error: "\u0627\u0644\u0627\u0633\u0645 \u0648\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
-      }
-      const [user] = await db.select().from(users).where(
-        and(eq(users.name, name), eq(users.mobile, mobile))
-      ).limit(1);
-      if (!user) {
-        return res.status(401).json({ error: "\u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D" });
-      }
-      res.json({ success: true, user: { id: user.id, name: user.name, mobile: user.mobile, email: user.email } });
-    } catch (error) {
-      console.error("Login error:", error?.message);
-      res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644" });
-    }
+  app2.post("/api/login", (_req, res) => {
+    res.status(410).json({ error: "\u0647\u0630\u0647 \u0627\u0644\u062E\u062F\u0645\u0629 \u0644\u0645 \u062A\u0639\u062F \u0645\u062A\u0627\u062D\u0629" });
   });
-  app2.post("/api/inspections", async (req, res) => {
-    try {
-      const { userId, carMake, carMakeAr, carModel, carModelAr, carYear, parts } = req.body;
-      if (!userId || !carMake || !carModel || !parts) {
-        return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u062D\u0635 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629" });
-      }
-      const now = /* @__PURE__ */ new Date();
-      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-      const randomNum = Math.floor(1e3 + Math.random() * 9e3);
-      const inspectionNumber = `INS-${dateStr}-${randomNum}`;
-      const [newInspection] = await db.insert(inspections).values({
-        inspectionNumber,
-        userId,
-        carMake,
-        carMakeAr: carMakeAr || null,
-        carModel,
-        carModelAr: carModelAr || null,
-        carYear: carYear || null,
-        parts: JSON.stringify(parts)
-      }).returning();
-      res.json({
-        success: true,
-        inspection: {
-          id: newInspection.id,
-          inspectionNumber: newInspection.inspectionNumber,
-          carMake: newInspection.carMake,
-          carMakeAr: newInspection.carMakeAr,
-          carModel: newInspection.carModel,
-          carModelAr: newInspection.carModelAr,
-          carYear: newInspection.carYear,
-          parts: JSON.parse(newInspection.parts),
-          createdAt: newInspection.createdAt
-        }
-      });
-    } catch (error) {
-      console.error("Save inspection error:", error?.message);
-      res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062D\u0641\u0638 \u0627\u0644\u0641\u062D\u0635" });
-    }
+  app2.post("/api/inspections", (_req, res) => {
+    res.status(410).json({ error: "\u0647\u0630\u0647 \u0627\u0644\u062E\u062F\u0645\u0629 \u0644\u0645 \u062A\u0639\u062F \u0645\u062A\u0627\u062D\u0629" });
   });
-  app2.get("/api/inspections/:userId", async (req, res) => {
-    try {
-      const { userId } = req.params;
-      if (!userId) {
-        return res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0645\u0637\u0644\u0648\u0628" });
-      }
-      const userInspections = await db.select().from(inspections).where(eq(inspections.userId, userId)).orderBy(desc(inspections.createdAt));
-      const formattedInspections = userInspections.map((inspection) => ({
-        id: inspection.id,
-        inspectionNumber: inspection.inspectionNumber,
-        carMake: inspection.carMake,
-        carMakeAr: inspection.carMakeAr,
-        carModel: inspection.carModel,
-        carModelAr: inspection.carModelAr,
-        carYear: inspection.carYear,
-        parts: JSON.parse(inspection.parts),
-        createdAt: inspection.createdAt
-      }));
-      res.json({ success: true, inspections: formattedInspections });
-    } catch (error) {
-      console.error("Get inspections error:", error?.message);
-      res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062C\u0644\u0628 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A" });
-    }
+  app2.get("/api/inspections/:userId", (_req, res) => {
+    res.status(410).json({ error: "\u0647\u0630\u0647 \u0627\u0644\u062E\u062F\u0645\u0629 \u0644\u0645 \u062A\u0639\u062F \u0645\u062A\u0627\u062D\u0629" });
   });
   app2.post("/api/analyze", requireCustomer, async (req, res) => {
     try {
@@ -1141,8 +1088,7 @@ RULES:
   app2.post("/api/identify-car", requireCustomer, async (req, res) => {
     try {
       const { imageUri } = req.body;
-      if (!imageUri)
-        return res.status(400).json({ error: "imageUri required" });
+      if (!imageUri) return res.status(400).json({ error: "imageUri required" });
       const response = await openai2.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -1234,11 +1180,9 @@ Rules:
   app2.post("/api/customers/login", async (req, res) => {
     try {
       const { mobileE164 } = req.body;
-      if (!mobileE164)
-        return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0645\u0637\u0644\u0648\u0628" });
+      if (!mobileE164) return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0645\u0637\u0644\u0648\u0628" });
       const [customer] = await db.select().from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
-      if (!customer)
-        return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (!customer) return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       const result = issueOtp(mobileE164);
       if ("cooldownRemaining" in result && !("code" in result)) {
         return res.status(429).json({ error: `\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 ${result.cooldownRemaining} \u062B\u0627\u0646\u064A\u0629 \u0642\u0628\u0644 \u0637\u0644\u0628 \u0631\u0645\u0632 \u062C\u062F\u064A\u062F` });
@@ -1255,15 +1199,13 @@ Rules:
   app2.post("/api/customers/verify-otp", async (req, res) => {
     try {
       const { mobileE164, otp } = req.body;
-      if (!mobileE164 || !otp)
-        return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0648\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
+      if (!mobileE164 || !otp) return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0648\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
       const result = verifyOtp(mobileE164, String(otp));
       if (!result.success) {
         return res.status(400).json({ error: result.error, attemptsLeft: result.attemptsLeft });
       }
       const [customer] = await db.select().from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
-      if (!customer)
-        return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (!customer) return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       await db.update(customers).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(customers.customerId, customer.customerId));
       const token = signToken(customer.customerId);
       res.json({ success: true, customer, token });
@@ -1279,8 +1221,7 @@ Rules:
         return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       }
       const [customer] = await db.select().from(customers).where(eq(customers.customerId, req.params.id)).limit(1);
-      if (!customer)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (!customer) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       res.json({ customer });
     } catch (err) {
       res.status(500).json({ error: err?.message });
@@ -1299,7 +1240,7 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.get("/api/vendors", async (_req, res) => {
+  app2.get("/api/vendors", requireAdmin, async (_req, res) => {
     try {
       const result = await db.select().from(vendors).orderBy(vendors.createdAt);
       res.json({ vendors: result });
@@ -1307,18 +1248,17 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.post("/api/vendors", async (req, res) => {
+  app2.post("/api/vendors", requireAdmin, async (req, res) => {
     try {
       const { vendorName, legalName, crNumber, vatNumber } = req.body;
-      if (!vendorName)
-        return res.status(400).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0648\u0631\u062F \u0645\u0637\u0644\u0648\u0628" });
+      if (!vendorName) return res.status(400).json({ error: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0648\u0631\u062F \u0645\u0637\u0644\u0648\u0628" });
       const [vendor] = await db.insert(vendors).values({ vendorName, legalName, crNumber, vatNumber }).returning();
       res.json({ success: true, vendor });
     } catch (err) {
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.get("/api/vendor-users", async (_req, res) => {
+  app2.get("/api/vendor-users", requireAdmin, async (_req, res) => {
     try {
       const result = await db.select().from(vendorUsers).orderBy(vendorUsers.createdAt);
       res.json({ vendorUsers: result });
@@ -1326,7 +1266,7 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.post("/api/vendor-users", async (req, res) => {
+  app2.post("/api/vendor-users", requireAdmin, async (req, res) => {
     try {
       const { vendorId, fullName, mobileE164, email, whatsappE164, role } = req.body;
       if (!vendorId || !mobileE164 || !whatsappE164) {
@@ -1360,14 +1300,12 @@ Rules:
         return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       }
       const [customer] = await db.select().from(customers).where(eq(customers.customerId, customerId)).limit(1);
-      if (!customer)
-        return res.status(404).json({ error: "\u0627\u0644\u0639\u0645\u064A\u0644 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (!customer) return res.status(404).json({ error: "\u0627\u0644\u0639\u0645\u064A\u0644 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       let inspectionNo = generateInspectionNo();
       let attempts = 0;
       while (attempts < 5) {
         const clash = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionNo, inspectionNo)).limit(1);
-        if (clash.length === 0)
-          break;
+        if (clash.length === 0) break;
         inspectionNo = generateInspectionNo();
         attempts++;
       }
@@ -1419,8 +1357,7 @@ Rules:
     try {
       const callerCustomerId = res.locals.customerId;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
-      if (!inspection)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (!inspection) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       if (inspection.customerId !== callerCustomerId) {
         return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       }
@@ -1436,10 +1373,8 @@ Rules:
     try {
       const callerCustomerId = res.locals.customerId;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
-      if (!inspection)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      if (inspection.customerId !== callerCustomerId)
-        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      if (!inspection) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const { fileUrl, mediaType } = req.body;
       if (!fileUrl || !mediaType) {
         return res.status(400).json({ error: "fileUrl \u0648 mediaType \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
@@ -1454,10 +1389,8 @@ Rules:
     try {
       const callerCustomerId = res.locals.customerId;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
-      if (!inspection)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      if (inspection.customerId !== callerCustomerId)
-        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      if (!inspection) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const { parts: partsList } = req.body;
       if (!Array.isArray(partsList) || partsList.length === 0) {
         return res.status(400).json({ error: "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0642\u0637\u0639 \u0645\u0637\u0644\u0648\u0628\u0629" });
@@ -1479,10 +1412,8 @@ Rules:
     try {
       const callerCustomerId = res.locals.customerId;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
-      if (!inspection)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      if (inspection.customerId !== callerCustomerId)
-        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      if (!inspection) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const { status } = req.body;
       const [updated] = await db.update(laqitInspections).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, req.params.id)).returning();
       res.json({ success: true, inspection: updated });
@@ -1495,10 +1426,8 @@ Rules:
       const callerCustomerId = res.locals.customerId;
       const inspectionId = req.params.id;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
-      if (!inspection)
-        return res.status(404).json({ error: "\u0627\u0644\u0641\u062D\u0635 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      if (inspection.customerId !== callerCustomerId)
-        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      if (!inspection) return res.status(404).json({ error: "\u0627\u0644\u0641\u062D\u0635 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const locationRows = await db.select({ vendorId: vendorLocations.vendorId }).from(vendorLocations).where(eq(vendorLocations.cityId, inspection.cityId));
       const cityVendorIds = locationRows.map((r) => r.vendorId);
       if (cityVendorIds.length === 0) {
@@ -1519,8 +1448,7 @@ Rules:
         const [primaryUser] = await db.select().from(vendorUsers).where(
           and(eq(vendorUsers.vendorId, vendorId), eq(vendorUsers.isWhatsappPrimary, true))
         ).limit(1);
-        if (!primaryUser)
-          continue;
+        if (!primaryUser) continue;
         const rfqText = `\u0637\u0644\u0628 \u0639\u0631\u0636 \u0633\u0639\u0631 - \u0644\u0627\u0642\u0637
 \u0631\u0642\u0645 \u0627\u0644\u0641\u062D\u0635: ${inspection.inspectionNo}
 \u0627\u0644\u0645\u0648\u062F\u064A\u0644: ${inspection.carModelId}
@@ -1546,8 +1474,7 @@ ${partsText}
           providerMessageId: sendResult.providerMessageId ?? null,
           sentAt: sendResult.success ? /* @__PURE__ */ new Date() : null
         });
-        if (sendResult.success)
-          vendorsNotified++;
+        if (sendResult.success) vendorsNotified++;
       }
       await db.update(laqitInspections).set({ status: "rfq_sent", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, inspectionId));
       res.json({ success: true, vendorsNotified });
@@ -1563,11 +1490,36 @@ ${partsText}
         const challenge = req.query["hub.challenge"];
         return res.send(challenge);
       }
+      const whatsappWebhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
+      if (whatsappWebhookSecret) {
+        const sigHeader = req.headers["x-hub-signature-256"];
+        if (!sigHeader) {
+          console.warn("WhatsApp webhook: missing x-hub-signature-256 header \u2014 rejecting");
+          return res.sendStatus(401);
+        }
+        const rawBody = req.rawBody;
+        if (!rawBody) {
+          console.warn("WhatsApp webhook: raw body unavailable \u2014 rejecting");
+          return res.sendStatus(400);
+        }
+        const expected = "sha256=" + createHmac2("sha256", whatsappWebhookSecret).update(rawBody).digest("hex");
+        const expectedBuf = Buffer.from(expected, "utf-8");
+        const actualBuf = Buffer.from(sigHeader, "utf-8");
+        if (expectedBuf.length !== actualBuf.length || !timingSafeEqual2(expectedBuf, actualBuf)) {
+          console.warn("WhatsApp webhook: signature mismatch \u2014 rejecting");
+          return res.sendStatus(401);
+        }
+      } else {
+        if (process.env.NODE_ENV !== "development") {
+          console.error("WhatsApp webhook: WHATSAPP_WEBHOOK_SECRET not set in production \u2014 rejecting unsigned request");
+          return res.sendStatus(401);
+        }
+        console.warn("WhatsApp webhook: WHATSAPP_WEBHOOK_SECRET not set \u2014 skipping signature verification (development mode only)");
+      }
       const entry = body?.entry?.[0];
       const change = entry?.changes?.[0];
       const message = change?.value?.messages?.[0];
-      if (!message)
-        return res.sendStatus(200);
+      if (!message) return res.sendStatus(200);
       const fromE164 = `+${message.from}`;
       const textBody = message?.text?.body ?? "";
       const mediaUrl = message?.image?.link ?? message?.document?.link;
@@ -1607,6 +1559,18 @@ ${partsText}
         return res.sendStatus(200);
       }
       if (mediaUrl && vendorUser) {
+        const [rfqEntry] = await db.select({ rfqRecipientId: rfqRecipients.rfqRecipientId }).from(rfqRecipients).where(
+          and(
+            eq(rfqRecipients.inspectionId, linkedInspection.inspectionId),
+            eq(rfqRecipients.vendorId, vendorUser.vendorId)
+          )
+        ).limit(1);
+        if (!rfqEntry) {
+          console.warn(
+            `WhatsApp webhook: vendor ${vendorUser.vendorId} not an RFQ recipient for inspection ${linkedInspection.inspectionNo} \u2014 ignoring quote`
+          );
+          return res.sendStatus(200);
+        }
         const ocrResult = await extractTotalPrice(mediaUrl);
         await db.insert(quotes).values({
           inspectionId: linkedInspection.inspectionId,
@@ -1646,10 +1610,8 @@ ${partsText}
     try {
       const callerCustomerId = res.locals.customerId;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
-      if (!inspection)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      if (inspection.customerId !== callerCustomerId)
-        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      if (!inspection) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const quotesList = await db.select().from(quotes).where(eq(quotes.inspectionId, req.params.id)).orderBy(desc(quotes.createdAt));
       const enriched = await Promise.all(
         quotesList.map(async (q) => {
@@ -1666,11 +1628,9 @@ ${partsText}
     try {
       const callerCustomerId = res.locals.customerId;
       const [quote] = await db.select().from(quotes).where(eq(quotes.quoteId, req.params.quoteId)).limit(1);
-      if (!quote)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (!quote) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, quote.inspectionId)).limit(1);
-      if (!insp || insp.customerId !== callerCustomerId)
-        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      if (!insp || insp.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const [vendor] = await db.select().from(vendors).where(eq(vendors.vendorId, quote.vendorId)).limit(1);
       res.json({ quote: { ...quote, vendorName: vendor?.vendorName ?? "" } });
     } catch (err) {
@@ -1682,13 +1642,10 @@ ${partsText}
       const callerCustomerId = res.locals.customerId;
       const { id: inspectionId, quoteId } = req.params;
       const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
-      if (!insp)
-        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      if (insp.customerId !== callerCustomerId)
-        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      if (!insp) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (insp.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const [targetQuote] = await db.select().from(quotes).where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId))).limit(1);
-      if (!targetQuote)
-        return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0644\u0627 \u064A\u0646\u062A\u0645\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628" });
+      if (!targetQuote) return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0644\u0627 \u064A\u0646\u062A\u0645\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628" });
       const allQuotes = await db.select().from(quotes).where(eq(quotes.inspectionId, inspectionId));
       for (const q of allQuotes) {
         if (q.quoteId !== quoteId) {
@@ -1717,8 +1674,10 @@ ${partsText}
         return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       }
       const [quote] = await db.select().from(quotes).where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId))).limit(1);
-      if (!quote)
-        return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0644\u0627 \u064A\u0646\u062A\u0645\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628" });
+      if (!quote) return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0644\u0627 \u064A\u0646\u062A\u0645\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628" });
+      if (quote.status !== "accepted") {
+        return res.status(400).json({ error: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062F\u0641\u0639 \u0625\u0644\u0627 \u0644\u0644\u0639\u0631\u0636 \u0627\u0644\u0645\u0642\u0628\u0648\u0644" });
+      }
       const amount = parseFloat(quote.totalAmount ?? "0");
       const intent = await createPaymentIntent(amount, quote.currency, {
         inspectionId,
@@ -1744,15 +1703,56 @@ ${partsText}
   });
   app2.post("/api/webhooks/payment", async (req, res) => {
     try {
+      const paymentWebhookSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+      if (paymentWebhookSecret) {
+        const sigHeader = req.headers["stripe-signature"];
+        if (!sigHeader) {
+          console.warn("Payment webhook: missing stripe-signature header \u2014 rejecting");
+          return res.sendStatus(401);
+        }
+        const rawBody = req.rawBody;
+        if (!rawBody) {
+          console.warn("Payment webhook: raw body unavailable \u2014 rejecting");
+          return res.sendStatus(400);
+        }
+        const parts = {};
+        for (const part of sigHeader.split(",")) {
+          const [k, v] = part.split("=");
+          if (k && v) parts[k.trim()] = v.trim();
+        }
+        const timestamp2 = parts["t"];
+        const v1Signature = parts["v1"];
+        if (!timestamp2 || !v1Signature) {
+          console.warn("Payment webhook: malformed stripe-signature header \u2014 rejecting");
+          return res.sendStatus(401);
+        }
+        const tsDiff = Math.abs(Date.now() / 1e3 - parseInt(timestamp2, 10));
+        if (tsDiff > 300) {
+          console.warn(`Payment webhook: timestamp too old (${tsDiff}s) \u2014 rejecting`);
+          return res.sendStatus(401);
+        }
+        const signedPayload = `${timestamp2}.${rawBody.toString("utf-8")}`;
+        const expected = createHmac2("sha256", paymentWebhookSecret).update(signedPayload).digest("hex");
+        const expectedBuf = Buffer.from(expected, "hex");
+        const actualBuf = Buffer.from(v1Signature, "hex");
+        if (expectedBuf.length !== actualBuf.length || !timingSafeEqual2(expectedBuf, actualBuf)) {
+          console.warn("Payment webhook: signature mismatch \u2014 rejecting");
+          return res.sendStatus(401);
+        }
+      } else {
+        if (process.env.NODE_ENV !== "development") {
+          console.error("Payment webhook: PAYMENT_WEBHOOK_SECRET not set in production \u2014 rejecting unsigned request");
+          return res.sendStatus(401);
+        }
+        console.warn("Payment webhook: PAYMENT_WEBHOOK_SECRET not set \u2014 skipping signature verification (development mode only)");
+      }
       const event = req.body;
       const eventType = event?.type ?? event?.status ?? "";
       if (eventType === "payment_intent.succeeded" || eventType === "captured") {
         const gatewayRef = event?.data?.object?.id ?? event?.gatewayRef ?? "";
-        if (!gatewayRef)
-          return res.sendStatus(200);
+        if (!gatewayRef) return res.sendStatus(200);
         const [payment] = await db.select().from(payments).where(eq(payments.gatewayRef, gatewayRef)).limit(1);
-        if (!payment)
-          return res.sendStatus(200);
+        if (!payment) return res.sendStatus(200);
         await db.update(payments).set({ status: "captured", paidAt: /* @__PURE__ */ new Date() }).where(eq(payments.paymentId, payment.paymentId));
         await db.update(laqitInspections).set({ status: "paid", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, payment.inspectionId));
         const [acceptedQuote] = await db.select().from(quotes).where(eq(quotes.quoteId, payment.quoteId)).limit(1);
@@ -1858,8 +1858,7 @@ async function seedReferenceData() {
   const modelInserts = [];
   for (const entry of modelsData) {
     const makeId = makeMap[entry.make];
-    if (!makeId)
-      continue;
+    if (!makeId) continue;
     for (const model of entry.models) {
       modelInserts.push({ makeId, modelName: model });
     }
@@ -1908,8 +1907,7 @@ async function seedReferenceData() {
   ];
   for (const v of vendorsSeed) {
     const existing = await db.select().from(vendors).where(eq2(vendors.vendorName, v.vendorName)).limit(1);
-    if (existing.length > 0)
-      continue;
+    if (existing.length > 0) continue;
     const [vendor] = await db.insert(vendors).values({ vendorName: v.vendorName, status: "active" }).returning();
     const [vendorUser] = await db.insert(vendorUsers).values({
       vendorId: vendor.vendorId,
@@ -1945,19 +1943,16 @@ var SEED_ADVISORY_LOCK_KEY = 742193;
 async function seedIfEmpty() {
   try {
     const existing = await db.select().from(carMakes).limit(1);
-    if (existing.length > 0)
-      return;
+    if (existing.length > 0) return;
     const client = await pool.connect();
     try {
       const { rows } = await client.query(
         "SELECT pg_try_advisory_lock($1) AS locked",
         [SEED_ADVISORY_LOCK_KEY]
       );
-      if (!rows[0]?.locked)
-        return;
+      if (!rows[0]?.locked) return;
       const recheck = await db.select().from(carMakes).limit(1);
-      if (recheck.length > 0)
-        return;
+      if (recheck.length > 0) return;
       console.log("Reference data is empty \u2014 running auto-seed...");
       await seedReferenceData();
     } finally {
@@ -1975,16 +1970,14 @@ async function dedupeCities() {
     const { rows } = await pool.query(
       "SELECT count(*)::int AS total, count(DISTINCT name_en)::int AS uniq FROM cities WHERE name_en IS NOT NULL"
     );
-    if (!rows[0] || rows[0].total === rows[0].uniq)
-      return;
+    if (!rows[0] || rows[0].total === rows[0].uniq) return;
     const client = await pool.connect();
     try {
       const lock = await client.query(
         "SELECT pg_try_advisory_lock($1) AS locked",
         [DEDUPE_ADVISORY_LOCK_KEY]
       );
-      if (!lock.rows[0]?.locked)
-        return;
+      if (!lock.rows[0]?.locked) return;
       try {
         await client.query("BEGIN");
         const recheck = await client.query(
@@ -2127,8 +2120,7 @@ function setupRequestLogging(app2) {
       return originalResJson.apply(res, [bodyJson, ...args]);
     };
     res.on("finish", () => {
-      if (!path2.startsWith("/api"))
-        return;
+      if (!path2.startsWith("/api")) return;
       const duration = Date.now() - start;
       let logLine = `${req.method} ${path2} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
@@ -2242,8 +2234,7 @@ Sitemap: ${baseUrl}/sitemap.xml
       }
     });
     app2.use((req, res, next) => {
-      if (req.path.startsWith("/api"))
-        return next();
+      if (req.path.startsWith("/api")) return next();
       expoProxy(req, res, next);
     });
   } else {
@@ -2272,8 +2263,7 @@ Sitemap: ${baseUrl}/sitemap.xml
       }
     });
     app2.get("*", (req, res, next) => {
-      if (req.path.startsWith("/api"))
-        return next();
+      if (req.path.startsWith("/api")) return next();
       const indexPath = path.join(webDir, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
@@ -2293,10 +2283,29 @@ function setupErrorHandler(app2) {
     throw err;
   });
 }
+function validateProductionSecrets() {
+  if (process.env.NODE_ENV === "development") return;
+  const required = [
+    { key: "WHATSAPP_WEBHOOK_SECRET", description: "WhatsApp webhook HMAC secret" },
+    { key: "PAYMENT_WEBHOOK_SECRET", description: "Stripe payment webhook signing secret" }
+  ];
+  const missing = required.filter(({ key }) => !process.env[key]);
+  if (missing.length > 0) {
+    const list = missing.map(({ key, description }) => `  - ${key}: ${description}`).join("\n");
+    log(
+      `
+\u26A0\uFE0F  SECURITY: Missing required webhook secrets in non-development environment:
+${list}
+  Webhook endpoints will reject all unsigned requests until these are set.
+`
+    );
+  }
+}
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
+  validateProductionSecrets();
   configureExpoAndLanding(app);
   const server = await registerRoutes(app);
   setupErrorHandler(app);
