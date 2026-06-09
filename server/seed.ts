@@ -230,9 +230,139 @@ export async function seedIfEmpty() {
   }
 }
 
+/**
+ * One-time, idempotent repair for duplicate `cities` rows.
+ *
+ * A prior production incident (the seed CLI block firing inside the bundled
+ * server) ran `seedReferenceData()` many times, and because `cities` has no
+ * unique constraint it accumulated dozens of duplicate rows per city. This
+ * collapses duplicates down to one canonical row (lowest city_id) per English
+ * name, repointing any foreign-key references first so the deletes are safe.
+ * It is a no-op once the data is clean, so it is safe to run on every boot.
+ */
+const DEDUPE_ADVISORY_LOCK_KEY = 742194;
+
+export async function dedupeCities() {
+  try {
+    const { rows } = await pool.query<{ total: number; uniq: number }>(
+      "SELECT count(*)::int AS total, count(DISTINCT name_en)::int AS uniq FROM cities WHERE name_en IS NOT NULL",
+    );
+    if (!rows[0] || rows[0].total === rows[0].uniq) return; // already clean
+
+    const client = await pool.connect();
+    try {
+      // Cross-instance mutual exclusion so concurrent boots don't race.
+      const lock = await client.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock($1) AS locked",
+        [DEDUPE_ADVISORY_LOCK_KEY],
+      );
+      if (!lock.rows[0]?.locked) return; // another instance is repairing
+
+      try {
+        await client.query("BEGIN");
+
+        // Re-check under the lock to avoid duplicate work.
+        const recheck = await client.query<{ total: number; uniq: number }>(
+          "SELECT count(*)::int AS total, count(DISTINCT name_en)::int AS uniq FROM cities WHERE name_en IS NOT NULL",
+        );
+        if (!recheck.rows[0] || recheck.rows[0].total === recheck.rows[0].uniq) {
+          await client.query("COMMIT");
+          return;
+        }
+        console.log(
+          `Deduplicating cities (${recheck.rows[0].total} rows, ${recheck.rows[0].uniq} unique)...`,
+        );
+
+        // vendor_locations has a UNIQUE(vendor_id, city_id). If a vendor has
+        // rows pointing at different duplicates that collapse to the same
+        // canonical city, repointing would violate that constraint. Drop the
+        // redundant rows first (keep one per vendor+canonical-city).
+        await client.query(`
+          WITH canon AS (
+            SELECT name_en, MIN(city_id::text)::uuid AS keep_id
+            FROM cities WHERE name_en IS NOT NULL GROUP BY name_en
+          ),
+          mapped AS (
+            SELECT vl.ctid AS rid, vl.vendor_id, canon.keep_id AS target_city
+            FROM vendor_locations vl
+            JOIN cities c ON c.city_id = vl.city_id
+            JOIN canon ON canon.name_en = c.name_en
+          ),
+          ranked AS (
+            SELECT rid,
+              ROW_NUMBER() OVER (PARTITION BY vendor_id, target_city ORDER BY rid) AS rn
+            FROM mapped
+          )
+          DELETE FROM vendor_locations vl
+          USING ranked
+          WHERE vl.ctid = ranked.rid AND ranked.rn > 1
+        `);
+
+        // Repoint remaining FK references from duplicate cities to the
+        // canonical (lowest city_id) row per English name. Fixed allowlist.
+        const repoint = (table: string) => `
+          WITH canon AS (
+            SELECT name_en, MIN(city_id::text)::uuid AS keep_id
+            FROM cities WHERE name_en IS NOT NULL GROUP BY name_en
+          ),
+          dups AS (
+            SELECT c.city_id AS dup_id, canon.keep_id
+            FROM cities c JOIN canon ON c.name_en = canon.name_en
+            WHERE c.city_id <> canon.keep_id
+          )
+          UPDATE ${table} t SET city_id = d.keep_id
+          FROM dups d WHERE t.city_id = d.dup_id
+        `;
+        for (const table of [
+          "customers",
+          "vendor_locations",
+          "laqit_inspections",
+        ]) {
+          await client.query(repoint(table));
+        }
+
+        // Delete the now-unreferenced duplicate city rows.
+        await client.query(`
+          WITH canon AS (
+            SELECT name_en, MIN(city_id::text)::uuid AS keep_id
+            FROM cities WHERE name_en IS NOT NULL GROUP BY name_en
+          )
+          DELETE FROM cities c
+          USING canon
+          WHERE c.name_en = canon.name_en AND c.city_id <> canon.keep_id
+        `);
+
+        await client.query("COMMIT");
+        console.log("City deduplication complete.");
+      } catch (e) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw e;
+      } finally {
+        await client
+          .query("SELECT pg_advisory_unlock($1)", [DEDUPE_ADVISORY_LOCK_KEY])
+          .catch(() => {});
+      }
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("dedupeCities failed:", err);
+  }
+}
+
 // CLI runner — only fires when this file is executed directly
 // (e.g. `npx tsx server/seed.ts`), not when imported by the server.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// NOTE: the production build bundles this module INTO server_dist/index.js, so
+// `import.meta.url === pathToFileURL(process.argv[1]).href` is TRUE there too.
+// We must additionally require the invoked entry file to be named `seed.*`,
+// otherwise this block would run (and call process.exit) inside the bundled
+// server and kill it on startup.
+const __entry = process.argv[1] ?? "";
+const __isDirectSeedRun =
+  !!process.argv[1] &&
+  import.meta.url === pathToFileURL(__entry).href &&
+  /(^|[\\/])seed\.(ts|js|mjs|cjs)$/.test(__entry);
+if (__isDirectSeedRun) {
   seedReferenceData()
     .then(() => process.exit(0))
     .catch((err) => {
