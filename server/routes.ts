@@ -378,16 +378,29 @@ Rules:
         return res.status(400).json({ error: "البريد الإلكتروني مسجل مسبقاً" });
       }
 
-      // Issue OTP only — profile data is NOT stored server-side.
-      // The customer row will be created in verify-otp using data submitted by
-      // the phone owner at the moment they prove ownership.
-      const result = issueOtp(mobileE164);
-      const code = "code" in result ? result.code : null;
-      if (code) {
-        const { sendSms } = await import("./services/sms");
-        await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      // OTP is frozen for registration: create the account directly and return a
+      // session token, without sending or verifying a verification code.
+      let customer;
+      try {
+        [customer] = await db
+          .insert(customers)
+          .values({
+            fullName: fullName ?? null,
+            mobileE164,
+            email,
+            cityId,
+            lastLoginAt: new Date(),
+          })
+          .returning();
+      } catch (insertErr: any) {
+        if (insertErr?.code === "23505") {
+          return res.status(400).json({ error: "رقم الجوال أو البريد الإلكتروني مسجل مسبقاً" });
+        }
+        throw insertErr;
       }
-      res.json({ success: true, message: "أدخل رمز التحقق المرسل إلى جوالك" });
+
+      const token = signToken(customer.customerId);
+      res.json({ success: true, customer, token });
     } catch (err: any) {
       console.error("Customer register error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء التسجيل" });

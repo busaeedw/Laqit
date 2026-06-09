@@ -480,6 +480,27 @@ export default function AccountScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // OTP frozen for registration: the server creates the account and returns
+      // a session token directly, so set the session and skip verification.
+      if (custData.token && custData.customer) {
+        const customer = custData.customer;
+        setSession(
+          {
+            id: customer.customerId,
+            name: customer.fullName ?? formName.trim(),
+            mobile: customer.mobileE164,
+            email: customer.email,
+            customerId: customer.customerId,
+            cityId: customer.cityId,
+          },
+          custData.token
+        );
+        setIsModalVisible(false);
+        setOtpStep(false);
+        return;
+      }
+
       setPendingMobileE164(mobileE164);
       setFormOtp("");
       setOtpStep(true);
