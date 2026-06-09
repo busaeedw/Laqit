@@ -54,7 +54,25 @@ export default function NewInspectionScreen() {
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<NavProp>();
   const { theme } = useTheme();
-  const { user } = useUser();
+  const { user, isLoggedIn, isHydrated } = useUser();
+
+  const requireLogin = (): boolean => {
+    if (isLoggedIn) return true;
+    if (!isHydrated) return false;
+    Alert.alert(
+      "تسجيل الدخول مطلوب",
+      "يجب تسجيل الدخول أولاً لاستخدام التحليل بالذكاء الاصطناعي",
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "تسجيل الدخول",
+          onPress: () =>
+            (navigation as any).navigate("Main", { screen: "AccountTab" }),
+        },
+      ]
+    );
+    return false;
+  };
 
   const [step, setStep] = useState<Step>(1);
 
@@ -126,6 +144,7 @@ export default function NewInspectionScreen() {
   );
 
   const handleIdentifyByCar = async () => {
+    if (!requireLogin()) return;
     const picked = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
@@ -142,7 +161,15 @@ export default function NewInspectionScreen() {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ imageUri: dataUri }),
       });
+      if (resp.status === 401) {
+        requireLogin();
+        return;
+      }
       const data = await resp.json();
+      if (!resp.ok) {
+        Alert.alert("", data.message || data.error || "تعذر تحليل صورة السيارة، يرجى المحاولة مرة أخرى");
+        return;
+      }
       if (!data.makeName) {
         Alert.alert("", "تعذر تحديد نوع السيارة من الصورة، يرجى الاختيار يدوياً");
         return;
@@ -167,7 +194,7 @@ export default function NewInspectionScreen() {
             name === idMake ||
             name.includes(idMake) ||
             idMake.includes(name) ||
-            idMake.split(/[\s-]+/).some((token) => name.includes(token) && token.length >= 3)
+            idMake.split(/[\s-]+/).some((token: string) => name.includes(token) && token.length >= 3)
           );
         }
       );
@@ -268,17 +295,38 @@ export default function NewInspectionScreen() {
             : undefined,
         }),
       });
+      if (resp.status === 401) {
+        requireLogin();
+        return;
+      }
       const data = await resp.json();
-      if (data.parts && Array.isArray(data.parts)) {
-        const aiParts: PartItem[] = data.parts.map((p: any) => ({
-          partName: p.nameAr ?? p.name ?? "قطعة",
-          quantity: 1,
-          source: "ai" as const,
-        }));
+      if (!resp.ok) {
+        Alert.alert(
+          "تعذر التحليل",
+          data.message || data.error || "حدث خطأ أثناء تحليل صورة الضرر، يرجى المحاولة مرة أخرى"
+        );
+        return;
+      }
+      const aiParts: PartItem[] = Array.isArray(data.parts)
+        ? data.parts.map((p: any) => ({
+            partName: p.nameAr ?? p.name ?? "قطعة",
+            quantity: 1,
+            source: "ai" as const,
+          }))
+        : [];
+      if (aiParts.length > 0) {
         setParts(aiParts);
+      } else {
+        Alert.alert(
+          "لم يتم اكتشاف أضرار",
+          "لم نتمكن من اكتشاف أضرار واضحة في الصورة. يمكنك التقاط صورة أوضح أو إضافة القطع المطلوبة يدوياً."
+        );
       }
     } catch {
-      // silently ignore AI errors; user can add manually
+      Alert.alert(
+        "تعذر التحليل",
+        "تعذر الاتصال بالخادم، يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى"
+      );
     } finally {
       setPartsLoading(false);
     }
@@ -308,6 +356,11 @@ export default function NewInspectionScreen() {
       }
       setStep(2);
     } else if (step === 2) {
+      if (!damagePhotoUri) {
+        Alert.alert("", "يرجى إضافة صورة العطل أولاً");
+        return;
+      }
+      if (!requireLogin()) return;
       setStep(3);
       await analyzeForParts();
     } else if (step === 3) {
