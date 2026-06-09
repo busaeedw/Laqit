@@ -2,6 +2,7 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
+import { seedIfEmpty } from "./seed";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -349,6 +350,9 @@ function setupErrorHandler(app: express.Application) {
     },
     () => {
       log(`express server serving on port ${port}`);
+      // Self-heal reference data on a fresh (e.g. production) database.
+      // Non-blocking so it never delays startup or healthchecks.
+      seedIfEmpty().catch((e) => log("seedIfEmpty error", e));
     },
   );
 })();

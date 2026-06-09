@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import {
   cities,
   carMakes,
@@ -9,8 +9,9 @@ import {
   vendorSupportedModels,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { pathToFileURL } from "url";
 
-async function seed() {
+export async function seedReferenceData() {
   console.log("Seeding reference data...");
 
   // ── Cities ────────────────────────────────────────────────────────────────
@@ -187,9 +188,55 @@ async function seed() {
   console.log("Seeding complete.");
 }
 
-seed()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("Seed error:", err);
-    process.exit(1);
-  });
+/**
+ * Seeds reference data only when the catalog is empty. Safe to call on every
+ * server startup — it self-heals a fresh production database (which starts
+ * empty even though its schema is migrated by the Publish flow) without
+ * re-inserting on subsequent boots.
+ */
+// Arbitrary constant key for the Postgres advisory lock that guards seeding.
+const SEED_ADVISORY_LOCK_KEY = 742193;
+
+export async function seedIfEmpty() {
+  try {
+    const existing = await db.select().from(carMakes).limit(1);
+    if (existing.length > 0) return;
+
+    // Cross-instance mutual exclusion: hold a session advisory lock on a
+    // dedicated pooled connection so that if multiple instances cold-start
+    // against the same empty database, only one performs the seed.
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock($1) AS locked",
+        [SEED_ADVISORY_LOCK_KEY],
+      );
+      if (!rows[0]?.locked) return; // another instance is seeding
+
+      // Re-check now that the lock is held, to avoid a TOCTOU double-seed.
+      const recheck = await db.select().from(carMakes).limit(1);
+      if (recheck.length > 0) return;
+
+      console.log("Reference data is empty — running auto-seed...");
+      await seedReferenceData();
+    } finally {
+      await client
+        .query("SELECT pg_advisory_unlock($1)", [SEED_ADVISORY_LOCK_KEY])
+        .catch(() => {});
+      client.release();
+    }
+  } catch (err) {
+    console.error("Auto-seed check failed:", err);
+  }
+}
+
+// CLI runner — only fires when this file is executed directly
+// (e.g. `npx tsx server/seed.ts`), not when imported by the server.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seedReferenceData()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("Seed error:", err);
+      process.exit(1);
+    });
+}

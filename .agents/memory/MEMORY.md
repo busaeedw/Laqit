@@ -1,0 +1,1 @@
+- [Production DB empty on deploy](prod-db-empty-on-deploy.md) — Replit prod gets its own DB; schema migrated but seed data empty + prod SQL read-only, so self-heal via startup seedIfEmpty.
