@@ -548,11 +548,7 @@ export default function NewInspectionScreen() {
                             backgroundColor:
                               selectedModel?.carModelId === m.carModelId
                                 ? theme.primary
-                                : theme.backgroundDefault,
-                            borderColor:
-                              selectedModel?.carModelId === m.carModelId
-                                ? theme.primary
-                                : theme.border,
+                                : theme.backgroundSecondary,
                           },
                         ]}
                       >
@@ -562,7 +558,7 @@ export default function NewInspectionScreen() {
                             {
                               color:
                                 selectedModel?.carModelId === m.carModelId ? "#fff" : theme.text,
-                              fontFamily: "Cairo_400Regular",
+                              fontFamily: "Cairo_600SemiBold",
                             },
                           ]}
                         >
@@ -902,8 +898,7 @@ const styles = StyleSheet.create({
   modelChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    borderRadius: BorderRadius.full,
   },
   photoBlock: { marginBottom: Spacing.xl },
   photoPlaceholder: {
