@@ -90,6 +90,64 @@ export function requireCustomer(req: Request, res: Response, next: NextFunction)
   next();
 }
 
+// ─── Rate Limiter ────────────────────────────────────────────────────────────
+
+interface RateLimitBucket {
+  timestamps: number[];
+}
+
+export class RateLimiter {
+  private store = new Map<string, RateLimitBucket>();
+  private readonly windowMs: number;
+  private readonly maxRequests: number;
+
+  constructor(windowMs: number, maxRequests: number) {
+    this.windowMs = windowMs;
+    this.maxRequests = maxRequests;
+  }
+
+  /** Returns true if the request is allowed, false if over limit. */
+  check(key: string): boolean {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+    const bucket = this.store.get(key) ?? { timestamps: [] };
+    bucket.timestamps = bucket.timestamps.filter((t) => t > cutoff);
+    if (bucket.timestamps.length >= this.maxRequests) {
+      this.store.set(key, bucket);
+      return false;
+    }
+    bucket.timestamps.push(now);
+    this.store.set(key, bucket);
+    return true;
+  }
+
+  /** Seconds until the caller can retry. */
+  retryAfterSeconds(key: string): number {
+    const bucket = this.store.get(key);
+    if (!bucket || bucket.timestamps.length === 0) return 0;
+    const oldest = Math.min(...bucket.timestamps);
+    return Math.max(0, Math.ceil((oldest + this.windowMs - Date.now()) / 1000));
+  }
+}
+
+/**
+ * Per-IP OTP send limiter: 5 OTP sends per IP per 15 minutes.
+ * Prevents using the service as an SMS spam cannon against arbitrary numbers.
+ */
+export const otpIpLimiter = new RateLimiter(15 * 60 * 1000, 5);
+
+/**
+ * Per-customer AI endpoint limiter: 20 requests per hour per customer.
+ * Prevents a single low-cost account from generating unbounded paid GPT-4o calls.
+ */
+export const aiCustomerLimiter = new RateLimiter(60 * 60 * 1000, 20);
+
+/**
+ * Per-IP AI endpoint limiter: 40 requests per hour per IP.
+ * Secondary defence against multi-account abuse from the same origin.
+ */
+export const aiIpLimiter = new RateLimiter(60 * 60 * 1000, 40);
+
 // ─── OTP Store ──────────────────────────────────────────────────────────────
 
 interface OtpEntry {

@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { createHmac, timingSafeEqual } from "crypto";
 import OpenAI from "openai";
 import { db } from "./db";
-import { signToken, requireCustomer, requireAdmin, issueOtp, verifyOtp } from "./auth";
+import { signToken, requireCustomer, requireAdmin, issueOtp, verifyOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter } from "./auth";
 import {
   users,
   inspections,
@@ -35,6 +35,14 @@ const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
+
+function clientIp(req: Request): string {
+  // req.ip is resolved by Express using the trust-proxy setting configured
+  // in server/index.ts (trust proxy = 1). This strips the trusted upstream
+  // hop so the returned value reflects the real client, not an attacker-
+  // injected leading X-Forwarded-For entry.
+  return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // User Registration
@@ -84,6 +92,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/analyze", requireCustomer, async (req, res) => {
     try {
+      const customerId = res.locals.customerId as string;
+      if (!aiCustomerLimiter.check(customerId)) {
+        const retryAfter = aiCustomerLimiter.retryAfterSeconds(customerId);
+        return res.status(429).json({ error: `تجاوزت الحد المسموح من طلبات التحليل، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+      const ip = clientIp(req);
+      if (!aiIpLimiter.check(ip)) {
+        const retryAfter = aiIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
       const { imageUri, carInfo } = req.body;
       
       console.log("Received analyze request");
@@ -225,6 +244,17 @@ RULES:
 
   app.post("/api/identify-car", requireCustomer, async (req, res) => {
     try {
+      const customerId = res.locals.customerId as string;
+      if (!aiCustomerLimiter.check(customerId)) {
+        const retryAfter = aiCustomerLimiter.retryAfterSeconds(customerId);
+        return res.status(429).json({ error: `تجاوزت الحد المسموح من طلبات التحليل، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+      const ip = clientIp(req);
+      if (!aiIpLimiter.check(ip)) {
+        const retryAfter = aiIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
       const { imageUri } = req.body;
       if (!imageUri) return res.status(400).json({ error: "imageUri required" });
 
@@ -309,6 +339,12 @@ Rules:
 
   app.post("/api/customers/register", async (req, res) => {
     try {
+      const ip = clientIp(req);
+      if (!otpIpLimiter.check(ip)) {
+        const retryAfter = otpIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
       const { fullName, mobileE164, email, cityId } = req.body;
       if (!mobileE164 || !email || !cityId) {
         return res.status(400).json({ error: "رقم الجوال والبريد والمدينة مطلوبة" });
@@ -336,6 +372,12 @@ Rules:
 
   app.post("/api/customers/login", async (req, res) => {
     try {
+      const ip = clientIp(req);
+      if (!otpIpLimiter.check(ip)) {
+        const retryAfter = otpIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
       const { mobileE164 } = req.body;
       if (!mobileE164) return res.status(400).json({ error: "رقم الجوال مطلوب" });
       const [customer] = await db

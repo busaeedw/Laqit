@@ -349,6 +349,12 @@ function validateProductionSecrets() {
 }
 
 (async () => {
+  // Trust the immediate upstream reverse proxy (Replit's load balancer).
+  // This lets Express resolve req.ip correctly from the X-Forwarded-For
+  // chain by stripping the trusted proxy hop rather than blindly trusting
+  // attacker-controlled leading entries.
+  app.set("trust proxy", 1);
+
   setupCors(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
