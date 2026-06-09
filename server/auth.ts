@@ -1,0 +1,141 @@
+import { createHmac, timingSafeEqual, randomBytes } from "crypto";
+import type { Request, Response, NextFunction } from "express";
+
+let jwtSecret: string;
+if (process.env.JWT_SECRET) {
+  jwtSecret = process.env.JWT_SECRET;
+} else {
+  if (process.env.NODE_ENV === "production") {
+    console.warn(
+      "[auth] WARNING: JWT_SECRET env var not set in production. " +
+      "Tokens will be invalidated on every server restart. " +
+      "Set JWT_SECRET to a stable secret."
+    );
+  }
+  jwtSecret = randomBytes(32).toString("hex");
+}
+
+const HEADER_B64 = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+const TOKEN_TTL_SECS = 30 * 24 * 3600;
+
+export function signToken(customerId: string): string {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(
+    JSON.stringify({ sub: customerId, iat: now, exp: now + TOKEN_TTL_SECS })
+  ).toString("base64url");
+  const sig = createHmac("sha256", jwtSecret)
+    .update(`${HEADER_B64}.${payload}`)
+    .digest("base64url");
+  return `${HEADER_B64}.${payload}.${sig}`;
+}
+
+export function verifyToken(token: string): { customerId: string } | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [header, payload, sig] = parts;
+  const expected = createHmac("sha256", jwtSecret)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+  try {
+    const expBuf = Buffer.from(expected, "base64url");
+    const sigBuf = Buffer.from(sig, "base64url");
+    if (expBuf.length !== sigBuf.length || !timingSafeEqual(expBuf, sigBuf)) {
+      return null;
+    }
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
+    if (!claims.sub || typeof claims.sub !== "string") return null;
+    if (typeof claims.exp === "number" && claims.exp < Math.floor(Date.now() / 1000)) return null;
+    return { customerId: claims.sub };
+  } catch {
+    return null;
+  }
+}
+
+export function requireCustomer(req: Request, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "غير مصرح" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const claims = verifyToken(token);
+  if (!claims) {
+    res.status(401).json({ error: "الجلسة منتهية، يرجى تسجيل الدخول مجدداً" });
+    return;
+  }
+  res.locals.customerId = claims.customerId;
+  next();
+}
+
+// ─── OTP Store ──────────────────────────────────────────────────────────────
+
+interface OtpEntry {
+  hash: string;
+  expiresAt: number;
+  attempts: number;
+  lastSentAt: number;
+}
+
+const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+
+const otpStore = new Map<string, OtpEntry>();
+
+function hashOtp(code: string): string {
+  return createHmac("sha256", jwtSecret).update(code).digest("hex");
+}
+
+export interface OtpIssueResult {
+  code: string;
+  cooldownRemaining?: number;
+}
+
+export function issueOtp(mobileE164: string): OtpIssueResult | { cooldownRemaining: number } {
+  const existing = otpStore.get(mobileE164);
+  const now = Date.now();
+  if (existing && now - existing.lastSentAt < OTP_RESEND_COOLDOWN_MS) {
+    return { cooldownRemaining: Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - existing.lastSentAt)) / 1000) };
+  }
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  otpStore.set(mobileE164, {
+    hash: hashOtp(code),
+    expiresAt: now + OTP_TTL_MS,
+    attempts: 0,
+    lastSentAt: now,
+  });
+  return { code };
+}
+
+export type OtpVerifyResult =
+  | { success: true }
+  | { success: false; error: string; attemptsLeft?: number };
+
+export function verifyOtp(mobileE164: string, code: string): OtpVerifyResult {
+  const entry = otpStore.get(mobileE164);
+  if (!entry) {
+    return { success: false, error: "لم يتم إرسال رمز التحقق، يرجى طلب رمز جديد" };
+  }
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(mobileE164);
+    return { success: false, error: "انتهت صلاحية رمز التحقق، يرجى طلب رمز جديد" };
+  }
+  if (entry.attempts >= OTP_MAX_ATTEMPTS) {
+    otpStore.delete(mobileE164);
+    return { success: false, error: "تجاوزت الحد المسموح من المحاولات، يرجى طلب رمز جديد" };
+  }
+  const expected = hashOtp(code.trim());
+  const expBuf = Buffer.from(expected, "hex");
+  const gotBuf = Buffer.from(entry.hash, "hex");
+  if (expBuf.length !== gotBuf.length || !timingSafeEqual(expBuf, gotBuf)) {
+    entry.attempts += 1;
+    const attemptsLeft = OTP_MAX_ATTEMPTS - entry.attempts;
+    if (attemptsLeft <= 0) {
+      otpStore.delete(mobileE164);
+      return { success: false, error: "رمز التحقق غير صحيح. تم تجاوز الحد المسموح من المحاولات" };
+    }
+    return { success: false, error: "رمز التحقق غير صحيح", attemptsLeft };
+  }
+  otpStore.delete(mobileE164);
+  return { success: true };
+}

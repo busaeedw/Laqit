@@ -21,7 +21,7 @@ import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 import { formatDate } from "@/utils/dateFormat";
 import { useUser } from "@/context/UserContext";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -66,7 +66,7 @@ export default function QuotesListScreen() {
                   `/api/laqit-inspections/${inspectionId}/quotes/${quoteId}/accept`,
                   apiUrl
                 ).toString(),
-                { method: "POST" }
+                { method: "POST", headers: authHeaders() }
               );
               if (resp.ok) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

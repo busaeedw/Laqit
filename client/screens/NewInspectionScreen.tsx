@@ -21,7 +21,7 @@ import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 import { useUser } from "@/context/UserContext";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -214,7 +214,7 @@ export default function NewInspectionScreen() {
       new URL("/api/laqit-inspections", apiUrl).toString(),
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           customerId: user.customerId,
           carModelId: selectedModel.carModelId,
@@ -236,7 +236,7 @@ export default function NewInspectionScreen() {
       new URL(`/api/laqit-inspections/${inspId}/media`, apiUrl).toString(),
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ fileUrl: uri, mediaType }),
       }
     );
@@ -248,7 +248,7 @@ export default function NewInspectionScreen() {
       new URL(`/api/laqit-inspections/${inspId}/parts`, apiUrl).toString(),
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ parts }),
       }
     );
@@ -337,7 +337,7 @@ export default function NewInspectionScreen() {
 
       await fetch(
         new URL(`/api/laqit-inspections/${inspId}/submit`, apiUrl).toString(),
-        { method: "POST" }
+        { method: "POST", headers: authHeaders() }
       );
 
       setInspectionId(inspId);

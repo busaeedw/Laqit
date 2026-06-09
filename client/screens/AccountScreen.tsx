@@ -23,7 +23,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 import { formatDualDate } from "@/utils/dateFormat";
 import { useUser } from "@/context/UserContext";
 
@@ -44,7 +44,7 @@ export default function AccountScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
-  const { user, setUser, isLoggedIn } = useUser();
+  const { user, setUser, setSession, clearSession, isLoggedIn } = useUser();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>("login");
@@ -72,13 +72,18 @@ export default function AccountScreen() {
   const [selectedCityId, setSelectedCityId] = useState("");
   const [isCityPickerVisible, setIsCityPickerVisible] = useState(false);
 
+  const [otpStep, setOtpStep] = useState(false);
+  const [formOtp, setFormOtp] = useState("");
+  const [pendingMobileE164, setPendingMobileE164] = useState("");
+
   const fetchInspections = async () => {
     if (!user?.customerId) return;
 
     setIsLoadingInspections(true);
     try {
       const response = await fetch(
-        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString()
+        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString(),
+        { headers: authHeaders() }
       );
       if (response.ok) {
         const data = await response.json();
@@ -107,7 +112,8 @@ export default function AccountScreen() {
     setIsLoadingCars(true);
     try {
       const response = await fetch(
-        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString()
+        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString(),
+        { headers: authHeaders() }
       );
       if (response.ok) {
         const data = await response.json();
@@ -171,7 +177,8 @@ export default function AccountScreen() {
     setIsLoadingParts(true);
     try {
       const response = await fetch(
-        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString()
+        new URL(`/api/laqit-inspections/customer/${user.customerId}`, getApiUrl()).toString(),
+        { headers: authHeaders() }
       );
       if (response.ok) {
         const data = await response.json();
@@ -235,6 +242,9 @@ export default function AccountScreen() {
     setSelectedCityId("");
     setTermsAccepted(false);
     setFormErrors({});
+    setOtpStep(false);
+    setFormOtp("");
+    setPendingMobileE164("");
     setIsModalVisible(true);
     if (mode === "register") loadCities();
   };
@@ -308,20 +318,92 @@ export default function AccountScreen() {
         return;
       }
 
-      const customer = data.customer;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setUser({
-        id: customer.customerId,
-        name: customer.fullName ?? formName.trim(),
-        mobile: customer.mobileE164,
-        email: customer.email,
-        customerId: customer.customerId,
-        cityId: customer.cityId,
-      });
-      setIsModalVisible(false);
+      setPendingMobileE164(mobileE164);
+      setFormOtp("");
+      setOtpStep(true);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!formOtp.trim() || formOtp.trim().length !== 6) {
+      setFormErrors({ general: "يرجى إدخال رمز التحقق المكون من 6 أرقام" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    setIsLoading(true);
+    setFormErrors({});
+
+    try {
+      const response = await fetch(
+        new URL("/api/customers/verify-otp", getApiUrl()).toString(),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mobileE164: pendingMobileE164, otp: formOtp.trim() }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const msg = data.error || "رمز التحقق غير صحيح";
+        setFormErrors({ general: data.attemptsLeft != null ? `${msg} (${data.attemptsLeft} محاولات متبقية)` : msg });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      const customer = data.customer;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSession(
+        {
+          id: customer.customerId,
+          name: customer.fullName ?? formName.trim(),
+          mobile: customer.mobileE164,
+          email: customer.email,
+          customerId: customer.customerId,
+          cityId: customer.cityId,
+        },
+        data.token
+      );
+      setIsModalVisible(false);
+      setOtpStep(false);
+    } catch (error) {
+      setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!pendingMobileE164) return;
+    setFormErrors({});
+    setIsLoading(true);
+    try {
+      const endpoint = modalMode === "login" ? "/api/customers/login" : "/api/customers/login";
+      const response = await fetch(
+        new URL(endpoint, getApiUrl()).toString(),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mobileE164: pendingMobileE164 }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        setFormErrors({ general: data.error || "حدث خطأ أثناء إعادة الإرسال" });
+      } else {
+        setFormOtp("");
+      }
+    } catch {
+      setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
     } finally {
       setIsLoading(false);
     }
@@ -368,17 +450,10 @@ export default function AccountScreen() {
         return;
       }
 
-      const customer = custData.customer;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setUser({
-        id: customer.customerId,
-        name: customer.fullName ?? formName.trim(),
-        mobile: mobileE164,
-        email: customer.email,
-        customerId: customer.customerId,
-        cityId: customer.cityId,
-      });
-      setIsModalVisible(false);
+      setPendingMobileE164(mobileE164);
+      setFormOtp("");
+      setOtpStep(true);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -389,7 +464,7 @@ export default function AccountScreen() {
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setUser(null);
+    clearSession();
   };
 
   const menuItems: MenuItem[][] = [
@@ -552,13 +627,21 @@ export default function AccountScreen() {
           <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
             <View style={styles.modalHeader}>
               <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
-                {modalMode === "login" ? "تسجيل الدخول" : "تسجيل حساب جديد"}
+                {otpStep ? "التحقق من الهوية" : modalMode === "login" ? "تسجيل الدخول" : "تسجيل حساب جديد"}
               </ThemedText>
               <Pressable 
-                onPress={() => setIsModalVisible(false)}
+                onPress={() => {
+                  if (otpStep) {
+                    setOtpStep(false);
+                    setFormOtp("");
+                    setFormErrors({});
+                  } else {
+                    setIsModalVisible(false);
+                  }
+                }}
                 style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
               >
-                <Feather name="x" size={24} color={theme.text} />
+                <Feather name={otpStep ? "arrow-right" : "x"} size={24} color={theme.text} />
               </Pressable>
             </View>
 
@@ -576,6 +659,69 @@ export default function AccountScreen() {
                 </View>
               ) : null}
 
+              {otpStep ? (
+                <>
+                  <View style={[styles.inputGroup, { alignItems: "center", paddingVertical: Spacing.lg }]}>
+                    <Feather name="shield" size={48} color={theme.primary} />
+                    <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold", textAlign: "center", marginTop: Spacing.md }]}>
+                      {`تم إرسال رمز التحقق إلى\n${pendingMobileE164}`}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold" }]}>
+                      رمز التحقق <ThemedText style={{ color: theme.error }}>*</ThemedText>
+                    </ThemedText>
+                    <TextInput
+                      value={formOtp}
+                      onChangeText={(t) => setFormOtp(t.replace(/[^0-9]/g, "").slice(0, 6))}
+                      placeholder="------"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      style={[
+                        styles.textInput,
+                        {
+                          backgroundColor: theme.backgroundSecondary,
+                          color: theme.text,
+                          borderColor: theme.border,
+                          fontFamily: "Cairo_700Bold",
+                          fontSize: 24,
+                          letterSpacing: 8,
+                          textAlign: "center",
+                        },
+                      ]}
+                      editable={!isLoading}
+                      autoFocus
+                    />
+                  </View>
+                  <Pressable
+                    onPress={handleVerifyOtp}
+                    disabled={isLoading}
+                    style={({ pressed }) => [
+                      styles.submitButton,
+                      { backgroundColor: theme.primary, opacity: isLoading ? 0.6 : pressed ? 0.8 : 1 },
+                    ]}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <ThemedText style={[styles.submitButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                        تحقق
+                      </ThemedText>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={handleResendOtp}
+                    disabled={isLoading}
+                    style={({ pressed }) => [styles.switchModeButton, { opacity: isLoading ? 0.4 : pressed ? 0.6 : 1 }]}
+                  >
+                    <ThemedText style={[styles.switchModeText, { color: theme.primary, fontFamily: "Cairo_400Regular" }]}>
+                      لم يصلك الرمز؟ أعد الإرسال
+                    </ThemedText>
+                  </Pressable>
+                </>
+              ) : (
+              <>
               <View style={styles.inputGroup}>
                 <ThemedText style={[styles.inputLabel, { fontFamily: "Cairo_600SemiBold" }]}>
                   الاسم <ThemedText style={{ color: theme.error }}>*</ThemedText>
@@ -773,6 +919,8 @@ export default function AccountScreen() {
                   {modalMode === "login" ? "ليس لديك حساب؟ سجل الآن" : "لديك حساب؟ سجل دخول"}
                 </ThemedText>
               </Pressable>
+              </>
+              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>

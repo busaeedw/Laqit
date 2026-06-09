@@ -33,6 +33,19 @@ export function getApiUrl(): string {
   return url.href;
 }
 
+let _authToken: string | null = null;
+
+export function setAuthToken(token: string | null): void {
+  _authToken = token;
+}
+
+export function authHeaders(): Record<string, string> {
+  if (_authToken) {
+    return { Authorization: `Bearer ${_authToken}` };
+  }
+  return {};
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -48,9 +61,14 @@ export async function apiRequest(
   const baseUrl = getApiUrl();
   const url = new URL(route, baseUrl);
 
+  const headers: Record<string, string> = {
+    ...authHeaders(),
+    ...(data ? { "Content-Type": "application/json" } : {}),
+  };
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -70,6 +88,7 @@ export const getQueryFn: <T>(options: {
 
     const res = await fetch(url, {
       credentials: "include",
+      headers: authHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

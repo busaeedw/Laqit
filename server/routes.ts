@@ -1,7 +1,8 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import OpenAI from "openai";
 import { db } from "./db";
+import { signToken, requireCustomer, issueOtp, verifyOtp } from "./auth";
 import {
   users,
   inspections,
@@ -402,7 +403,14 @@ Rules:
         .insert(customers)
         .values({ fullName: fullName ?? null, mobileE164, email, cityId })
         .returning();
-      res.json({ success: true, customer });
+
+      const result = issueOtp(mobileE164);
+      const code = "code" in result ? result.code : null;
+      if (code) {
+        const { sendSms } = await import("./services/sms");
+        await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      }
+      res.json({ success: true, message: "تم إنشاء الحساب. أدخل رمز التحقق المرسل إلى جوالك" });
     } catch (err: any) {
       if (err?.code === "23505") {
         return res.status(400).json({ error: "رقم الجوال أو البريد الإلكتروني مسجل مسبقاً" });
@@ -422,19 +430,57 @@ Rules:
         .where(eq(customers.mobileE164, mobileE164))
         .limit(1);
       if (!customer) return res.status(404).json({ error: "المستخدم غير موجود" });
-      await db
-        .update(customers)
-        .set({ lastLoginAt: new Date() })
-        .where(eq(customers.customerId, customer.customerId));
-      res.json({ success: true, customer });
+
+      const result = issueOtp(mobileE164);
+      if ("cooldownRemaining" in result && !("code" in result)) {
+        return res.status(429).json({ error: `يرجى الانتظار ${result.cooldownRemaining} ثانية قبل طلب رمز جديد` });
+      }
+      const { code } = result as { code: string };
+      const { sendSms } = await import("./services/sms");
+      await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      res.json({ success: true, message: "تم إرسال رمز التحقق إلى جوالك" });
     } catch (err: any) {
       console.error("Customer login error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
     }
   });
 
-  app.get("/api/customers/:id", async (req, res) => {
+  app.post("/api/customers/verify-otp", async (req, res) => {
     try {
+      const { mobileE164, otp } = req.body;
+      if (!mobileE164 || !otp) return res.status(400).json({ error: "رقم الجوال ورمز التحقق مطلوبان" });
+
+      const result = verifyOtp(mobileE164, String(otp));
+      if (!result.success) {
+        return res.status(400).json({ error: result.error, attemptsLeft: result.attemptsLeft });
+      }
+
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.mobileE164, mobileE164))
+        .limit(1);
+      if (!customer) return res.status(404).json({ error: "المستخدم غير موجود" });
+
+      await db
+        .update(customers)
+        .set({ lastLoginAt: new Date() })
+        .where(eq(customers.customerId, customer.customerId));
+
+      const token = signToken(customer.customerId);
+      res.json({ success: true, customer, token });
+    } catch (err: any) {
+      console.error("Verify OTP error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء التحقق" });
+    }
+  });
+
+  app.get("/api/customers/:id", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
       const [customer] = await db
         .select()
         .from(customers)
@@ -447,8 +493,12 @@ Rules:
     }
   });
 
-  app.patch("/api/customers/:id", async (req, res) => {
+  app.patch("/api/customers/:id", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
       const { fullName, cityId } = req.body;
       const [updated] = await db
         .update(customers)
@@ -529,11 +579,15 @@ Rules:
     return `INS-${year}-${seq}`;
   }
 
-  app.post("/api/laqit-inspections", async (req, res) => {
+  app.post("/api/laqit-inspections", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
       const { customerId, carModelId, carYear, carType } = req.body;
       if (!customerId || !carModelId) {
         return res.status(400).json({ error: "معرف العميل والموديل مطلوبان" });
+      }
+      if (customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
       }
       const [customer] = await db
         .select()
@@ -575,8 +629,12 @@ Rules:
     }
   });
 
-  app.get("/api/laqit-inspections/customer/:customerId", async (req, res) => {
+  app.get("/api/laqit-inspections/customer/:customerId", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
       const rows = await db
         .select()
         .from(laqitInspections)
@@ -610,14 +668,18 @@ Rules:
     }
   });
 
-  app.get("/api/laqit-inspections/:id", async (req, res) => {
+  app.get("/api/laqit-inspections/:id", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
       const [inspection] = await db
         .select()
         .from(laqitInspections)
         .where(eq(laqitInspections.inspectionId, req.params.id))
         .limit(1);
       if (!inspection) return res.status(404).json({ error: "غير موجود" });
+      if (inspection.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
 
       const media = await db
         .select()
@@ -641,8 +703,12 @@ Rules:
     }
   });
 
-  app.post("/api/laqit-inspections/:id/media", async (req, res) => {
+  app.post("/api/laqit-inspections/:id/media", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection) return res.status(404).json({ error: "غير موجود" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
       const { fileUrl, mediaType } = req.body;
       if (!fileUrl || !mediaType) {
         return res.status(400).json({ error: "fileUrl و mediaType مطلوبان" });
@@ -657,8 +723,12 @@ Rules:
     }
   });
 
-  app.post("/api/laqit-inspections/:id/parts", async (req, res) => {
+  app.post("/api/laqit-inspections/:id/parts", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection) return res.status(404).json({ error: "غير موجود" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
       const { parts: partsList } = req.body as { parts: { partName: string; quantity?: number; source?: string }[] };
       if (!Array.isArray(partsList) || partsList.length === 0) {
         return res.status(400).json({ error: "قائمة القطع مطلوبة" });
@@ -680,8 +750,12 @@ Rules:
     }
   });
 
-  app.patch("/api/laqit-inspections/:id/status", async (req, res) => {
+  app.patch("/api/laqit-inspections/:id/status", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection) return res.status(404).json({ error: "غير موجود" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
       const { status } = req.body;
       const [updated] = await db
         .update(laqitInspections)
@@ -696,8 +770,9 @@ Rules:
 
   // ─── RFQ Submit: targets eligible vendors and sends WhatsApp ─────────────
 
-  app.post("/api/laqit-inspections/:id/submit", async (req, res) => {
+  app.post("/api/laqit-inspections/:id/submit", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
       const inspectionId = req.params.id;
 
       const [inspection] = await db
@@ -706,6 +781,7 @@ Rules:
         .where(eq(laqitInspections.inspectionId, inspectionId))
         .limit(1);
       if (!inspection) return res.status(404).json({ error: "الفحص غير موجود" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
 
       // Find eligible vendors: same city + supports car model
       const locationRows = await db
@@ -933,8 +1009,12 @@ Rules:
 
   // ─── Quotes ───────────────────────────────────────────────────────────────
 
-  app.get("/api/laqit-inspections/:id/quotes", async (req, res) => {
+  app.get("/api/laqit-inspections/:id/quotes", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection) return res.status(404).json({ error: "غير موجود" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
       const quotesList = await db
         .select()
         .from(quotes)
@@ -958,14 +1038,17 @@ Rules:
     }
   });
 
-  app.get("/api/quotes/:quoteId", async (req, res) => {
+  app.get("/api/quotes/:quoteId", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
       const [quote] = await db
         .select()
         .from(quotes)
         .where(eq(quotes.quoteId, req.params.quoteId))
         .limit(1);
       if (!quote) return res.status(404).json({ error: "غير موجود" });
+      const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, quote.inspectionId)).limit(1);
+      if (!insp || insp.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
       const [vendor] = await db
         .select()
         .from(vendors)
@@ -977,11 +1060,23 @@ Rules:
     }
   });
 
-  app.post("/api/laqit-inspections/:id/quotes/:quoteId/accept", async (req, res) => {
+  app.post("/api/laqit-inspections/:id/quotes/:quoteId/accept", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
       const { id: inspectionId, quoteId } = req.params;
+      const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
+      if (!insp) return res.status(404).json({ error: "غير موجود" });
+      if (insp.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
 
-      // Reject all other quotes
+      // Verify the quoteId belongs to this inspection (prevents cross-inspection tampering)
+      const [targetQuote] = await db
+        .select()
+        .from(quotes)
+        .where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId)))
+        .limit(1);
+      if (!targetQuote) return res.status(404).json({ error: "العرض غير موجود أو لا ينتمي لهذا الطلب" });
+
+      // Reject all other quotes for this inspection
       const allQuotes = await db
         .select()
         .from(quotes)
@@ -989,15 +1084,15 @@ Rules:
 
       for (const q of allQuotes) {
         if (q.quoteId !== quoteId) {
-          await db.update(quotes).set({ status: "rejected" }).where(eq(quotes.quoteId, q.quoteId));
+          await db.update(quotes).set({ status: "rejected" }).where(and(eq(quotes.quoteId, q.quoteId), eq(quotes.inspectionId, inspectionId)));
         }
       }
 
-      // Accept the selected quote
+      // Accept the selected quote (scoped to both quoteId and inspectionId)
       await db
         .update(quotes)
         .set({ status: "accepted", acceptedAt: new Date() })
-        .where(eq(quotes.quoteId, quoteId));
+        .where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId)));
 
       // Update inspection status
       await db
@@ -1013,19 +1108,27 @@ Rules:
 
   // ─── Payments ─────────────────────────────────────────────────────────────
 
-  app.post("/api/payments", async (req, res) => {
+  app.post("/api/payments", requireCustomer, async (req: Request, res: Response) => {
     try {
+      const callerCustomerId: string = res.locals.customerId;
       const { inspectionId, quoteId, customerId } = req.body;
       if (!inspectionId || !quoteId || !customerId) {
         return res.status(400).json({ error: "بيانات الدفع غير مكتملة" });
+      }
+      if (customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
+      const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
+      if (!insp || insp.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
       }
 
       const [quote] = await db
         .select()
         .from(quotes)
-        .where(eq(quotes.quoteId, quoteId))
+        .where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId)))
         .limit(1);
-      if (!quote) return res.status(404).json({ error: "العرض غير موجود" });
+      if (!quote) return res.status(404).json({ error: "العرض غير موجود أو لا ينتمي لهذا الطلب" });
 
       const amount = parseFloat(quote.totalAmount ?? "0");
       const intent = await createPaymentIntent(amount, quote.currency, {
