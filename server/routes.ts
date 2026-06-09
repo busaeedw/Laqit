@@ -411,9 +411,21 @@ Rules:
         .where(eq(customers.mobileE164, mobileE164))
         .limit(1);
 
-      // Allow re-sending OTP for a pending (unverified) registration so the
-      // client's resend flow works before the account has been committed to the DB.
-      if (!customer && !hasPendingOtp(mobileE164)) {
+      // OTP is disabled for login: an existing verified account is logged in
+      // directly without a verification code.
+      if (customer) {
+        await db
+          .update(customers)
+          .set({ lastLoginAt: new Date() })
+          .where(eq(customers.customerId, customer.customerId));
+        const token = signToken(customer.customerId);
+        return res.json({ success: true, customer, token });
+      }
+
+      // No verified account yet. Allow re-sending OTP for a pending (unverified)
+      // registration so the client's resend flow works before the account has
+      // been committed to the DB.
+      if (!hasPendingOtp(mobileE164)) {
         return res.status(404).json({ error: "المستخدم غير موجود" });
       }
 

@@ -319,6 +319,27 @@ export default function AccountScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // OTP disabled for login: the server returns the session token directly
+      // for an existing account, so skip the verification step entirely.
+      if (data.token && data.customer) {
+        const customer = data.customer;
+        setSession(
+          {
+            id: customer.customerId,
+            name: customer.fullName ?? formName.trim(),
+            mobile: customer.mobileE164,
+            email: customer.email,
+            customerId: customer.customerId,
+            cityId: customer.cityId,
+          },
+          data.token
+        );
+        setIsModalVisible(false);
+        setOtpStep(false);
+        return;
+      }
+
       setPendingMobileE164(mobileE164);
       setFormOtp("");
       setOtpStep(true);

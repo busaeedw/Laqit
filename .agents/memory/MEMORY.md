@@ -1,3 +1,5 @@
 - [Production DB empty on deploy](prod-db-empty-on-deploy.md) — Replit prod gets its own DB; schema migrated but seed data empty + prod SQL read-only, so self-heal via startup seedIfEmpty.
 - [Startup seed/bundling gotchas](startup-seed-bundling-gotchas.md) — bundled server makes seed CLI-guard fire (killed prod); guard on entry basename; Postgres has no MIN(uuid) (cast ::text); FK-safe dedupe pattern.
 - [Dependency vuln remediation](dependency-audit-remediation.md) — `npm audit fix` (no force) for transitive; bump direct deps (EOVERRIDE blocks overriding them); remaining moderates are Expo/drizzle-kit framework-locked, don't force.
+- [Login OTP disabled](login-otp-disabled.md) — customer login bypasses OTP by user request (phone number alone yields token); broken auth, restore/gate before production.
+- [AI analyze/identify optional auth](analyze-flow-requires-auth.md) — damage-assessment AI endpoints allow anonymous; per-IP limit (40/hr) is the only guard for logged-out callers.
