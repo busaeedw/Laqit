@@ -24,6 +24,7 @@ import {
   quotes,
   payments,
   notifications,
+  inspectionStatusEnum,
 } from "../shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { sendWhatsAppMessage } from "./services/whatsapp";
@@ -712,10 +713,36 @@ Rules:
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
       if (!inspection) return res.status(404).json({ error: "غير موجود" });
       if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
+
       const { status } = req.body;
+      // Reject anything that is not a known workflow state.
+      if (typeof status !== "string" || !(inspectionStatusEnum.enumValues as string[]).includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+
+      // Workflow truth (rfq_sent, quotes_received, quote_accepted, payment_pending,
+      // paid, vendor_notified, ready_for_pickup, closed) is derived server-side by
+      // the submit / accept / payment / webhook routes. The only state transition a
+      // customer may drive directly is cancelling their own request, and only before
+      // a quote has been accepted or payment has begun. Everything else is forbidden
+      // so a client cannot forge payment/fulfillment milestones.
+      if (status !== "cancelled") {
+        return res.status(403).json({ error: "غير مسموح بتعيين هذه الحالة" });
+      }
+
+      // Idempotent: already cancelled → succeed without change.
+      if (inspection.status === "cancelled") {
+        return res.json({ success: true, inspection });
+      }
+
+      const CUSTOMER_CANCELLABLE_FROM = ["draft", "rfq_sent", "waiting_quotes", "quotes_received"];
+      if (!CUSTOMER_CANCELLABLE_FROM.includes(inspection.status)) {
+        return res.status(409).json({ error: "لا يمكن إلغاء الطلب في هذه المرحلة" });
+      }
+
       const [updated] = await db
         .update(laqitInspections)
-        .set({ status, updatedAt: new Date() })
+        .set({ status: "cancelled", updatedAt: new Date() })
         .where(eq(laqitInspections.inspectionId, req.params.id))
         .returning();
       res.json({ success: true, inspection: updated });
@@ -739,6 +766,25 @@ Rules:
       if (!inspection) return res.status(404).json({ error: "الفحص غير موجود" });
       if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
 
+      // Replay / idempotency guard: an RFQ may only be broadcast once, from a draft
+      // inspection. Atomically claim the draft → rfq_sent transition so that
+      // concurrent or repeated submissions cannot fan out duplicate WhatsApp
+      // messages to vendors. Only the request that wins this conditional update
+      // proceeds to send; all others are rejected before any messaging side effect.
+      const claimed = await db
+        .update(laqitInspections)
+        .set({ status: "rfq_sent", updatedAt: new Date() })
+        .where(
+          and(
+            eq(laqitInspections.inspectionId, inspectionId),
+            eq(laqitInspections.status, "draft")
+          )
+        )
+        .returning();
+      if (claimed.length === 0) {
+        return res.status(409).json({ error: "تم إرسال هذا الطلب من قبل" });
+      }
+
       // Find eligible vendors: same city + supports car model
       const locationRows = await db
         .select({ vendorId: vendorLocations.vendorId })
@@ -747,10 +793,7 @@ Rules:
 
       const cityVendorIds = locationRows.map((r) => r.vendorId);
       if (cityVendorIds.length === 0) {
-        await db
-          .update(laqitInspections)
-          .set({ status: "rfq_sent", updatedAt: new Date() })
-          .where(eq(laqitInspections.inspectionId, inspectionId));
+        // Status was already set to rfq_sent by the atomic claim above.
         return res.json({ success: true, vendorsNotified: 0, message: "لا يوجد موردون في مدينتك بعد" });
       }
 
@@ -821,11 +864,7 @@ Rules:
         if (sendResult.success) vendorsNotified++;
       }
 
-      await db
-        .update(laqitInspections)
-        .set({ status: "rfq_sent", updatedAt: new Date() })
-        .where(eq(laqitInspections.inspectionId, inspectionId));
-
+      // Status was already set to rfq_sent by the atomic claim above.
       res.json({ success: true, vendorsNotified });
     } catch (err: any) {
       console.error("Submit RFQ error:", err?.message);
