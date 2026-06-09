@@ -168,7 +168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
-  app.post("/api/analyze", async (req, res) => {
+  app.post("/api/analyze", requireCustomer, async (req, res) => {
     try {
       const { imageUri, carInfo } = req.body;
       
@@ -309,7 +309,7 @@ RULES:
 
   // ─── Car Identification by Photo ─────────────────────────────────────────
 
-  app.post("/api/identify-car", async (req, res) => {
+  app.post("/api/identify-car", requireCustomer, async (req, res) => {
     try {
       const { imageUri } = req.body;
       if (!imageUri) return res.status(400).json({ error: "imageUri required" });

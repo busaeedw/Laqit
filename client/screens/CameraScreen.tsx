@@ -15,7 +15,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -73,7 +73,7 @@ export default function CameraScreen() {
               // Call AI car identification API
               const response = await fetch(new URL("/api/identify-car", getApiUrl()).href, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...authHeaders() },
                 body: JSON.stringify({ imageUri: base64Image }),
               });
 
@@ -134,7 +134,7 @@ export default function CameraScreen() {
             
             const response = await fetch(new URL("/api/identify-car", getApiUrl()).href, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeaders() },
               body: JSON.stringify({ imageUri: base64Image }),
             });
 

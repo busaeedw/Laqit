@@ -22,7 +22,7 @@ import Animated, {
   FadeInDown,
   FadeIn,
 } from "react-native-reanimated";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -168,7 +168,7 @@ export default function OrderScreen() {
         // Call AI car identification API
         const response = await fetch(new URL("/api/identify-car", getApiUrl()).href, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({ imageUri: base64Image }),
         });
 
@@ -237,7 +237,7 @@ export default function OrderScreen() {
 
         const response = await fetch(new URL("/api/analyze", getApiUrl()).href, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({ imageUri: base64Image, carInfo: selectedCar }),
         });
 

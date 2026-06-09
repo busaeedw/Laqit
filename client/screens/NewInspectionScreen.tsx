@@ -139,7 +139,7 @@ export default function NewInspectionScreen() {
     try {
       const resp = await fetch(new URL("/api/identify-car", apiUrl).toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ imageUri: dataUri }),
       });
       const data = await resp.json();
@@ -260,7 +260,7 @@ export default function NewInspectionScreen() {
     try {
       const resp = await fetch(new URL("/api/analyze", apiUrl).toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           imageUri: damagePhotoUri,
           carInfo: selectedModel

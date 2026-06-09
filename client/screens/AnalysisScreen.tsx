@@ -25,7 +25,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList, CarInfo, DetectedPart } from "@/navigation/RootStackNavigator";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 
 type AnalysisScreenRouteProp = RouteProp<RootStackParamList, "Analysis">;
 
@@ -108,7 +108,7 @@ export default function AnalysisScreen() {
 
         const response = await fetch(new URL("/api/analyze", getApiUrl()).href, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({
             imageUri: base64Image,
             carInfo,
