@@ -52,7 +52,8 @@
         {
           "photosPermission": "السماح لـ لاقط قطع السيارات بالوصول إلى الصور لاختيار صور قطع السيارة"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "reactCompiler": true

@@ -56,6 +56,26 @@ or `scripts/`, so the imports themselves must be relative.
 inlines the schema (`rg -c pgTable server_dist/index.js` > 0) and boots via
 `PORT=5050 NODE_ENV=production node server_dist/index.js`.
 
+## Platform-split modules (.native.ts / .web.ts) hide missing native deps until deploy
+A `foo.web.ts` / `foo.native.ts` pair lets Metro pick a variant per platform. The
+web dev server only bundles the `.web` variant, so a native-only dependency
+imported in the `.native` variant (e.g. `expo-secure-store`) can be **missing
+from node_modules** yet dev/web works fine. The deploy build
+(`npm run expo:static:build` → `scripts/build.js`) builds the **iOS and Android**
+bundles too, which pull in the `.native` variant → Metro `UnableToResolveError`
+→ bundle HTTP 500 → publish fails.
+**Symptom:** dev fine; publish/deploy fails; `scripts/build.js` prints
+"Download failed: iOS bundle HTTP 500". Note `expo:static:build` exits 0 even on
+this failure — do NOT trust its exit code.
+**Diagnose:** `curl 'http://localhost:8081/client/index.bundle?platform=ios&dev=false&minify=true'`
+returns a JSON `UnableToResolveError` naming the missing module and import stack.
+**Fix:** install the missing package with `npx expo install <pkg>` (gets the
+SDK-compatible version + registers any config plugin in app.json), then restart
+the `Start Frontend` workflow so Metro picks up the new native module.
+**How to apply:** any task that adds a `.native.ts` file must have its native
+imports actually installed. After such merges, verify the iOS bundle returns 200,
+not just that the web app runs.
+
 ## Deduping a table with FK references safely
 When collapsing duplicate rows (e.g. `cities` with no unique constraint) keep the
 canonical row and, in one transaction: (1) for any child table with a UNIQUE that

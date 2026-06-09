@@ -1,8 +1,50 @@
 var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
+
+// server/services/sms.ts
+var sms_exports = {};
+__export(sms_exports, {
+  sendSms: () => sendSms
+});
+async function sendSms(toE164, body) {
+  const apiKey = process.env.SMS_API_KEY;
+  if (!apiKey) {
+    console.log(`[SMS STUB] Would send to ${toE164}:`);
+    console.log(`  Message: ${body}`);
+    return { success: true, messageId: `mock_sms_${Date.now()}` };
+  }
+  try {
+    const response = await fetch("https://api.unifonic.com/rest/Messages/Send", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        AppSid: apiKey,
+        Recipient: toE164,
+        Body: body
+      }).toString()
+    });
+    const result = await response.json();
+    return {
+      success: response.ok && result?.Success,
+      messageId: result?.Data?.MessageID
+    };
+  } catch (err) {
+    console.error("[SMS] Send error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+var init_sms = __esm({
+  "server/services/sms.ts"() {
+    "use strict";
+  }
+});
 
 // server/index.ts
 import express from "express";
@@ -589,6 +631,117 @@ var pool = new Pool({
 });
 var db = drizzle(pool, { schema: schema_exports });
 
+// server/auth.ts
+import { createHmac, timingSafeEqual, randomBytes } from "crypto";
+var jwtSecret;
+if (process.env.JWT_SECRET) {
+  jwtSecret = process.env.JWT_SECRET;
+} else {
+  if (process.env.NODE_ENV === "production") {
+    console.warn(
+      "[auth] WARNING: JWT_SECRET env var not set in production. Tokens will be invalidated on every server restart. Set JWT_SECRET to a stable secret."
+    );
+  }
+  jwtSecret = randomBytes(32).toString("hex");
+}
+var HEADER_B64 = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+var TOKEN_TTL_SECS = 30 * 24 * 3600;
+function signToken(customerId) {
+  const now = Math.floor(Date.now() / 1e3);
+  const payload = Buffer.from(
+    JSON.stringify({ sub: customerId, iat: now, exp: now + TOKEN_TTL_SECS })
+  ).toString("base64url");
+  const sig = createHmac("sha256", jwtSecret).update(`${HEADER_B64}.${payload}`).digest("base64url");
+  return `${HEADER_B64}.${payload}.${sig}`;
+}
+function verifyToken(token) {
+  const parts = token.split(".");
+  if (parts.length !== 3)
+    return null;
+  const [header, payload, sig] = parts;
+  const expected = createHmac("sha256", jwtSecret).update(`${header}.${payload}`).digest("base64url");
+  try {
+    const expBuf = Buffer.from(expected, "base64url");
+    const sigBuf = Buffer.from(sig, "base64url");
+    if (expBuf.length !== sigBuf.length || !timingSafeEqual(expBuf, sigBuf)) {
+      return null;
+    }
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
+    if (!claims.sub || typeof claims.sub !== "string")
+      return null;
+    if (typeof claims.exp === "number" && claims.exp < Math.floor(Date.now() / 1e3))
+      return null;
+    return { customerId: claims.sub };
+  } catch {
+    return null;
+  }
+}
+function requireCustomer(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  const claims = verifyToken(token);
+  if (!claims) {
+    res.status(401).json({ error: "\u0627\u0644\u062C\u0644\u0633\u0629 \u0645\u0646\u062A\u0647\u064A\u0629\u060C \u064A\u0631\u062C\u0649 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0645\u062C\u062F\u062F\u0627\u064B" });
+    return;
+  }
+  res.locals.customerId = claims.customerId;
+  next();
+}
+var OTP_TTL_MS = 5 * 60 * 1e3;
+var OTP_RESEND_COOLDOWN_MS = 60 * 1e3;
+var OTP_MAX_ATTEMPTS = 5;
+var otpStore = /* @__PURE__ */ new Map();
+function hashOtp(code) {
+  return createHmac("sha256", jwtSecret).update(code).digest("hex");
+}
+function issueOtp(mobileE164) {
+  const existing = otpStore.get(mobileE164);
+  const now = Date.now();
+  if (existing && now - existing.lastSentAt < OTP_RESEND_COOLDOWN_MS) {
+    return { cooldownRemaining: Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - existing.lastSentAt)) / 1e3) };
+  }
+  const code = String(Math.floor(1e5 + Math.random() * 9e5));
+  otpStore.set(mobileE164, {
+    hash: hashOtp(code),
+    expiresAt: now + OTP_TTL_MS,
+    attempts: 0,
+    lastSentAt: now
+  });
+  return { code };
+}
+function verifyOtp(mobileE164, code) {
+  const entry = otpStore.get(mobileE164);
+  if (!entry) {
+    return { success: false, error: "\u0644\u0645 \u064A\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642\u060C \u064A\u0631\u062C\u0649 \u0637\u0644\u0628 \u0631\u0645\u0632 \u062C\u062F\u064A\u062F" };
+  }
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(mobileE164);
+    return { success: false, error: "\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642\u060C \u064A\u0631\u062C\u0649 \u0637\u0644\u0628 \u0631\u0645\u0632 \u062C\u062F\u064A\u062F" };
+  }
+  if (entry.attempts >= OTP_MAX_ATTEMPTS) {
+    otpStore.delete(mobileE164);
+    return { success: false, error: "\u062A\u062C\u0627\u0648\u0632\u062A \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0645\u0646 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0627\u062A\u060C \u064A\u0631\u062C\u0649 \u0637\u0644\u0628 \u0631\u0645\u0632 \u062C\u062F\u064A\u062F" };
+  }
+  const expected = hashOtp(code.trim());
+  const expBuf = Buffer.from(expected, "hex");
+  const gotBuf = Buffer.from(entry.hash, "hex");
+  if (expBuf.length !== gotBuf.length || !timingSafeEqual(expBuf, gotBuf)) {
+    entry.attempts += 1;
+    const attemptsLeft = OTP_MAX_ATTEMPTS - entry.attempts;
+    if (attemptsLeft <= 0) {
+      otpStore.delete(mobileE164);
+      return { success: false, error: "\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D. \u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0645\u0646 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0627\u062A" };
+    }
+    return { success: false, error: "\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D", attemptsLeft };
+  }
+  otpStore.delete(mobileE164);
+  return { success: true };
+}
+
 // server/routes.ts
 import { eq, and, desc, inArray } from "drizzle-orm";
 
@@ -649,34 +802,8 @@ async function sendWhatsAppMessage(toE164, text2, pdfUrl, inspectionId) {
   }
 }
 
-// server/services/sms.ts
-async function sendSms(toE164, body) {
-  const apiKey = process.env.SMS_API_KEY;
-  if (!apiKey) {
-    console.log(`[SMS STUB] Would send to ${toE164}:`);
-    console.log(`  Message: ${body}`);
-    return { success: true, messageId: `mock_sms_${Date.now()}` };
-  }
-  try {
-    const response = await fetch("https://api.unifonic.com/rest/Messages/Send", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        AppSid: apiKey,
-        Recipient: toE164,
-        Body: body
-      }).toString()
-    });
-    const result = await response.json();
-    return {
-      success: response.ok && result?.Success,
-      messageId: result?.Data?.MessageID
-    };
-  } catch (err) {
-    console.error("[SMS] Send error:", err?.message);
-    return { success: false, error: err?.message };
-  }
-}
+// server/routes.ts
+init_sms();
 
 // server/services/ocr.ts
 import OpenAI from "openai";
@@ -885,7 +1012,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062C\u0644\u0628 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A" });
     }
   });
-  app2.post("/api/analyze", async (req, res) => {
+  app2.post("/api/analyze", requireCustomer, async (req, res) => {
     try {
       const { imageUri, carInfo } = req.body;
       console.log("Received analyze request");
@@ -1011,7 +1138,7 @@ RULES:
       });
     }
   });
-  app2.post("/api/identify-car", async (req, res) => {
+  app2.post("/api/identify-car", requireCustomer, async (req, res) => {
     try {
       const { imageUri } = req.body;
       if (!imageUri)
@@ -1089,7 +1216,13 @@ Rules:
         return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0648\u0627\u0644\u0628\u0631\u064A\u062F \u0648\u0627\u0644\u0645\u062F\u064A\u0646\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" });
       }
       const [customer] = await db.insert(customers).values({ fullName: fullName ?? null, mobileE164, email, cityId }).returning();
-      res.json({ success: true, customer });
+      const result = issueOtp(mobileE164);
+      const code = "code" in result ? result.code : null;
+      if (code) {
+        const { sendSms: sendSms2 } = await Promise.resolve().then(() => (init_sms(), sms_exports));
+        await sendSms2(mobileE164, `\u0644\u0627\u0642\u0637: \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0627\u0644\u062E\u0627\u0635 \u0628\u0643 \u0647\u0648 ${code}. \u0635\u0627\u0644\u062D \u0644\u0645\u062F\u0629 5 \u062F\u0642\u0627\u0626\u0642.`);
+      }
+      res.json({ success: true, message: "\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u062D\u0633\u0627\u0628. \u0623\u062F\u062E\u0644 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0627\u0644\u0645\u0631\u0633\u0644 \u0625\u0644\u0649 \u062C\u0648\u0627\u0644\u0643" });
     } catch (err) {
       if (err?.code === "23505") {
         return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0623\u0648 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B" });
@@ -1106,15 +1239,45 @@ Rules:
       const [customer] = await db.select().from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
       if (!customer)
         return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      await db.update(customers).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(customers.customerId, customer.customerId));
-      res.json({ success: true, customer });
+      const result = issueOtp(mobileE164);
+      if ("cooldownRemaining" in result && !("code" in result)) {
+        return res.status(429).json({ error: `\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 ${result.cooldownRemaining} \u062B\u0627\u0646\u064A\u0629 \u0642\u0628\u0644 \u0637\u0644\u0628 \u0631\u0645\u0632 \u062C\u062F\u064A\u062F` });
+      }
+      const { code } = result;
+      const { sendSms: sendSms2 } = await Promise.resolve().then(() => (init_sms(), sms_exports));
+      await sendSms2(mobileE164, `\u0644\u0627\u0642\u0637: \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0627\u0644\u062E\u0627\u0635 \u0628\u0643 \u0647\u0648 ${code}. \u0635\u0627\u0644\u062D \u0644\u0645\u062F\u0629 5 \u062F\u0642\u0627\u0626\u0642.`);
+      res.json({ success: true, message: "\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0625\u0644\u0649 \u062C\u0648\u0627\u0644\u0643" });
     } catch (err) {
       console.error("Customer login error:", err?.message);
       res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644" });
     }
   });
-  app2.get("/api/customers/:id", async (req, res) => {
+  app2.post("/api/customers/verify-otp", async (req, res) => {
     try {
+      const { mobileE164, otp } = req.body;
+      if (!mobileE164 || !otp)
+        return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0648\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
+      const result = verifyOtp(mobileE164, String(otp));
+      if (!result.success) {
+        return res.status(400).json({ error: result.error, attemptsLeft: result.attemptsLeft });
+      }
+      const [customer] = await db.select().from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
+      if (!customer)
+        return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      await db.update(customers).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(customers.customerId, customer.customerId));
+      const token = signToken(customer.customerId);
+      res.json({ success: true, customer, token });
+    } catch (err) {
+      console.error("Verify OTP error:", err?.message);
+      res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u062D\u0642\u0642" });
+    }
+  });
+  app2.get("/api/customers/:id", requireCustomer, async (req, res) => {
+    try {
+      const callerCustomerId = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      }
       const [customer] = await db.select().from(customers).where(eq(customers.customerId, req.params.id)).limit(1);
       if (!customer)
         return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
@@ -1123,8 +1286,12 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.patch("/api/customers/:id", async (req, res) => {
+  app2.patch("/api/customers/:id", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      }
       const { fullName, cityId } = req.body;
       const [updated] = await db.update(customers).set({ ...fullName && { fullName }, ...cityId && { cityId } }).where(eq(customers.customerId, req.params.id)).returning();
       res.json({ success: true, customer: updated });
@@ -1182,11 +1349,15 @@ Rules:
     const seq = Math.floor(1e5 + Math.random() * 9e5);
     return `INS-${year}-${seq}`;
   }
-  app2.post("/api/laqit-inspections", async (req, res) => {
+  app2.post("/api/laqit-inspections", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
       const { customerId, carModelId, carYear, carType } = req.body;
       if (!customerId || !carModelId) {
         return res.status(400).json({ error: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0639\u0645\u064A\u0644 \u0648\u0627\u0644\u0645\u0648\u062F\u064A\u0644 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
+      }
+      if (customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       }
       const [customer] = await db.select().from(customers).where(eq(customers.customerId, customerId)).limit(1);
       if (!customer)
@@ -1215,8 +1386,12 @@ Rules:
       res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0641\u062D\u0635" });
     }
   });
-  app2.get("/api/laqit-inspections/customer/:customerId", async (req, res) => {
+  app2.get("/api/laqit-inspections/customer/:customerId", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
+      if (req.params.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      }
       const rows = await db.select().from(laqitInspections).where(eq(laqitInspections.customerId, req.params.customerId)).orderBy(desc(laqitInspections.createdAt));
       const uniqueModelIds = [...new Set(rows.map((r) => r.carModelId))];
       const modelRows = uniqueModelIds.length > 0 ? await db.select().from(carModels).where(inArray(carModels.carModelId, uniqueModelIds)) : [];
@@ -1240,11 +1415,15 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.get("/api/laqit-inspections/:id", async (req, res) => {
+  app2.get("/api/laqit-inspections/:id", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
       if (!inspection)
         return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      }
       const media = await db.select().from(inspectionMedia).where(eq(inspectionMedia.inspectionId, req.params.id));
       const parts = await db.select().from(inspectionParts).where(eq(inspectionParts.inspectionId, req.params.id));
       const quotesList = await db.select().from(quotes).where(eq(quotes.inspectionId, req.params.id)).orderBy(desc(quotes.createdAt));
@@ -1253,8 +1432,14 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.post("/api/laqit-inspections/:id/media", async (req, res) => {
+  app2.post("/api/laqit-inspections/:id/media", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection)
+        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId)
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const { fileUrl, mediaType } = req.body;
       if (!fileUrl || !mediaType) {
         return res.status(400).json({ error: "fileUrl \u0648 mediaType \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
@@ -1265,8 +1450,14 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.post("/api/laqit-inspections/:id/parts", async (req, res) => {
+  app2.post("/api/laqit-inspections/:id/parts", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection)
+        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId)
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const { parts: partsList } = req.body;
       if (!Array.isArray(partsList) || partsList.length === 0) {
         return res.status(400).json({ error: "\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0642\u0637\u0639 \u0645\u0637\u0644\u0648\u0628\u0629" });
@@ -1284,8 +1475,14 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.patch("/api/laqit-inspections/:id/status", async (req, res) => {
+  app2.patch("/api/laqit-inspections/:id/status", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection)
+        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId)
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const { status } = req.body;
       const [updated] = await db.update(laqitInspections).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, req.params.id)).returning();
       res.json({ success: true, inspection: updated });
@@ -1293,12 +1490,15 @@ Rules:
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.post("/api/laqit-inspections/:id/submit", async (req, res) => {
+  app2.post("/api/laqit-inspections/:id/submit", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
       const inspectionId = req.params.id;
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
       if (!inspection)
         return res.status(404).json({ error: "\u0627\u0644\u0641\u062D\u0635 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId)
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const locationRows = await db.select({ vendorId: vendorLocations.vendorId }).from(vendorLocations).where(eq(vendorLocations.cityId, inspection.cityId));
       const cityVendorIds = locationRows.map((r) => r.vendorId);
       if (cityVendorIds.length === 0) {
@@ -1442,8 +1642,14 @@ ${partsText}
       res.sendStatus(200);
     }
   });
-  app2.get("/api/laqit-inspections/:id/quotes", async (req, res) => {
+  app2.get("/api/laqit-inspections/:id/quotes", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
+      const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, req.params.id)).limit(1);
+      if (!inspection)
+        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (inspection.customerId !== callerCustomerId)
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const quotesList = await db.select().from(quotes).where(eq(quotes.inspectionId, req.params.id)).orderBy(desc(quotes.createdAt));
       const enriched = await Promise.all(
         quotesList.map(async (q) => {
@@ -1456,42 +1662,63 @@ ${partsText}
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.get("/api/quotes/:quoteId", async (req, res) => {
+  app2.get("/api/quotes/:quoteId", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
       const [quote] = await db.select().from(quotes).where(eq(quotes.quoteId, req.params.quoteId)).limit(1);
       if (!quote)
         return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, quote.inspectionId)).limit(1);
+      if (!insp || insp.customerId !== callerCustomerId)
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const [vendor] = await db.select().from(vendors).where(eq(vendors.vendorId, quote.vendorId)).limit(1);
       res.json({ quote: { ...quote, vendorName: vendor?.vendorName ?? "" } });
     } catch (err) {
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.post("/api/laqit-inspections/:id/quotes/:quoteId/accept", async (req, res) => {
+  app2.post("/api/laqit-inspections/:id/quotes/:quoteId/accept", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
       const { id: inspectionId, quoteId } = req.params;
+      const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
+      if (!insp)
+        return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (insp.customerId !== callerCustomerId)
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      const [targetQuote] = await db.select().from(quotes).where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId))).limit(1);
+      if (!targetQuote)
+        return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0644\u0627 \u064A\u0646\u062A\u0645\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628" });
       const allQuotes = await db.select().from(quotes).where(eq(quotes.inspectionId, inspectionId));
       for (const q of allQuotes) {
         if (q.quoteId !== quoteId) {
-          await db.update(quotes).set({ status: "rejected" }).where(eq(quotes.quoteId, q.quoteId));
+          await db.update(quotes).set({ status: "rejected" }).where(and(eq(quotes.quoteId, q.quoteId), eq(quotes.inspectionId, inspectionId)));
         }
       }
-      await db.update(quotes).set({ status: "accepted", acceptedAt: /* @__PURE__ */ new Date() }).where(eq(quotes.quoteId, quoteId));
+      await db.update(quotes).set({ status: "accepted", acceptedAt: /* @__PURE__ */ new Date() }).where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId)));
       await db.update(laqitInspections).set({ status: "quote_accepted", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, inspectionId));
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err?.message });
     }
   });
-  app2.post("/api/payments", async (req, res) => {
+  app2.post("/api/payments", requireCustomer, async (req, res) => {
     try {
+      const callerCustomerId = res.locals.customerId;
       const { inspectionId, quoteId, customerId } = req.body;
       if (!inspectionId || !quoteId || !customerId) {
         return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062F\u0641\u0639 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629" });
       }
-      const [quote] = await db.select().from(quotes).where(eq(quotes.quoteId, quoteId)).limit(1);
+      if (customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      }
+      const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
+      if (!insp || insp.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      }
+      const [quote] = await db.select().from(quotes).where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId))).limit(1);
       if (!quote)
-        return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+        return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0644\u0627 \u064A\u0646\u062A\u0645\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628" });
       const amount = parseFloat(quote.totalAmount ?? "0");
       const intent = await createPaymentIntent(amount, quote.currency, {
         inspectionId,
@@ -1869,7 +2096,7 @@ function setupCors(app2) {
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, DELETE, OPTIONS"
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
     if (req.method === "OPTIONS") {
@@ -1881,13 +2108,13 @@ function setupCors(app2) {
 function setupBodyParsing(app2) {
   app2.use(
     express.json({
-      limit: "50mb",
+      limit: "10mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       }
     })
   );
-  app2.use(express.urlencoded({ extended: false, limit: "50mb" }));
+  app2.use(express.urlencoded({ extended: false, limit: "10mb" }));
 }
 function setupRequestLogging(app2) {
   app2.use((req, res, next) => {
