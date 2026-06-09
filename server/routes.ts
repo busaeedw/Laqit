@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
+import { createHmac, timingSafeEqual } from "crypto";
 import OpenAI from "openai";
 import { db } from "./db";
 import { signToken, requireCustomer, requireAdmin, issueOtp, verifyOtp } from "./auth";
@@ -889,6 +890,34 @@ Rules:
         return res.send(challenge);
       }
 
+      // ── Verify Meta webhook signature ──────────────────────────────────────
+      const whatsappWebhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
+      if (whatsappWebhookSecret) {
+        const sigHeader = req.headers["x-hub-signature-256"] as string | undefined;
+        if (!sigHeader) {
+          console.warn("WhatsApp webhook: missing x-hub-signature-256 header — rejecting");
+          return res.sendStatus(401);
+        }
+        const rawBody = req.rawBody as Buffer | undefined;
+        if (!rawBody) {
+          console.warn("WhatsApp webhook: raw body unavailable — rejecting");
+          return res.sendStatus(400);
+        }
+        const expected = "sha256=" + createHmac("sha256", whatsappWebhookSecret).update(rawBody).digest("hex");
+        const expectedBuf = Buffer.from(expected, "utf-8");
+        const actualBuf = Buffer.from(sigHeader, "utf-8");
+        if (expectedBuf.length !== actualBuf.length || !timingSafeEqual(expectedBuf, actualBuf)) {
+          console.warn("WhatsApp webhook: signature mismatch — rejecting");
+          return res.sendStatus(401);
+        }
+      } else {
+        if (process.env.NODE_ENV !== "development") {
+          console.error("WhatsApp webhook: WHATSAPP_WEBHOOK_SECRET not set in production — rejecting unsigned request");
+          return res.sendStatus(401);
+        }
+        console.warn("WhatsApp webhook: WHATSAPP_WEBHOOK_SECRET not set — skipping signature verification (development mode only)");
+      }
+
       const entry = body?.entry?.[0];
       const change = entry?.changes?.[0];
       const message = change?.value?.messages?.[0];
@@ -954,6 +983,26 @@ Rules:
 
       // If media attached → run OCR and create quote
       if (mediaUrl && vendorUser) {
+        // Verify this vendor was an RFQ recipient for the linked inspection before
+        // accepting a quote — prevents forged quotes from vendors who were not invited.
+        const [rfqEntry] = await db
+          .select({ rfqRecipientId: rfqRecipients.rfqRecipientId })
+          .from(rfqRecipients)
+          .where(
+            and(
+              eq(rfqRecipients.inspectionId, linkedInspection.inspectionId),
+              eq(rfqRecipients.vendorId, vendorUser.vendorId)
+            )
+          )
+          .limit(1);
+
+        if (!rfqEntry) {
+          console.warn(
+            `WhatsApp webhook: vendor ${vendorUser.vendorId} not an RFQ recipient for inspection ${linkedInspection.inspectionNo} — ignoring quote`
+          );
+          return res.sendStatus(200);
+        }
+
         const ocrResult = await extractTotalPrice(mediaUrl);
 
         await db.insert(quotes).values({
@@ -1130,6 +1179,12 @@ Rules:
         .limit(1);
       if (!quote) return res.status(404).json({ error: "العرض غير موجود أو لا ينتمي لهذا الطلب" });
 
+      // Only allow payment against the customer-accepted quote — prevents forging
+      // a payment record for an arbitrary quote on this inspection.
+      if (quote.status !== "accepted") {
+        return res.status(400).json({ error: "لا يمكن الدفع إلا للعرض المقبول" });
+      }
+
       const amount = parseFloat(quote.totalAmount ?? "0");
       const intent = await createPaymentIntent(amount, quote.currency, {
         inspectionId,
@@ -1166,6 +1221,57 @@ Rules:
   // Payment webhook (Stripe or mock)
   app.post("/api/webhooks/payment", async (req, res) => {
     try {
+      // ── Verify Stripe webhook signature ────────────────────────────────────
+      // Stripe signs every webhook with a HMAC-SHA256 over "<timestamp>.<rawBody>"
+      // and includes it in the `stripe-signature` header as "t=...,v1=...".
+      // When PAYMENT_WEBHOOK_SECRET is set we enforce the signature; otherwise we
+      // log a warning and allow through (development / stub mode only).
+      const paymentWebhookSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+      if (paymentWebhookSecret) {
+        const sigHeader = req.headers["stripe-signature"] as string | undefined;
+        if (!sigHeader) {
+          console.warn("Payment webhook: missing stripe-signature header — rejecting");
+          return res.sendStatus(401);
+        }
+        const rawBody = req.rawBody as Buffer | undefined;
+        if (!rawBody) {
+          console.warn("Payment webhook: raw body unavailable — rejecting");
+          return res.sendStatus(400);
+        }
+        // Parse t= and v1= from header
+        const parts: Record<string, string> = {};
+        for (const part of sigHeader.split(",")) {
+          const [k, v] = part.split("=");
+          if (k && v) parts[k.trim()] = v.trim();
+        }
+        const timestamp = parts["t"];
+        const v1Signature = parts["v1"];
+        if (!timestamp || !v1Signature) {
+          console.warn("Payment webhook: malformed stripe-signature header — rejecting");
+          return res.sendStatus(401);
+        }
+        // Reject stale webhooks (> 5 minutes old) to prevent replay attacks
+        const tsDiff = Math.abs(Date.now() / 1000 - parseInt(timestamp, 10));
+        if (tsDiff > 300) {
+          console.warn(`Payment webhook: timestamp too old (${tsDiff}s) — rejecting`);
+          return res.sendStatus(401);
+        }
+        const signedPayload = `${timestamp}.${rawBody.toString("utf-8")}`;
+        const expected = createHmac("sha256", paymentWebhookSecret).update(signedPayload).digest("hex");
+        const expectedBuf = Buffer.from(expected, "hex");
+        const actualBuf = Buffer.from(v1Signature, "hex");
+        if (expectedBuf.length !== actualBuf.length || !timingSafeEqual(expectedBuf, actualBuf)) {
+          console.warn("Payment webhook: signature mismatch — rejecting");
+          return res.sendStatus(401);
+        }
+      } else {
+        if (process.env.NODE_ENV !== "development") {
+          console.error("Payment webhook: PAYMENT_WEBHOOK_SECRET not set in production — rejecting unsigned request");
+          return res.sendStatus(401);
+        }
+        console.warn("Payment webhook: PAYMENT_WEBHOOK_SECRET not set — skipping signature verification (development mode only)");
+      }
+
       const event = req.body;
       const eventType: string = event?.type ?? event?.status ?? "";
 

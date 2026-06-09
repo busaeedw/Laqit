@@ -330,10 +330,29 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
+function validateProductionSecrets() {
+  if (process.env.NODE_ENV === "development") return;
+
+  const required = [
+    { key: "WHATSAPP_WEBHOOK_SECRET", description: "WhatsApp webhook HMAC secret" },
+    { key: "PAYMENT_WEBHOOK_SECRET", description: "Stripe payment webhook signing secret" },
+  ];
+
+  const missing = required.filter(({ key }) => !process.env[key]);
+  if (missing.length > 0) {
+    const list = missing.map(({ key, description }) => `  - ${key}: ${description}`).join("\n");
+    log(
+      `\n⚠️  SECURITY: Missing required webhook secrets in non-development environment:\n${list}\n` +
+      `  Webhook endpoints will reject all unsigned requests until these are set.\n`
+    );
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
+  validateProductionSecrets();
 
   configureExpoAndLanding(app);
 
