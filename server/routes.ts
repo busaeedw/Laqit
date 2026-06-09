@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { createHmac, timingSafeEqual } from "crypto";
 import OpenAI from "openai";
 import { db } from "./db";
-import { signToken, requireCustomer, requireAdmin, issueOtp, verifyOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter } from "./auth";
+import { signToken, requireCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter } from "./auth";
 import {
   users,
   inspections,
@@ -350,22 +350,36 @@ Rules:
       if (!mobileE164 || !email || !cityId) {
         return res.status(400).json({ error: "رقم الجوال والبريد والمدينة مطلوبة" });
       }
-      const [customer] = await db
-        .insert(customers)
-        .values({ fullName: fullName ?? null, mobileE164, email, cityId })
-        .returning();
 
+      // Reject if a verified account already exists for this mobile or email.
+      const [existingMobile] = await db
+        .select({ customerId: customers.customerId })
+        .from(customers)
+        .where(eq(customers.mobileE164, mobileE164))
+        .limit(1);
+      if (existingMobile) {
+        return res.status(400).json({ error: "رقم الجوال مسجل مسبقاً" });
+      }
+      const [existingEmail] = await db
+        .select({ customerId: customers.customerId })
+        .from(customers)
+        .where(eq(customers.email, email))
+        .limit(1);
+      if (existingEmail) {
+        return res.status(400).json({ error: "البريد الإلكتروني مسجل مسبقاً" });
+      }
+
+      // Issue OTP only — profile data is NOT stored server-side.
+      // The customer row will be created in verify-otp using data submitted by
+      // the phone owner at the moment they prove ownership.
       const result = issueOtp(mobileE164);
       const code = "code" in result ? result.code : null;
       if (code) {
         const { sendSms } = await import("./services/sms");
         await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
       }
-      res.json({ success: true, message: "تم إنشاء الحساب. أدخل رمز التحقق المرسل إلى جوالك" });
+      res.json({ success: true, message: "أدخل رمز التحقق المرسل إلى جوالك" });
     } catch (err: any) {
-      if (err?.code === "23505") {
-        return res.status(400).json({ error: "رقم الجوال أو البريد الإلكتروني مسجل مسبقاً" });
-      }
       console.error("Customer register error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء التسجيل" });
     }
@@ -381,12 +395,18 @@ Rules:
 
       const { mobileE164 } = req.body;
       if (!mobileE164) return res.status(400).json({ error: "رقم الجوال مطلوب" });
+
       const [customer] = await db
         .select()
         .from(customers)
         .where(eq(customers.mobileE164, mobileE164))
         .limit(1);
-      if (!customer) return res.status(404).json({ error: "المستخدم غير موجود" });
+
+      // Allow re-sending OTP for a pending (unverified) registration so the
+      // client's resend flow works before the account has been committed to the DB.
+      if (!customer && !hasPendingOtp(mobileE164)) {
+        return res.status(404).json({ error: "المستخدم غير موجود" });
+      }
 
       const result = issueOtp(mobileE164);
       if ("cooldownRemaining" in result && !("code" in result)) {
@@ -404,7 +424,7 @@ Rules:
 
   app.post("/api/customers/verify-otp", async (req, res) => {
     try {
-      const { mobileE164, otp } = req.body;
+      const { mobileE164, otp, fullName, email, cityId } = req.body;
       if (!mobileE164 || !otp) return res.status(400).json({ error: "رقم الجوال ورمز التحقق مطلوبان" });
 
       const result = verifyOtp(mobileE164, String(otp));
@@ -412,17 +432,46 @@ Rules:
         return res.status(400).json({ error: result.error, attemptsLeft: result.attemptsLeft });
       }
 
-      const [customer] = await db
+      // OTP verified — the caller is the phone owner. Determine login vs registration.
+      const [existing] = await db
         .select()
         .from(customers)
         .where(eq(customers.mobileE164, mobileE164))
         .limit(1);
-      if (!customer) return res.status(404).json({ error: "المستخدم غير موجود" });
 
-      await db
-        .update(customers)
-        .set({ lastLoginAt: new Date() })
-        .where(eq(customers.customerId, customer.customerId));
+      let customer;
+
+      if (!existing) {
+        // Registration path: create the account now, using data provided by the
+        // phone owner in this very request (after proving phone ownership).
+        if (!email || !cityId) {
+          return res.status(400).json({ error: "بيانات التسجيل غير مكتملة" });
+        }
+        try {
+          [customer] = await db
+            .insert(customers)
+            .values({
+              fullName: fullName ?? null,
+              mobileE164,
+              email,
+              cityId,
+              lastLoginAt: new Date(),
+            })
+            .returning();
+        } catch (insertErr: any) {
+          if (insertErr?.code === "23505") {
+            return res.status(400).json({ error: "رقم الجوال أو البريد الإلكتروني مسجل مسبقاً" });
+          }
+          throw insertErr;
+        }
+      } else {
+        // Login path: existing verified account.
+        await db
+          .update(customers)
+          .set({ lastLoginAt: new Date() })
+          .where(eq(customers.customerId, existing.customerId));
+        customer = existing;
+      }
 
       const token = signToken(customer.customerId);
       res.json({ success: true, customer, token });

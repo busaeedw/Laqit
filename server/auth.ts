@@ -188,6 +188,16 @@ export function issueOtp(mobileE164: string): OtpIssueResult | { cooldownRemaini
   return { code };
 }
 
+/**
+ * Returns true when an active (non-expired) OTP entry exists for this number.
+ * Used by the login/resend route to allow OTP resends while a registration is
+ * still in flight (i.e. the account does not yet exist in the DB).
+ */
+export function hasPendingOtp(mobileE164: string): boolean {
+  const entry = otpStore.get(mobileE164);
+  return !!entry && Date.now() <= entry.expiresAt;
+}
+
 export type OtpVerifyResult =
   | { success: true }
   | { success: false; error: string; attemptsLeft?: number };

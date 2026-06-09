@@ -346,7 +346,15 @@ export default function AccountScreen() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mobileE164: pendingMobileE164, otp: formOtp.trim() }),
+          body: JSON.stringify({
+            mobileE164: pendingMobileE164,
+            otp: formOtp.trim(),
+            ...(modalMode === "register" && {
+              fullName: formName.trim() || undefined,
+              email: formEmail.trim(),
+              cityId: selectedCityId,
+            }),
+          }),
         }
       );
 
