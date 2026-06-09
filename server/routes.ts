@@ -174,10 +174,10 @@ RULES:
         ? `The user has selected: ${carInfo.make} ${carInfo.model} ${carInfo.year}. Inspect the car image carefully for any missing, damaged, broken, worn, or defective parts.`
         : `Identify the car make, model, year, then inspect the image carefully for any missing, damaged, broken, worn, or defective parts.`;
 
-      console.log("Calling OpenAI API with model gpt-4o...");
+      console.log("Calling OpenAI API with model gpt-5...");
       
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5",
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -192,7 +192,7 @@ RULES:
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 2048,
+        max_completion_tokens: 4096,
       });
 
       console.log("OpenAI API response received");
@@ -257,7 +257,7 @@ RULES:
       if (!imageUri) return res.status(400).json({ error: "imageUri required" });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5",
         messages: [
           {
             role: "system",
@@ -284,7 +284,7 @@ Rules:
           },
         ],
         response_format: { type: "json_object" },
-        max_tokens: 256,
+        max_completion_tokens: 2048,
       });
 
       const raw = response.choices[0]?.message?.content ?? "{}";
