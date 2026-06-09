@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { whatsappMessages } from "@shared/schema";
+import { whatsappMessages } from "../../shared/schema";
 
 export interface WhatsAppSendResult {
   success: boolean;

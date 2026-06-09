@@ -22,7 +22,7 @@ import {
   quotes,
   payments,
   notifications,
-} from "@shared/schema";
+} from "../shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { sendWhatsAppMessage } from "./services/whatsapp";
 import { sendSms } from "./services/sms";

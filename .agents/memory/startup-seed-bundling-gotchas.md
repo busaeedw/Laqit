@@ -34,6 +34,28 @@ deterministic canonical uuid per group, cast through text:
 `MIN(uuid_col::text)::uuid`. Comparisons (`<>`, `=`) on uuid work fine; only the
 aggregate is missing.
 
+## Path aliases (@shared/*) break the bundled production server
+Dev runs via `tsx`, which honors tsconfig `paths`, so `import ... from
+"@shared/schema"` resolves. But the production build bundles with
+`esbuild ... --packages=external`, which externalizes **every** bare/aliased
+specifier (anything not starting with `.` or `/`) BEFORE applying tsconfig
+`paths`. So `@shared/schema` is left as an external import in
+`server_dist/index.js`, and `node` throws `ERR_MODULE_NOT_FOUND: Cannot find
+package '@shared/schema'` at startup → deploy healthchecks return 500.
+**Symptom:** dev fine, prod crashes immediately on boot; the bundle contains
+`import ... from "@shared/schema"` and none of the schema is inlined (no
+`pgTable` in the bundle).
+**Fix:** server-side code must import shared modules with **relative** paths
+(`../shared/schema`, `../../shared/schema`, …) so esbuild bundles them. The
+`@shared` alias is fine in client code but must not be used in any file that
+ends up in the esbuild server bundle.
+**Why:** can't edit `package.json` (the build command with `--packages=external`)
+or `scripts/`, so the imports themselves must be relative.
+**How to apply:** after any task that touches server imports, grep
+`rg "@shared|from ['\"]@/" server/` — it must return nothing. Verify the bundle
+inlines the schema (`rg -c pgTable server_dist/index.js` > 0) and boots via
+`PORT=5050 NODE_ENV=production node server_dist/index.js`.
+
 ## Deduping a table with FK references safely
 When collapsing duplicate rows (e.g. `cities` with no unique constraint) keep the
 canonical row and, in one transaction: (1) for any child table with a UNIQUE that
