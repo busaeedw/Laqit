@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { createHmac, timingSafeEqual } from "crypto";
 import OpenAI from "openai";
 import { db } from "./db";
-import { signToken, requireCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter } from "./auth";
+import { signToken, requireCustomer, optionalCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter } from "./auth";
 import {
   users,
   inspections,
@@ -91,10 +91,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
-  app.post("/api/analyze", requireCustomer, async (req, res) => {
+  app.post("/api/analyze", optionalCustomer, async (req, res) => {
     try {
-      const customerId = res.locals.customerId as string;
-      if (!aiCustomerLimiter.check(customerId)) {
+      const customerId = res.locals.customerId as string | undefined;
+      if (customerId && !aiCustomerLimiter.check(customerId)) {
         const retryAfter = aiCustomerLimiter.retryAfterSeconds(customerId);
         return res.status(429).json({ error: `تجاوزت الحد المسموح من طلبات التحليل، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
@@ -252,10 +252,10 @@ RULES:
 
   // ─── Car Identification by Photo ─────────────────────────────────────────
 
-  app.post("/api/identify-car", requireCustomer, async (req, res) => {
+  app.post("/api/identify-car", optionalCustomer, async (req, res) => {
     try {
-      const customerId = res.locals.customerId as string;
-      if (!aiCustomerLimiter.check(customerId)) {
+      const customerId = res.locals.customerId as string | undefined;
+      if (customerId && !aiCustomerLimiter.check(customerId)) {
         const retryAfter = aiCustomerLimiter.retryAfterSeconds(customerId);
         return res.status(429).json({ error: `تجاوزت الحد المسموح من طلبات التحليل، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }

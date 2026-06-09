@@ -90,6 +90,23 @@ export function requireCustomer(req: Request, res: Response, next: NextFunction)
   next();
 }
 
+/**
+ * Optional customer auth: if a valid Bearer token is present, attaches
+ * res.locals.customerId; otherwise continues anonymously without rejecting.
+ * Used for public AI endpoints (damage assessment) that must work without login
+ * while still binding the request to a customer when one is signed in.
+ */
+export function optionalCustomer(req: Request, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const claims = verifyToken(authHeader.slice(7));
+    if (claims) {
+      res.locals.customerId = claims.customerId;
+    }
+  }
+  next();
+}
+
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 
 interface RateLimitBucket {

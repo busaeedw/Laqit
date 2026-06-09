@@ -144,7 +144,6 @@ export default function NewInspectionScreen() {
   );
 
   const handleIdentifyByCar = async () => {
-    if (!requireLogin()) return;
     const picked = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
@@ -360,7 +359,6 @@ export default function NewInspectionScreen() {
         Alert.alert("", "يرجى إضافة صورة العطل أولاً");
         return;
       }
-      if (!requireLogin()) return;
       setStep(3);
       await analyzeForParts();
     } else if (step === 3) {
