@@ -538,6 +538,9 @@ export const quotes = pgTable(
     index("idx_quotes_inspection_id").on(t.inspectionId),
     index("idx_quotes_vendor_id").on(t.vendorId),
     index("idx_quotes_status").on(t.status),
+    uniqueIndex("uq_one_accepted_quote_per_inspection")
+      .on(t.inspectionId)
+      .where(sql`status = 'accepted'`),
   ]
 );
 
@@ -572,6 +575,9 @@ export const payments = pgTable(
     index("idx_payments_inspection_id").on(t.inspectionId),
     index("idx_payments_customer_id").on(t.customerId),
     index("idx_payments_status").on(t.status),
+    uniqueIndex("uq_one_live_payment_per_inspection")
+      .on(t.inspectionId)
+      .where(sql`status IN ('initiated', 'captured')`),
   ]
 );
 

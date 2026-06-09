@@ -1157,6 +1157,38 @@ Rules:
       if (!insp) return res.status(404).json({ error: "غير موجود" });
       if (insp.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
 
+      // Block re-acceptance once inspection status reflects a payment or terminal state.
+      // Covers: payment_pending, paid, cancelled, and downstream fulfillment states.
+      const lockedStatuses = [
+        "payment_pending",
+        "paid",
+        "cancelled",
+        "vendor_notified",
+        "ready_for_pickup",
+        "closed",
+      ];
+      if (lockedStatuses.includes(insp.status)) {
+        return res.status(409).json({ error: "لا يمكن تغيير العرض بعد بدء الدفع أو اكتماله" });
+      }
+
+      // Secondary guard: check payments table directly for any active payment row.
+      // This closes the race window between payment row insert and the inspection
+      // status flip to payment_pending — the status check above may not yet reflect
+      // an in-flight concurrent payment creation, but the payments row will exist.
+      const [activePayment] = await db
+        .select()
+        .from(payments)
+        .where(
+          and(
+            eq(payments.inspectionId, inspectionId),
+            inArray(payments.status, ["initiated", "captured"])
+          )
+        )
+        .limit(1);
+      if (activePayment) {
+        return res.status(409).json({ error: "لا يمكن تغيير العرض بعد بدء الدفع أو اكتماله" });
+      }
+
       // Verify the quoteId belongs to this inspection (prevents cross-inspection tampering)
       const [targetQuote] = await db
         .select()
@@ -1232,24 +1264,42 @@ Rules:
         customerId,
       });
 
-      const [payment] = await db
-        .insert(payments)
-        .values({
-          inspectionId,
-          quoteId,
-          customerId,
-          amount: String(amount),
-          currency: quote.currency,
-          status: "initiated",
-          gateway: "stripe",
-          gatewayRef: intent.id,
-        })
-        .returning();
+      // Atomically insert the payment row and flip inspection status inside a
+      // single transaction. This eliminates the race window where quote-acceptance
+      // could slip in between the two separate DML statements.
+      let payment: typeof payments.$inferSelect;
+      try {
+        payment = await db.transaction(async (tx) => {
+          const [inserted] = await tx
+            .insert(payments)
+            .values({
+              inspectionId,
+              quoteId,
+              customerId,
+              amount: String(amount),
+              currency: quote.currency,
+              status: "initiated",
+              gateway: "stripe",
+              gatewayRef: intent.id,
+            })
+            .returning();
 
-      await db
-        .update(laqitInspections)
-        .set({ status: "payment_pending", updatedAt: new Date() })
-        .where(eq(laqitInspections.inspectionId, inspectionId));
+          await tx
+            .update(laqitInspections)
+            .set({ status: "payment_pending", updatedAt: new Date() })
+            .where(eq(laqitInspections.inspectionId, inspectionId));
+
+          return inserted;
+        });
+      } catch (insertErr: any) {
+        // Unique constraint uq_one_live_payment_per_inspection fires when a
+        // concurrent request already inserted an active payment row. Return 409
+        // regardless of whether this arrived via race or a sequential retry.
+        if (insertErr?.code === "23505") {
+          return res.status(409).json({ error: "يوجد دفع نشط لهذا الطلب بالفعل" });
+        }
+        throw insertErr;
+      }
 
       res.json({ success: true, payment, clientSecret: intent.clientSecret });
     } catch (err: any) {
@@ -1328,6 +1378,32 @@ Rules:
           .limit(1);
 
         if (!payment) return res.sendStatus(200);
+
+        // Idempotency: skip if already captured
+        if (payment.status === "captured") return res.sendStatus(200);
+
+        // Guard: only transition to paid when the inspection is in the expected
+        // payment-in-flight state. Reject transitions from any other state
+        // (already paid, cancelled, rewound, etc.) to prevent state corruption.
+        const [webhookInsp] = await db
+          .select()
+          .from(laqitInspections)
+          .where(eq(laqitInspections.inspectionId, payment.inspectionId))
+          .limit(1);
+        if (!webhookInsp || webhookInsp.status !== "payment_pending") return res.sendStatus(200);
+
+        // Guard: verify the quote tied to this payment is still the accepted quote.
+        // If acceptance was somehow changed (race), the original quote would have been
+        // rejected; do not notify the wrong vendor or overwrite state.
+        const [paymentQuote] = await db
+          .select()
+          .from(quotes)
+          .where(and(eq(quotes.quoteId, payment.quoteId), eq(quotes.inspectionId, payment.inspectionId)))
+          .limit(1);
+        if (!paymentQuote || paymentQuote.status !== "accepted") {
+          console.warn(`Payment webhook: quote ${payment.quoteId} is no longer accepted — skipping paid transition`);
+          return res.sendStatus(200);
+        }
 
         await db
           .update(payments)
