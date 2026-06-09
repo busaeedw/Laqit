@@ -616,7 +616,6 @@ export default function NewInspectionScreen() {
             </ThemedText>
 
             {[
-              { label: "صورة السيارة", uri: carPhotoUri, setter: setCarPhotoUri },
               { label: "صورة العطل / الضرر", uri: damagePhotoUri, setter: setDamagePhotoUri },
             ].map(({ label, uri, setter }) => (
               <View key={label} style={styles.photoBlock}>
