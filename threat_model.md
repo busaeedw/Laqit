@@ -29,8 +29,9 @@ Production scope for this scan is the public deployment at `https://laqit.app`. 
 
 - **Production entry points:** `server/index.ts` and `server/routes.ts`; web app requests share the same Express origin as the API.
 - **Highest-risk code areas:** `server/routes.ts` customer/vendor/inspection/quote/payment/webhook routes; `server/services/payment.ts`; `server/services/ocr.ts`; `server/services/whatsapp.ts`.
-- **Public surfaces:** nearly all `/api/*` endpoints, including customer profile, inspection, vendor management, quote acceptance, payment creation, and both webhooks.
+- **Public surfaces:** nearly all `/api/*` endpoints, including customer profile, inspection, vendor management, quote acceptance, payment creation, both webhooks, customer OTP endpoints, and the still-mounted legacy `/api/register`, `/api/login`, and `/api/inspections*` routes.
 - **Authenticated/admin surfaces to verify carefully:** customer data access, quote acceptance/payment flow, vendor management, webhook-triggered state changes.
+- **Production-reachable legacy surface:** `client/screens/OrderScreen.tsx` still targets the legacy `/api/inspections` route through `HomeStackNavigator`, so the old user/inspection flow remains part of the production attack surface.
 - **Usually dev-only / lower-priority areas:** `server/seed.ts`, `server/replit_integrations/**`, Expo development proxy behavior in `server/index.ts`, and client-only presentation code unless it reveals a production trust assumption.
 
 ## Threat Categories
@@ -49,7 +50,7 @@ Customer profiles, inspection history, quote images, vendor contacts, and OCR-ex
 
 ### Denial of Service
 
-Public AI image-analysis and OCR-backed flows can trigger expensive third-party calls and heavy request bodies. Internet-facing endpoints that accept images or create outbound side effects must enforce authentication where appropriate, strict size/rate limits, and bounded external-call behavior.
+Public AI image-analysis and OCR-backed flows can trigger expensive third-party calls and heavy request bodies. Internet-facing endpoints that accept images or create outbound side effects must enforce authentication where appropriate, strict size/rate limits, bounded external-call behavior, and abuse controls on OTP/SMS or vendor-broadcast fan-out routes.
 
 ### Elevation of Privilege
 
