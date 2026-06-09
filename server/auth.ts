@@ -51,6 +51,29 @@ export function verifyToken(token: string): { customerId: string } | null {
   }
 }
 
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey) {
+    res.status(503).json({ error: "خدمة الإدارة غير متاحة" });
+    return;
+  }
+  const provided = req.headers["x-admin-api-key"];
+  if (typeof provided !== "string" || provided.length !== adminKey.length) {
+    res.status(403).json({ error: "غير مسموح" });
+    return;
+  }
+  try {
+    if (!timingSafeEqual(Buffer.from(provided, "utf-8"), Buffer.from(adminKey, "utf-8"))) {
+      res.status(403).json({ error: "غير مسموح" });
+      return;
+    }
+  } catch {
+    res.status(403).json({ error: "غير مسموح" });
+    return;
+  }
+  next();
+}
+
 export function requireCustomer(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {

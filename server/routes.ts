@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import OpenAI from "openai";
 import { db } from "./db";
-import { signToken, requireCustomer, issueOtp, verifyOtp } from "./auth";
+import { signToken, requireCustomer, requireAdmin, issueOtp, verifyOtp } from "./auth";
 import {
   users,
   inspections,
@@ -513,7 +513,7 @@ Rules:
 
   // ─── Vendors (admin / self-registration) ─────────────────────────────────
 
-  app.get("/api/vendors", async (_req, res) => {
+  app.get("/api/vendors", requireAdmin, async (_req, res) => {
     try {
       const result = await db.select().from(vendors).orderBy(vendors.createdAt);
       res.json({ vendors: result });
@@ -522,7 +522,7 @@ Rules:
     }
   });
 
-  app.post("/api/vendors", async (req, res) => {
+  app.post("/api/vendors", requireAdmin, async (req, res) => {
     try {
       const { vendorName, legalName, crNumber, vatNumber } = req.body;
       if (!vendorName) return res.status(400).json({ error: "اسم المورد مطلوب" });
@@ -536,7 +536,7 @@ Rules:
     }
   });
 
-  app.get("/api/vendor-users", async (_req, res) => {
+  app.get("/api/vendor-users", requireAdmin, async (_req, res) => {
     try {
       const result = await db.select().from(vendorUsers).orderBy(vendorUsers.createdAt);
       res.json({ vendorUsers: result });
@@ -545,7 +545,7 @@ Rules:
     }
   });
 
-  app.post("/api/vendor-users", async (req, res) => {
+  app.post("/api/vendor-users", requireAdmin, async (req, res) => {
     try {
       const { vendorId, fullName, mobileE164, email, whatsappE164, role } = req.body;
       if (!vendorId || !mobileE164 || !whatsappE164) {
