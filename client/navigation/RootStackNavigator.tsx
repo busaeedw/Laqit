@@ -15,6 +15,7 @@ const NewInspectionScreen = lazy(() => import("@/screens/NewInspectionScreen"));
 const InspectionDetailScreen = lazy(() => import("@/screens/InspectionDetailScreen"));
 const QuotesListScreen = lazy(() => import("@/screens/QuotesListScreen"));
 const CarBrandsScreen = lazy(() => import("@/screens/CarBrandsScreen"));
+const CarBrandDetailScreen = lazy(() => import("@/screens/CarBrandDetailScreen"));
 
 function ScreenFallback() {
   return (
@@ -55,6 +56,21 @@ export type DetectedPart = {
   boundingBox: { x: number; y: number; width: number; height: number };
 };
 
+export type AgentInfo = {
+  agentNameEn: string;
+  agentNameAr: string | null;
+  website: string | null;
+  phone: string | null;
+  headquartersCity: string | null;
+};
+
+export type CarMakeParam = {
+  makeId: string;
+  makeName: string;
+  nameAr: string | null;
+  agent: AgentInfo | null;
+};
+
 export type RootStackParamList = {
   Main: undefined;
   Camera: {
@@ -72,6 +88,7 @@ export type RootStackParamList = {
   InspectionDetail: { inspectionId: string };
   QuotesList: { inspectionId: string };
   CarBrands: undefined;
+  CarBrandDetail: { make: CarMakeParam };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -168,6 +185,13 @@ export default function RootStackNavigator() {
         options={{
           headerTitle: "ماركات السيارات",
         }}
+      />
+      <Stack.Screen
+        name="CarBrandDetail"
+        component={withSuspense(CarBrandDetailScreen)}
+        options={({ route }) => ({
+          headerTitle: route.params.make.nameAr ?? route.params.make.makeName,
+        })}
       />
     </Stack.Navigator>
   );

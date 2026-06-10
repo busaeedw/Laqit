@@ -6,17 +6,19 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
-  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 interface AgentInfo {
   agentNameEn: string;
@@ -77,10 +79,13 @@ function BrandAvatar({ name, color }: { name: string; color: string }) {
   );
 }
 
+type NavProp = NativeStackNavigationProp<RootStackParamList, "CarBrands">;
+
 export default function CarBrandsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
+  const navigation = useNavigation<NavProp>();
 
   const [search, setSearch] = useState("");
 
@@ -122,10 +127,27 @@ export default function CarBrandsScreen() {
     );
   }, [data, search]);
 
-  const handleWebsitePress = useCallback((website: string) => {
-    const url = website.startsWith("http") ? website : `https://${website}`;
-    Linking.openURL(url).catch(() => {});
-  }, []);
+  const handleRowPress = useCallback(
+    (item: CarMake) => {
+      navigation.navigate("CarBrandDetail", {
+        make: {
+          makeId: item.makeId,
+          makeName: item.makeName,
+          nameAr: item.nameAr ?? null,
+          agent: item.agent
+            ? {
+                agentNameEn: item.agent.agentNameEn,
+                agentNameAr: item.agent.agentNameAr ?? null,
+                website: item.agent.website ?? null,
+                phone: item.agent.phone ?? null,
+                headquartersCity: item.agent.headquartersCity ?? null,
+              }
+            : null,
+        },
+      });
+    },
+    [navigation]
+  );
 
   const renderItem = useCallback(
     ({ item, index }: { item: CarMake; index: number }) => {
@@ -133,8 +155,13 @@ export default function CarBrandsScreen() {
       const count = modelCountByMake[item.makeId];
       return (
         <Animated.View entering={FadeInDown.duration(400).delay(index * 30)}>
-          <View
-            style={[styles.row, { backgroundColor: theme.backgroundDefault }]}
+          <Pressable
+            onPress={() => handleRowPress(item)}
+            style={({ pressed }) => [
+              styles.row,
+              { backgroundColor: theme.backgroundDefault },
+              pressed && { opacity: 0.75 },
+            ]}
             testID={`brand-row-${item.makeId}`}
           >
             <BrandAvatar name={item.makeName} color={color} />
@@ -156,32 +183,29 @@ export default function CarBrandsScreen() {
                 </ThemedText>
               ) : null}
               {item.agent?.website ? (
-                <Pressable
-                  onPress={() => handleWebsitePress(item.agent!.website!)}
-                  hitSlop={8}
-                  testID={`agent-website-${item.makeId}`}
-                >
-                  <ThemedText style={[styles.websiteLink, { color, fontFamily: "Cairo_400Regular" }]}>
-                    {item.agent.website}
-                  </ThemedText>
-                </Pressable>
+                <ThemedText style={[styles.websiteLink, { color, fontFamily: "Cairo_400Regular" }]}>
+                  {item.agent.website}
+                </ThemedText>
               ) : null}
             </View>
-            {count !== undefined ? (
-              <View style={[styles.countBadge, { backgroundColor: color + "15" }]}>
-                <ThemedText style={[styles.countText, { color, fontFamily: "Cairo_600SemiBold" }]}>
-                  {count}
-                </ThemedText>
-                <ThemedText style={[styles.countLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                  موديل
-                </ThemedText>
-              </View>
-            ) : null}
-          </View>
+            <View style={styles.rowEnd}>
+              {count !== undefined ? (
+                <View style={[styles.countBadge, { backgroundColor: color + "15" }]}>
+                  <ThemedText style={[styles.countText, { color, fontFamily: "Cairo_600SemiBold" }]}>
+                    {count}
+                  </ThemedText>
+                  <ThemedText style={[styles.countLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                    موديل
+                  </ThemedText>
+                </View>
+              ) : null}
+              <Feather name="chevron-left" size={16} color={theme.textSecondary} />
+            </View>
+          </Pressable>
         </Animated.View>
       );
     },
-    [theme, modelCountByMake, handleWebsitePress]
+    [theme, modelCountByMake, handleRowPress]
   );
 
   const headerComponent = useMemo(
@@ -318,6 +342,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "right",
     textDecorationLine: "underline",
+  },
+  rowEnd: {
+    alignItems: "center",
+    gap: Spacing.xs,
   },
   countBadge: {
     alignItems: "center",

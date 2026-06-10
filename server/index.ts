@@ -2,7 +2,7 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
-import { seedIfEmpty, dedupeCities } from "./seed";
+import { seedIfEmpty, dedupeCities, ensureMigrations } from "./seed";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -382,7 +382,8 @@ function validateProductionSecrets() {
       // Self-heal reference data on a fresh (e.g. production) database, then
       // repair any duplicate cities left by a prior incident. Non-blocking so
       // it never delays startup or healthchecks.
-      seedIfEmpty()
+      ensureMigrations()
+        .then(() => seedIfEmpty())
         .then(() => dedupeCities())
         .catch((e) => log("startup data reconcile error", e));
     },

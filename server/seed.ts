@@ -335,6 +335,31 @@ export async function seedReferenceData() {
 // Arbitrary constant key for the Postgres advisory lock that guards seeding.
 const SEED_ADVISORY_LOCK_KEY = 742193;
 
+export async function ensureMigrations() {
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS car_make_agents (
+          agent_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          make_id UUID NOT NULL UNIQUE REFERENCES car_makes(make_id),
+          agent_name_en VARCHAR(200) NOT NULL,
+          agent_name_ar VARCHAR(200),
+          website VARCHAR(300),
+          phone VARCHAR(30),
+          headquarters_city VARCHAR(100),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("ensureMigrations error:", (err as Error)?.message);
+  }
+}
+
 export async function seedIfEmpty() {
   try {
     const existing = await db.select().from(carMakes).limit(1);
