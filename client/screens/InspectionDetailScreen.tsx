@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { arrayBufferToBase64 } from "../lib/pdfUtils";
 import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -92,12 +93,7 @@ export default function InspectionDetailScreen() {
       }
 
       const arrayBuffer = await resp.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce(
-          (data, byte) => data + String.fromCharCode(byte),
-          ""
-        )
-      );
+      const base64 = arrayBufferToBase64(arrayBuffer);
 
       const filename = `laqit-${Date.now()}.pdf`;
       const fileUri =

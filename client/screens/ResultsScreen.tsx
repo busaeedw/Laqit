@@ -17,6 +17,7 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { arrayBufferToBase64 } from "../lib/pdfUtils";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -491,9 +492,7 @@ export default function ResultsScreen() {
       }
 
       const arrayBuffer = await resp.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-      );
+      const base64 = arrayBufferToBase64(arrayBuffer);
 
       const filename = `laqit-analysis-${Date.now()}.pdf`;
       const fileUri = (FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "") + filename;
