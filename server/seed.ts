@@ -66,6 +66,20 @@ export async function seedReferenceData() {
     { makeName: "Porsche",       nameAr: "بورشه" },
     { makeName: "Volvo",         nameAr: "فولفو" },
     { makeName: "Lincoln",       nameAr: "لينكولن" },
+    // ── Korean ────────────────────────────────────────────────────────────────
+    { makeName: "Genesis",       nameAr: "جينيسيس" },
+    // ── Japanese ──────────────────────────────────────────────────────────────
+    { makeName: "Subaru",        nameAr: "سوبارو" },
+    { makeName: "Isuzu",         nameAr: "إيسوزو" },
+    // ── Chinese ───────────────────────────────────────────────────────────────
+    { makeName: "BYD",           nameAr: "بي واي دي" },
+    { makeName: "Geely",         nameAr: "جيلي" },
+    { makeName: "Chery",         nameAr: "شيري" },
+    { makeName: "Haval",         nameAr: "هافال" },
+    { makeName: "Changan",       nameAr: "شانغان" },
+    { makeName: "JETOUR",        nameAr: "جيتور" },
+    { makeName: "GAC",           nameAr: "جاك" },
+    { makeName: "Exeed",         nameAr: "إكسيد" },
   ];
 
   for (const m of makesData) {
@@ -114,6 +128,20 @@ export async function seedReferenceData() {
     { make: "Porsche",       models: ["Cayenne", "Macan", "Panamera", "911", "Taycan"] },
     { make: "Volvo",         models: ["XC90", "XC60", "XC40", "S90", "S60", "V90"] },
     { make: "Lincoln",       models: ["Navigator", "Aviator", "Nautilus", "Corsair", "Continental"] },
+    // ── Korean ────────────────────────────────────────────────────────────────
+    { make: "Genesis",       models: ["G70", "G80", "G90", "GV70", "GV80", "GV60"] },
+    // ── Japanese ──────────────────────────────────────────────────────────────
+    { make: "Subaru",        models: ["Outback", "Forester", "XV", "Impreza", "Legacy", "BRZ"] },
+    { make: "Isuzu",         models: ["D-Max", "MU-X", "Trooper", "Elf"] },
+    // ── Chinese ───────────────────────────────────────────────────────────────
+    { make: "BYD",           models: ["Seal", "Atto 3", "Han", "Tang", "Song Plus", "Dolphin", "Seal U", "Sea Lion 6"] },
+    { make: "Geely",         models: ["Coolray", "Tugella", "Okavango", "Preface", "Monjaro", "Emgrand"] },
+    { make: "Chery",         models: ["Tiggo 4 Pro", "Tiggo 7 Pro", "Tiggo 8 Pro", "Arrizo 6 Pro", "Arrizo 8"] },
+    { make: "Haval",         models: ["H6", "Jolion", "H2", "Dargo", "Big Dog", "Raptor"] },
+    { make: "Changan",       models: ["CS35 Plus", "CS55 Plus", "CS75 Plus", "Alsvin", "Uni-K", "Uni-T", "Hunter"] },
+    { make: "JETOUR",        models: ["X70 Plus", "X90 Plus", "Dashing", "T2", "X70S", "Traveler"] },
+    { make: "GAC",           models: ["GS3", "GS4", "GS8", "GA4", "Trumpchi GS4", "Emkoo"] },
+    { make: "Exeed",         models: ["TXL", "VX", "RX", "LX", "Sterra ES", "Sterra ET"] },
   ];
 
   const modelInserts: { makeId: string; modelName: string }[] = [];

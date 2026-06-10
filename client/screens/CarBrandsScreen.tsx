@@ -30,12 +30,15 @@ interface ApiResponse {
 }
 
 const BRAND_INITIALS: Record<string, string> = {
-  Toyota: "T", Honda: "H", Nissan: "N", Hyundai: "H", Kia: "K",
-  Renault: "R", "Mercedes-Benz": "M", BMW: "B", Lexus: "L",
+  Toyota: "T", Honda: "H", Nissan: "N", Hyundai: "HY", Kia: "K",
+  Renault: "R", "Mercedes-Benz": "MB", BMW: "B", Lexus: "L",
   Chevrolet: "C", Ford: "F", GMC: "G", Audi: "A", Mitsubishi: "M",
   Cadillac: "C", "Land Rover": "LR", Jeep: "J", Infiniti: "I",
-  Volkswagen: "V", Mazda: "M", Dodge: "D", RAM: "R", Suzuki: "S",
-  MG: "MG", Porsche: "P", Volvo: "V", Lincoln: "L",
+  Volkswagen: "VW", Mazda: "MZ", Dodge: "D", RAM: "R", Suzuki: "S",
+  MG: "MG", Porsche: "P", Volvo: "V", Lincoln: "LN",
+  Genesis: "GN", Subaru: "SB", Isuzu: "IZ",
+  BYD: "BYD", Geely: "GL", Chery: "CH", Haval: "HV",
+  Changan: "CA", JETOUR: "JT", GAC: "GAC", Exeed: "EX",
 };
 
 const BRAND_COLORS: Record<string, string> = {
@@ -48,6 +51,10 @@ const BRAND_COLORS: Record<string, string> = {
   Volkswagen: "#001E50", Mazda: "#910A2D", Dodge: "#CC0000",
   RAM: "#CC0000", Suzuki: "#CD1518", MG: "#C8102E",
   Porsche: "#D5001C", Volvo: "#003057", Lincoln: "#1A1A1A",
+  Genesis: "#1A1A2E", Subaru: "#003399", Isuzu: "#CC0000",
+  BYD: "#1DB954", Geely: "#003087", Chery: "#CC0000",
+  Haval: "#B8172B", Changan: "#003087", JETOUR: "#E63329",
+  GAC: "#003087", Exeed: "#C41230",
 };
 
 function BrandAvatar({ name, color }: { name: string; color: string }) {
