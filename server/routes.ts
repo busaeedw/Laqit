@@ -954,7 +954,11 @@ Rules:
         price: 0,
       }));
 
-      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, "ar");
+      const rawLocale = req.query.locale;
+      const safeLocale: PdfLocale =
+        rawLocale === "en" || rawLocale === "bilingual" ? rawLocale : "ar";
+
+      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

@@ -51,6 +51,7 @@ export default function InspectionDetailScreen() {
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [pdfLocale, setPdfLocale] = useState<"ar" | "en" | "bilingual">("ar");
 
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
@@ -72,6 +73,7 @@ export default function InspectionDetailScreen() {
 
     try {
       const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
+      url.searchParams.set("locale", pdfLocale);
       const resp = await fetch(url.toString(), {
         method: "GET",
         headers: { ...authHeaders() },
@@ -268,6 +270,39 @@ export default function InspectionDetailScreen() {
         {/* PDF actions — only when parts exist */}
         {parts.length > 0 ? (
           <View style={styles.pdfSection}>
+            {/* Language selector */}
+            <View style={[styles.localePicker, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
+              {(
+                [
+                  { value: "ar", label: "عربي" },
+                  { value: "bilingual", label: "ثنائي" },
+                  { value: "en", label: "English" },
+                ] as const
+              ).map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  testID={`button-pdf-locale-${opt.value}`}
+                  onPress={() => setPdfLocale(opt.value)}
+                  style={[
+                    styles.localeOption,
+                    pdfLocale === opt.value && { backgroundColor: theme.primary },
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.localeOptionText,
+                      {
+                        fontFamily: "Cairo_700Bold",
+                        color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    {opt.label}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
             <View style={styles.pdfBtnRow}>
               {/* Download */}
               <Pressable
@@ -477,6 +512,21 @@ const styles = StyleSheet.create({
   pdfSection: {
     marginBottom: Spacing.lg,
     gap: Spacing.sm,
+  },
+  localePicker: {
+    flexDirection: "row-reverse",
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    overflow: "hidden",
+  },
+  localeOption: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  localeOptionText: {
+    fontSize: 13,
   },
   pdfBtnRow: {
     flexDirection: "row-reverse",
