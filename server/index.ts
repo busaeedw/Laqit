@@ -268,20 +268,13 @@ function configureExpoAndLanding(app: express.Application) {
     // under /web-app, and static assets from static-build/web.
     const webDir = path.resolve(process.cwd(), "static-build", "web");
 
-    // Root "/" → pre-rendered Arabic landing page (visible to bots without JS)
+    // Root "/" → Expo SPA (app splash screen)
     app.get("/", (req: Request, res: Response) => {
-      try {
-        const html = getSeoLandingHtml(req);
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.status(200).send(html);
-      } catch {
-        // Fallback to Expo SPA if template is missing
-        const indexPath = path.join(webDir, "index.html");
-        if (fs.existsSync(indexPath)) {
-          res.sendFile(indexPath);
-        } else {
-          res.status(404).send("Not found");
-        }
+      const indexPath = path.join(webDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Not found");
       }
     });
 
