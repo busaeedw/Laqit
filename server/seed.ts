@@ -372,7 +372,11 @@ export async function ensureMigrations() {
 
 export async function seedIfEmpty() {
   try {
-    const existing = await db.select().from(carMakes).limit(1);
+    // Guard on `cities`, NOT `car_makes` — because syncCarCatalog() runs
+    // before seedIfEmpty() and always populates car_makes, so checking
+    // car_makes would permanently prevent cities/vendors from being seeded
+    // on a fresh database.
+    const existing = await db.select().from(cities).limit(1);
     if (existing.length > 0) return;
 
     // Cross-instance mutual exclusion: hold a session advisory lock on a
@@ -387,7 +391,7 @@ export async function seedIfEmpty() {
       if (!rows[0]?.locked) return; // another instance is seeding
 
       // Re-check now that the lock is held, to avoid a TOCTOU double-seed.
-      const recheck = await db.select().from(carMakes).limit(1);
+      const recheck = await db.select().from(cities).limit(1);
       if (recheck.length > 0) return;
 
       console.log("Reference data is empty — running auto-seed...");
