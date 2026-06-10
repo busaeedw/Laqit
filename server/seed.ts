@@ -38,16 +38,46 @@ export async function seedReferenceData() {
   console.log(`Cities: ${allCities.length} rows`);
 
   // ── Car Makes ─────────────────────────────────────────────────────────────
-  const makesData = [
-    "Toyota", "Honda", "Nissan", "Hyundai", "Kia",
-    "Renault", "Mercedes-Benz", "BMW", "Lexus", "Chevrolet",
-    "Ford", "GMC", "Audi", "Mitsubishi", "Cadillac",
+  const makesData: { makeName: string; nameAr: string }[] = [
+    { makeName: "Toyota",        nameAr: "تويوتا" },
+    { makeName: "Honda",         nameAr: "هوندا" },
+    { makeName: "Nissan",        nameAr: "نيسان" },
+    { makeName: "Hyundai",       nameAr: "هيونداي" },
+    { makeName: "Kia",           nameAr: "كيا" },
+    { makeName: "Renault",       nameAr: "رينو" },
+    { makeName: "Mercedes-Benz", nameAr: "مرسيدس بنز" },
+    { makeName: "BMW",           nameAr: "بي إم دبليو" },
+    { makeName: "Lexus",         nameAr: "لكزس" },
+    { makeName: "Chevrolet",     nameAr: "شيفروليه" },
+    { makeName: "Ford",          nameAr: "فورد" },
+    { makeName: "GMC",           nameAr: "جي إم سي" },
+    { makeName: "Audi",          nameAr: "أودي" },
+    { makeName: "Mitsubishi",    nameAr: "ميتسوبيشي" },
+    { makeName: "Cadillac",      nameAr: "كاديلاك" },
+    { makeName: "Land Rover",    nameAr: "لاند روفر" },
+    { makeName: "Jeep",          nameAr: "جيب" },
+    { makeName: "Infiniti",      nameAr: "إنفينيتي" },
+    { makeName: "Volkswagen",    nameAr: "فولكس واجن" },
+    { makeName: "Mazda",         nameAr: "مازدا" },
+    { makeName: "Dodge",         nameAr: "دودج" },
+    { makeName: "RAM",           nameAr: "رام" },
+    { makeName: "Suzuki",        nameAr: "سوزوكي" },
+    { makeName: "MG",            nameAr: "إم جي" },
+    { makeName: "Porsche",       nameAr: "بورشه" },
+    { makeName: "Volvo",         nameAr: "فولفو" },
+    { makeName: "Lincoln",       nameAr: "لينكولن" },
   ];
 
-  await db
-    .insert(carMakes)
-    .values(makesData.map((m) => ({ makeName: m })))
-    .onConflictDoNothing();
+  for (const m of makesData) {
+    await db
+      .insert(carMakes)
+      .values({ makeName: m.makeName, nameAr: m.nameAr })
+      .onConflictDoNothing();
+    await db
+      .update(carMakes)
+      .set({ nameAr: m.nameAr })
+      .where(eq(carMakes.makeName, m.makeName));
+  }
 
   const allMakes = await db.select().from(carMakes);
   console.log(`Car makes: ${allMakes.length} rows`);
@@ -57,21 +87,33 @@ export async function seedReferenceData() {
 
   // ── Car Models ────────────────────────────────────────────────────────────
   const modelsData: { make: string; models: string[] }[] = [
-    { make: "Toyota", models: ["Camry", "Corolla", "Land Cruiser", "Hilux", "RAV4", "Yaris", "Prado", "Rush"] },
-    { make: "Honda", models: ["Accord", "Civic", "CR-V", "Pilot", "Odyssey"] },
-    { make: "Nissan", models: ["Altima", "Patrol", "Sentra", "Pathfinder", "X-Trail", "Sunny"] },
-    { make: "Hyundai", models: ["Elantra", "Sonata", "Tucson", "Accent", "Santa Fe", "Creta", "Palisade", "i10", "i20", "i30"] },
-    { make: "Kia", models: ["Sportage", "Optima", "Sorento", "Picanto", "Cerato", "Carnival"] },
-    { make: "Renault", models: ["Duster", "Logan", "Symbol", "Megane", "Fluence"] },
-    { make: "Mercedes-Benz", models: ["C-Class", "E-Class", "S-Class", "GLC", "GLE"] },
-    { make: "BMW", models: ["3 Series", "5 Series", "7 Series", "X5", "X6"] },
-    { make: "Lexus", models: ["LX", "GX", "RX", "ES", "IS"] },
-    { make: "Chevrolet", models: ["Malibu", "Tahoe", "Suburban", "Silverado", "Captiva"] },
-    { make: "Ford", models: ["F-150", "F-250", "F-350", "Explorer", "Expedition", "Expedition MAX", "Escape", "Fusion", "Edge", "Flex", "Bronco", "Bronco Sport", "Maverick", "Ranger", "Mustang", "Mustang Mach-E", "EcoSport", "Kuga", "Everest", "Focus", "Fiesta", "Mondeo", "Taurus", "Transit", "Transit Connect", "Galaxy", "S-Max", "Puma", "Territory"] },
-    { make: "GMC", models: ["Yukon", "Sierra", "Terrain", "Acadia"] },
-    { make: "Audi", models: ["A4", "A6", "Q5", "Q7"] },
-    { make: "Mitsubishi", models: ["Pajero", "L200", "Eclipse Cross", "ASX"] },
-    { make: "Cadillac", models: ["Escalade", "Escalade ESV", "CT4", "CT5", "CT6", "XT4", "XT5", "XT6", "ATS", "CTS", "SRX", "STS", "DTS"] },
+    { make: "Toyota",        models: ["Camry", "Corolla", "Land Cruiser", "Hilux", "RAV4", "Yaris", "Prado", "Rush", "FJ Cruiser", "Fortuner"] },
+    { make: "Honda",         models: ["Accord", "Civic", "CR-V", "Pilot", "Odyssey", "HR-V"] },
+    { make: "Nissan",        models: ["Altima", "Patrol", "Sentra", "Pathfinder", "X-Trail", "Sunny", "Navara", "Kicks", "Xterra"] },
+    { make: "Hyundai",       models: ["Elantra", "Sonata", "Tucson", "Accent", "Santa Fe", "Creta", "Palisade", "i10", "i20", "i30", "Azera", "Staria"] },
+    { make: "Kia",           models: ["Sportage", "Optima", "Sorento", "Picanto", "Cerato", "Carnival", "Telluride", "Stinger"] },
+    { make: "Renault",       models: ["Duster", "Logan", "Symbol", "Megane", "Fluence", "Koleos", "Captur", "Sandero"] },
+    { make: "Mercedes-Benz", models: ["C-Class", "E-Class", "S-Class", "GLC", "GLE", "GLS", "A-Class", "CLA", "G-Class"] },
+    { make: "BMW",           models: ["3 Series", "5 Series", "7 Series", "X3", "X5", "X6", "X7", "M3", "M5"] },
+    { make: "Lexus",         models: ["LX", "GX", "RX", "ES", "IS", "LS", "NX", "UX"] },
+    { make: "Chevrolet",     models: ["Malibu", "Tahoe", "Suburban", "Silverado", "Captiva", "TrailBlazer", "Spark"] },
+    { make: "Ford",          models: ["F-150", "Explorer", "Expedition", "Ranger", "Bronco", "Edge", "Mustang", "Escape", "Fusion", "Taurus", "Transit", "Everest"] },
+    { make: "GMC",           models: ["Yukon", "Sierra", "Terrain", "Acadia", "Suburban", "Canyon"] },
+    { make: "Audi",          models: ["A4", "A6", "A8", "Q3", "Q5", "Q7", "Q8", "e-tron"] },
+    { make: "Mitsubishi",    models: ["Pajero", "L200", "Eclipse Cross", "ASX", "Outlander", "Attrage"] },
+    { make: "Cadillac",      models: ["Escalade", "Escalade ESV", "CT5", "XT5", "XT6"] },
+    { make: "Land Rover",    models: ["Range Rover", "Range Rover Sport", "Range Rover Evoque", "Defender", "Discovery", "Discovery Sport"] },
+    { make: "Jeep",          models: ["Wrangler", "Grand Cherokee", "Cherokee", "Compass", "Renegade", "Gladiator"] },
+    { make: "Infiniti",      models: ["QX80", "QX60", "QX50", "Q50", "Q60", "QX30"] },
+    { make: "Volkswagen",    models: ["Passat", "Tiguan", "Golf", "Touareg", "Polo", "Jetta"] },
+    { make: "Mazda",         models: ["CX-5", "CX-9", "Mazda3", "Mazda6", "CX-3", "BT-50"] },
+    { make: "Dodge",         models: ["Charger", "Challenger", "Durango", "Journey"] },
+    { make: "RAM",           models: ["1500", "2500", "3500", "ProMaster"] },
+    { make: "Suzuki",        models: ["Vitara", "Swift", "Jimny", "Ertiga", "Baleno", "Ciaz"] },
+    { make: "MG",            models: ["MG5", "MG6", "HS", "ZS", "RX5", "T60"] },
+    { make: "Porsche",       models: ["Cayenne", "Macan", "Panamera", "911", "Taycan"] },
+    { make: "Volvo",         models: ["XC90", "XC60", "XC40", "S90", "S60", "V90"] },
+    { make: "Lincoln",       models: ["Navigator", "Aviator", "Nautilus", "Corsair", "Continental"] },
   ];
 
   const modelInserts: { makeId: string; modelName: string }[] = [];

@@ -330,6 +330,16 @@ Rules:
     }
   });
 
+  app.get("/api/car-models/counts", async (_req, res) => {
+    try {
+      const result = await db.select().from(carModels);
+      res.json({ models: result.map((m) => ({ makeId: m.makeId })) });
+    } catch (err: any) {
+      console.error("GET /api/car-models/counts error:", err?.message);
+      res.status(500).json({ error: "خطأ في جلب عدد الموديلات" });
+    }
+  });
+
   app.get("/api/car-models/:makeId", async (req, res) => {
     try {
       const { makeId } = req.params;

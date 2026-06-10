@@ -140,6 +140,34 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.duration(600).delay(450)}>
+        <Pressable
+          testID="button-car-brands"
+          onPress={() => rootNavigation.navigate("CarBrands")}
+          style={({ pressed }) => [
+            styles.ctaCard,
+            {
+              backgroundColor: theme.backgroundDefault,
+              opacity: pressed ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.99 : 1 }],
+              marginBottom: Spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.ctaContent}>
+            <ThemedText style={[styles.ctaTitle, { fontFamily: "Cairo_700Bold" }]}>
+              ماركات السيارات المتوفرة
+            </ThemedText>
+            <ThemedText style={[styles.ctaSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              تعرف على جميع الماركات المدعومة في المملكة
+            </ThemedText>
+          </View>
+          <View style={[styles.brandIcon, { backgroundColor: theme.primary + "15" }]}>
+            <Feather name="grid" size={22} color={theme.primary} />
+          </View>
+        </Pressable>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable
           testID="button-pricing-cta"
@@ -287,5 +315,12 @@ const styles = StyleSheet.create({
   ctaSubtitle: {
     fontSize: 12,
     textAlign: "right",
+  },
+  brandIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.sm,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

@@ -193,6 +193,7 @@ export const carMakes = pgTable("car_makes", {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   makeName: varchar("make_name", { length: 50 }).notNull().unique(),
+  nameAr: varchar("name_ar", { length: 80 }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

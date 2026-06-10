@@ -14,6 +14,7 @@ const ExpertScreen = lazy(() => import("@/screens/ExpertScreen"));
 const NewInspectionScreen = lazy(() => import("@/screens/NewInspectionScreen"));
 const InspectionDetailScreen = lazy(() => import("@/screens/InspectionDetailScreen"));
 const QuotesListScreen = lazy(() => import("@/screens/QuotesListScreen"));
+const CarBrandsScreen = lazy(() => import("@/screens/CarBrandsScreen"));
 
 function ScreenFallback() {
   return (
@@ -70,6 +71,7 @@ export type RootStackParamList = {
   NewInspection: undefined;
   InspectionDetail: { inspectionId: string };
   QuotesList: { inspectionId: string };
+  CarBrands: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -158,6 +160,13 @@ export default function RootStackNavigator() {
         component={withSuspense(QuotesListScreen)}
         options={{
           headerTitle: "عروض الأسعار",
+        }}
+      />
+      <Stack.Screen
+        name="CarBrands"
+        component={withSuspense(CarBrandsScreen)}
+        options={{
+          headerTitle: "ماركات السيارات",
         }}
       />
     </Stack.Navigator>
