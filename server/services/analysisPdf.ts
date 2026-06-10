@@ -433,7 +433,12 @@ export async function generateAnalysisPdf(
       drawBilingualHeaders();
 
       parts.forEach((part, i) => {
-        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; drawBilingualHeaders(); }
+        if (rowTop > doc.page.height - 100) {
+          doc.addPage(); rowTop = 60;
+          sectionBar(rowTop, `(تابع) ${L.detectedPartsAr}`, `${L.detectedPartsEn} (Cont.)`);
+          rowTop += 28;
+          drawBilingualHeaders();
+        }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("ArabicBold").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
@@ -471,7 +476,12 @@ export async function generateAnalysisPdf(
       drawArHeaders();
 
       parts.forEach((part, i) => {
-        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; drawArHeaders(); }
+        if (rowTop > doc.page.height - 100) {
+          doc.addPage(); rowTop = 60;
+          sectionBar(rowTop, `(تابع) ${L.detectedPartsAr}`, "");
+          rowTop += 28;
+          drawArHeaders();
+        }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("ArabicBold").fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
@@ -507,7 +517,12 @@ export async function generateAnalysisPdf(
       drawEnHeaders();
 
       parts.forEach((part, i) => {
-        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; drawEnHeaders(); }
+        if (rowTop > doc.page.height - 100) {
+          doc.addPage(); rowTop = 60;
+          sectionBar(rowTop, "", `${L.detectedPartsEn} (Cont.)`);
+          rowTop += 28;
+          drawEnHeaders();
+        }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
