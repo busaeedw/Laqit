@@ -427,9 +427,7 @@ export default function ResultsScreen() {
       }
 
       const arrayBuffer = await resp.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-      );
+      const base64 = arrayBufferToBase64(arrayBuffer);
 
       const filename = `laqit-preview-${Date.now()}.pdf`;
       const fileUri = (FileSystem.cacheDirectory ?? "") + filename;
