@@ -297,9 +297,10 @@ export default function AccountScreen() {
     setFormErrors({});
 
     try {
-      const mobileE164 = formMobile.trim().startsWith("+")
-        ? formMobile.trim()
-        : `+966${formMobile.trim().replace(/^0/, "")}`;
+      const rawMobile = formMobile.trim().replace(/[\s\-\(\)]/g, "");
+      const mobileE164 = rawMobile.startsWith("+")
+        ? rawMobile
+        : `+966${rawMobile.replace(/^0/, "")}`;
 
       const response = await fetch(
         new URL("/api/customers/login", getApiUrl()).toString(),
@@ -453,9 +454,10 @@ export default function AccountScreen() {
     setFormErrors({});
 
     try {
-      const mobileE164 = formMobile.trim().startsWith("+")
-        ? formMobile.trim()
-        : `+966${formMobile.trim().replace(/^0/, "")}`;
+      const rawMobile = formMobile.trim().replace(/[\s\-\(\)]/g, "");
+      const mobileE164 = rawMobile.startsWith("+")
+        ? rawMobile
+        : `+966${rawMobile.replace(/^0/, "")}`;
 
       // Register in new customers table
       const custResponse = await fetch(
