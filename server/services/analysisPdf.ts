@@ -476,14 +476,15 @@ export async function generateAnalysisPdf(
     }
 
     // ── Footer ────────────────────────────────────────────────────────────────
+    const footerStyle = { fontSize: 8, fillColor: gray, lineSpacing: 12 };
     const footerY = doc.page.height - 50;
     if (L.footerEn) {
-      doc.font("Helvetica-Bold").fontSize(8).fillColor(gray)
+      doc.font("Helvetica-Bold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
         .text(L.footerEn, 50, footerY, { width: pageWidth, align: "center" });
     }
     if (L.footerAr) {
-      const arFooterY = L.footerEn ? footerY + 12 : footerY;
-      doc.font("ArabicBold").fontSize(8).fillColor(gray)
+      const arFooterY = L.footerEn ? footerY + footerStyle.lineSpacing : footerY;
+      doc.font("ArabicBold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
         .text(L.footerAr, 50, arFooterY, { width: pageWidth, align: "center" });
     }
 
