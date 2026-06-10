@@ -381,7 +381,7 @@ export async function generateAnalysisPdf(
         if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, 24).fill(light);
 
-        doc.font("ArabicBold").fontSize(10).fillColor(dark)
+        doc.font("ArabicBold").fontSize(9).fillColor(dark)
           .text(part.nameAr, c1, rowTop + 6, { width: pageWidth * 0.34, align: "right" });
         doc.font("Helvetica-Bold").fontSize(9).fillColor(dark)
           .text(part.name, c2, rowTop + 8, { width: pageWidth * 0.25 });
