@@ -271,6 +271,9 @@ export async function generateAnalysisPdf(
     // Footer text (font size, color, and spacing between EN and AR lines)
     const footerStyle = { fontSize: 8, fillColor: gray, lineSpacing: 12 };
 
+    // Page-number text in the bottom margin
+    const pageNumberStyle = { fontSize: 7, fillColor: gray };
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     // Draw a section bar with separate Arabic (right) and/or English (left) label.
@@ -591,16 +594,16 @@ export async function generateAnalysisPdf(
         doc.y = doc.page.margins.top; // prevent overflow-guard false-positive
         const pageNum = p + 1;
         if (isBilingual) {
-          doc.font("Helvetica").fontSize(7).fillColor(gray)
+          doc.font("Helvetica").fontSize(pageNumberStyle.fontSize).fillColor(pageNumberStyle.fillColor)
             .text(`Page ${pageNum} / ${totalPages}`, 50, pageNumY, { width: pageWidth * 0.5, align: "left", lineBreak: false });
           doc.y = doc.page.margins.top;
-          doc.font("Arabic").fontSize(7).fillColor(gray)
+          doc.font("Arabic").fontSize(pageNumberStyle.fontSize).fillColor(pageNumberStyle.fillColor)
             .text(`${totalPages} / ${pageNum} صفحة`, 50 + pageWidth * 0.5, pageNumY, { width: pageWidth * 0.5, align: "right", lineBreak: false });
         } else if (isAr) {
-          doc.font("Arabic").fontSize(7).fillColor(gray)
+          doc.font("Arabic").fontSize(pageNumberStyle.fontSize).fillColor(pageNumberStyle.fillColor)
             .text(`${totalPages} / ${pageNum} صفحة`, 50, pageNumY, { width: pageWidth, align: "right", lineBreak: false });
         } else {
-          doc.font("Helvetica").fontSize(7).fillColor(gray)
+          doc.font("Helvetica").fontSize(pageNumberStyle.fontSize).fillColor(pageNumberStyle.fillColor)
             .text(`Page ${pageNum} / ${totalPages}`, 50, pageNumY, { width: pageWidth, align: "left", lineBreak: false });
         }
       }
