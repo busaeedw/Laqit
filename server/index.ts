@@ -246,6 +246,17 @@ function configureExpoAndLanding(app: express.Application) {
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
 
+  // Admin agents management page — served before the dev proxy / prod catch-all
+  app.get("/admin", (_req: Request, res: Response) => {
+    const templatePath = path.resolve(process.cwd(), "server", "templates", "admin-agents.html");
+    if (fs.existsSync(templatePath)) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.sendFile(templatePath);
+    } else {
+      res.status(404).send("Admin page not found");
+    }
+  });
+
   if (isDev) {
     // In development: proxy all non-API browser requests to the Expo web dev server
     const expoProxy = createProxyMiddleware({

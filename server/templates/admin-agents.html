@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Laqit — Car Brand Agents Admin</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        background: #f5f7fa;
+        color: #1a1a2e;
+        min-height: 100vh;
+      }
+
+      /* ── Auth overlay ─────────────────────────────────────────── */
+      #auth-screen {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .auth-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        padding: 40px 36px;
+        width: 100%;
+        max-width: 400px;
+      }
+      .auth-card h1 {
+        margin: 0 0 6px;
+        font-size: 20px;
+        font-weight: 700;
+        color: #1E74F2;
+      }
+      .auth-card p {
+        margin: 0 0 28px;
+        color: #666;
+        font-size: 13px;
+      }
+      .auth-card input {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1.5px solid #dde1ea;
+        border-radius: 8px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .auth-card input:focus { border-color: #1E74F2; }
+      .auth-card button {
+        margin-top: 12px;
+        width: 100%;
+        padding: 11px;
+        background: #1E74F2;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .auth-card button:hover { background: #1560d4; }
+      .auth-error {
+        margin-top: 10px;
+        color: #d9363e;
+        font-size: 13px;
+        display: none;
+      }
+
+      /* ── Main layout ──────────────────────────────────────────── */
+      #main-screen { display: none; }
+
+      header {
+        background: #fff;
+        border-bottom: 1px solid #e8ecf3;
+        padding: 0 28px;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      header .brand {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1E74F2;
+      }
+      header .brand span {
+        color: #333;
+        font-weight: 400;
+        font-size: 13px;
+        margin-left: 8px;
+      }
+      .logout-btn {
+        background: none;
+        border: 1.5px solid #dde1ea;
+        border-radius: 7px;
+        padding: 6px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        color: #555;
+        transition: border-color 0.15s, color 0.15s;
+      }
+      .logout-btn:hover { border-color: #aaa; color: #111; }
+
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 28px 20px 60px;
+      }
+      .page-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 6px;
+      }
+      .page-sub {
+        font-size: 13px;
+        color: #666;
+        margin: 0 0 24px;
+      }
+
+      /* ── Table ────────────────────────────────────────────────── */
+      .table-wrap {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 8px rgba(0,0,0,0.07);
+        overflow: hidden;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      thead tr {
+        background: #f0f4fb;
+      }
+      th {
+        padding: 11px 14px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 12px;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      td {
+        padding: 10px 14px;
+        border-top: 1px solid #f0f2f7;
+        vertical-align: middle;
+      }
+      tbody tr:hover { background: #f9fbff; }
+
+      .make-name {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .make-name-ar {
+        font-size: 12px;
+        color: #888;
+        direction: rtl;
+      }
+
+      /* ── Inline edit ──────────────────────────────────────────── */
+      .field-cell {
+        position: relative;
+      }
+      .field-display {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 28px;
+      }
+      .field-value {
+        flex: 1;
+        color: #1a1a2e;
+        word-break: break-word;
+      }
+      .field-value.empty { color: #bbb; font-style: italic; }
+      .edit-btn {
+        opacity: 0;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 3px 6px;
+        border-radius: 5px;
+        color: #1E74F2;
+        font-size: 12px;
+        transition: opacity 0.1s, background 0.1s;
+        white-space: nowrap;
+      }
+      tbody tr:hover .edit-btn { opacity: 1; }
+      .edit-btn:hover { background: #e8f0fe; }
+
+      .field-edit { display: none; }
+      .field-edit input {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1.5px solid #1E74F2;
+        border-radius: 6px;
+        font-size: 13px;
+        outline: none;
+        background: #f0f4ff;
+      }
+      .edit-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 5px;
+      }
+      .save-btn, .cancel-btn {
+        padding: 4px 12px;
+        border-radius: 5px;
+        border: none;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.12s;
+      }
+      .save-btn { background: #1E74F2; color: #fff; }
+      .save-btn:hover { background: #1560d4; }
+      .cancel-btn { background: #eef0f5; color: #555; }
+      .cancel-btn:hover { background: #dde1ea; }
+
+      /* Row-level save all button */
+      .row-save-btn {
+        background: #1E74F2;
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.12s;
+        display: none;
+      }
+      .row-save-btn:hover { background: #1560d4; }
+      .row-save-btn.visible { display: inline-block; }
+      .row-save-btn.saving { background: #aaa; pointer-events: none; }
+
+      .row-status {
+        font-size: 12px;
+        margin-left: 8px;
+        display: none;
+      }
+      .row-status.ok { color: #2e7d32; display: inline; }
+      .row-status.err { color: #d9363e; display: inline; }
+
+      /* ── Loading / empty states ───────────────────────────────── */
+      .state-row td {
+        padding: 40px;
+        text-align: center;
+        color: #888;
+        font-size: 14px;
+      }
+      .spinner {
+        display: inline-block;
+        width: 22px;
+        height: 22px;
+        border: 2.5px solid #dde1ea;
+        border-top-color: #1E74F2;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        vertical-align: middle;
+        margin-right: 8px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .no-agent { color: #bbb; font-style: italic; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+
+    <!-- ── Auth screen ───────────────────────────────────────── -->
+    <div id="auth-screen">
+      <div class="auth-card">
+        <h1>Laqit Admin</h1>
+        <p>Enter the admin API key to manage car brand agent data.</p>
+        <input type="password" id="api-key-input" placeholder="Admin API key" autocomplete="current-password" />
+        <button id="auth-btn" onclick="authenticate()">Sign in</button>
+        <div class="auth-error" id="auth-error">Invalid API key. Please try again.</div>
+      </div>
+    </div>
+
+    <!-- ── Main screen ───────────────────────────────────────── -->
+    <div id="main-screen">
+      <header>
+        <div class="brand">
+          Laqit Admin
+          <span>Car Brand Agents</span>
+        </div>
+        <button class="logout-btn" onclick="logout()">Sign out</button>
+      </header>
+      <main>
+        <div class="page-title">Car Brand Agents</div>
+        <p class="page-sub">
+          Manage authorized Saudi distributor data for each car brand.
+          Click any field to edit it inline, then save the row.
+        </p>
+        <div class="table-wrap">
+          <table id="makes-table">
+            <thead>
+              <tr>
+                <th style="min-width:120px">Brand</th>
+                <th style="min-width:160px">Agent Name (EN)</th>
+                <th style="min-width:140px">Agent Name (AR)</th>
+                <th style="min-width:140px">Website</th>
+                <th style="min-width:120px">Phone</th>
+                <th style="min-width:120px">HQ City</th>
+                <th style="min-width:80px"></th>
+              </tr>
+            </thead>
+            <tbody id="makes-tbody">
+              <tr class="state-row">
+                <td colspan="7">
+                  <span class="spinner"></span> Loading…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const SESSION_KEY = "laqit_admin_key";
+      let adminKey = sessionStorage.getItem(SESSION_KEY) || "";
+      let makesData = [];
+
+      // ── Auth ──────────────────────────────────────────────────
+      function authenticate() {
+        const input = document.getElementById("api-key-input");
+        const key = input.value.trim();
+        if (!key) return;
+        adminKey = key;
+        // Test the key against the API
+        fetch("/api/vendors", { headers: { "x-admin-api-key": key } })
+          .then(r => {
+            if (r.status === 403 || r.status === 401) throw new Error("forbidden");
+            return r.json();
+          })
+          .then(() => {
+            sessionStorage.setItem(SESSION_KEY, key);
+            showMain();
+          })
+          .catch(() => {
+            document.getElementById("auth-error").style.display = "block";
+            adminKey = "";
+          });
+      }
+
+      document.getElementById("api-key-input").addEventListener("keydown", e => {
+        if (e.key === "Enter") authenticate();
+      });
+
+      function logout() {
+        sessionStorage.removeItem(SESSION_KEY);
+        adminKey = "";
+        document.getElementById("main-screen").style.display = "none";
+        document.getElementById("auth-screen").style.display = "flex";
+        document.getElementById("api-key-input").value = "";
+        document.getElementById("auth-error").style.display = "none";
+      }
+
+      function showMain() {
+        document.getElementById("auth-screen").style.display = "none";
+        document.getElementById("main-screen").style.display = "block";
+        loadMakes();
+      }
+
+      // Auto-sign in if key is stored
+      if (adminKey) {
+        fetch("/api/vendors", { headers: { "x-admin-api-key": adminKey } })
+          .then(r => r.ok ? showMain() : logout())
+          .catch(() => logout());
+      }
+
+      // ── Data loading ──────────────────────────────────────────
+      function loadMakes() {
+        const tbody = document.getElementById("makes-tbody");
+        tbody.innerHTML = '<tr class="state-row"><td colspan="7"><span class="spinner"></span> Loading…</td></tr>';
+
+        fetch("/api/car-makes")
+          .then(r => r.json())
+          .then(data => {
+            makesData = data.makes || [];
+            if (makesData.length === 0) {
+              tbody.innerHTML = '<tr class="state-row"><td colspan="7">No car brands found.</td></tr>';
+              return;
+            }
+            renderTable(makesData);
+          })
+          .catch(err => {
+            tbody.innerHTML = `<tr class="state-row"><td colspan="7">Failed to load brands: ${err.message}</td></tr>`;
+          });
+      }
+
+      // ── Rendering ─────────────────────────────────────────────
+      function renderTable(makes) {
+        const tbody = document.getElementById("makes-tbody");
+        tbody.innerHTML = "";
+        makes.forEach(make => {
+          const tr = buildRow(make);
+          tbody.appendChild(tr);
+        });
+      }
+
+      const EDITABLE_FIELDS = [
+        { key: "agentNameEn", label: "Agent Name (EN)", rtl: false },
+        { key: "agentNameAr", label: "اسم الوكيل", rtl: true },
+        { key: "website",     label: "Website",        rtl: false },
+        { key: "phone",       label: "Phone",          rtl: false },
+        { key: "headquartersCity", label: "HQ City",   rtl: false },
+      ];
+
+      function buildRow(make) {
+        const tr = document.createElement("tr");
+        tr.dataset.makeId = make.makeId;
+
+        // Brand cell
+        const tdBrand = document.createElement("td");
+        tdBrand.innerHTML = `<div class="make-name">${esc(make.makeName)}</div>`
+          + (make.nameAr ? `<div class="make-name-ar">${esc(make.nameAr)}</div>` : "");
+        tr.appendChild(tdBrand);
+
+        const agent = make.agent || {};
+        const pending = {}; // tracks unsaved changes per field
+
+        EDITABLE_FIELDS.forEach(f => {
+          const td = document.createElement("td");
+          td.className = "field-cell";
+
+          const currentVal = agent[f.key] || "";
+
+          const displayDiv = document.createElement("div");
+          displayDiv.className = "field-display";
+
+          const valueSpan = document.createElement("span");
+          valueSpan.className = "field-value" + (currentVal ? "" : " empty");
+          valueSpan.textContent = currentVal || "—";
+          if (f.rtl) valueSpan.style.direction = "rtl";
+          displayDiv.appendChild(valueSpan);
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "edit-btn";
+          editBtn.textContent = "Edit";
+          editBtn.onclick = () => startEdit(td, f, valueSpan, editDiv, editInput, displayDiv, pending, tr);
+          displayDiv.appendChild(editBtn);
+
+          const editDiv = document.createElement("div");
+          editDiv.className = "field-edit";
+
+          const editInput = document.createElement("input");
+          editInput.type = "text";
+          editInput.value = currentVal;
+          if (f.rtl) editInput.style.direction = "rtl";
+          editInput.placeholder = f.label;
+          editDiv.appendChild(editInput);
+
+          const actionsDiv = document.createElement("div");
+          actionsDiv.className = "edit-actions";
+
+          const saveFieldBtn = document.createElement("button");
+          saveFieldBtn.className = "save-btn";
+          saveFieldBtn.textContent = "OK";
+          saveFieldBtn.onclick = () => commitEdit(td, f, valueSpan, editDiv, editInput, displayDiv, pending, tr);
+
+          const cancelBtn = document.createElement("button");
+          cancelBtn.className = "cancel-btn";
+          cancelBtn.textContent = "Cancel";
+          cancelBtn.onclick = () => cancelEdit(td, editDiv, displayDiv);
+
+          actionsDiv.appendChild(saveFieldBtn);
+          actionsDiv.appendChild(cancelBtn);
+          editDiv.appendChild(actionsDiv);
+
+          editInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") commitEdit(td, f, valueSpan, editDiv, editInput, displayDiv, pending, tr);
+            if (e.key === "Escape") cancelEdit(td, editDiv, displayDiv);
+          });
+
+          td.appendChild(displayDiv);
+          td.appendChild(editDiv);
+          tr.appendChild(td);
+        });
+
+        // Save row button cell
+        const tdAction = document.createElement("td");
+
+        const saveRowBtn = document.createElement("button");
+        saveRowBtn.className = "row-save-btn";
+        saveRowBtn.textContent = "Save";
+        saveRowBtn.onclick = () => saveRow(make, pending, saveRowBtn, statusSpan);
+        tr.dataset.saveBtn = "";
+        tdAction.appendChild(saveRowBtn);
+
+        const statusSpan = document.createElement("span");
+        statusSpan.className = "row-status";
+        tdAction.appendChild(statusSpan);
+
+        tr.appendChild(tdAction);
+
+        // Store references for use by field edit callbacks
+        tr._pending = pending;
+        tr._saveRowBtn = saveRowBtn;
+        tr._statusSpan = statusSpan;
+        tr._agent = agent;
+
+        return tr;
+      }
+
+      function startEdit(td, f, valueSpan, editDiv, editInput, displayDiv, pending, tr) {
+        displayDiv.style.display = "none";
+        editDiv.style.display = "block";
+        editInput.focus();
+        editInput.select();
+      }
+
+      function commitEdit(td, f, valueSpan, editDiv, editInput, displayDiv, pending, tr) {
+        const newVal = editInput.value.trim();
+        pending[f.key] = newVal;
+        valueSpan.textContent = newVal || "—";
+        valueSpan.className = "field-value" + (newVal ? "" : " empty");
+        displayDiv.style.display = "flex";
+        editDiv.style.display = "none";
+        // Show save button
+        tr._saveRowBtn.classList.add("visible");
+        tr._statusSpan.className = "row-status";
+      }
+
+      function cancelEdit(td, editDiv, displayDiv) {
+        displayDiv.style.display = "flex";
+        editDiv.style.display = "none";
+      }
+
+      // ── Saving ────────────────────────────────────────────────
+      function saveRow(make, pending, saveRowBtn, statusSpan) {
+        const agent = make.agent || {};
+        const payload = {
+          agentNameEn: pending.agentNameEn !== undefined ? pending.agentNameEn : (agent.agentNameEn || ""),
+          agentNameAr: pending.agentNameAr !== undefined ? pending.agentNameAr : (agent.agentNameAr || ""),
+          website: pending.website !== undefined ? pending.website : (agent.website || ""),
+          phone: pending.phone !== undefined ? pending.phone : (agent.phone || ""),
+          headquartersCity: pending.headquartersCity !== undefined ? pending.headquartersCity : (agent.headquartersCity || ""),
+        };
+
+        if (!payload.agentNameEn) {
+          statusSpan.textContent = "Agent Name (EN) is required";
+          statusSpan.className = "row-status err";
+          return;
+        }
+
+        saveRowBtn.textContent = "Saving…";
+        saveRowBtn.classList.add("saving");
+        statusSpan.className = "row-status";
+
+        fetch(`/api/car-makes/${make.makeId}/agent`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-api-key": adminKey,
+          },
+          body: JSON.stringify(payload),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success) {
+              // Merge back into make.agent
+              make.agent = Object.assign(make.agent || {}, payload);
+              // Clear pending
+              Object.keys(pending).forEach(k => delete pending[k]);
+              saveRowBtn.classList.remove("visible", "saving");
+              saveRowBtn.textContent = "Save";
+              statusSpan.textContent = "Saved";
+              statusSpan.className = "row-status ok";
+              setTimeout(() => { statusSpan.className = "row-status"; }, 2500);
+            } else {
+              throw new Error(data.error || "Unknown error");
+            }
+          })
+          .catch(err => {
+            saveRowBtn.classList.remove("saving");
+            saveRowBtn.textContent = "Save";
+            statusSpan.textContent = err.message;
+            statusSpan.className = "row-status err";
+          });
+      }
+
+      // ── Helpers ───────────────────────────────────────────────
+      function esc(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+    </script>
+  </body>
+</html>

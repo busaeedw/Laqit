@@ -404,6 +404,34 @@ Rules:
     }
   });
 
+  app.patch("/api/car-makes/:makeId/agent", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { makeId } = req.params;
+      const { agentNameEn, agentNameAr, website, phone, headquartersCity } = req.body;
+      if (!agentNameEn) {
+        return res.status(400).json({ error: "agentNameEn is required" });
+      }
+      const [agent] = await db
+        .insert(carMakeAgents)
+        .values({ makeId, agentNameEn, agentNameAr: agentNameAr || null, website: website || null, phone: phone || null, headquartersCity: headquartersCity || null })
+        .onConflictDoUpdate({
+          target: carMakeAgents.makeId,
+          set: {
+            agentNameEn,
+            agentNameAr: agentNameAr || null,
+            website: website || null,
+            phone: phone || null,
+            headquartersCity: headquartersCity || null,
+          },
+        })
+        .returning();
+      res.json({ success: true, agent });
+    } catch (err: any) {
+      console.error("PATCH /api/car-makes/:makeId/agent error:", err?.message);
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   app.get("/api/car-models/counts", async (_req, res) => {
     try {
       const result = await db.select().from(carModels);
