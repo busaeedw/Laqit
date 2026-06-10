@@ -165,6 +165,12 @@ export const aiCustomerLimiter = new RateLimiter(60 * 60 * 1000, 20);
  */
 export const aiIpLimiter = new RateLimiter(60 * 60 * 1000, 40);
 
+/**
+ * Per-IP email send limiter: 5 requests per minute per IP.
+ * Prevents email abuse from the analysis PDF send endpoint.
+ */
+export const emailIpLimiter = new RateLimiter(60 * 1000, 5);
+
 // ─── OTP Store ──────────────────────────────────────────────────────────────
 
 interface OtpEntry {

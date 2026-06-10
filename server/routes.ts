@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { createHmac, timingSafeEqual } from "crypto";
 import OpenAI from "openai";
 import { db } from "./db";
-import { signToken, requireCustomer, optionalCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter } from "./auth";
+import { signToken, requireCustomer, optionalCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter, emailIpLimiter } from "./auth";
 import {
   users,
   inspections,
@@ -32,6 +32,8 @@ import { sendWhatsAppMessage } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
 import { createPaymentIntent } from "./services/payment";
+import { generateAnalysisPdf } from "./services/analysisPdf";
+import { sendAnalysisPdfEmail } from "./services/email";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -306,6 +308,46 @@ Rules:
     } catch (err: any) {
       console.error("identify-car error:", err?.message);
       res.status(500).json({ error: "فشل في تحليل صورة السيارة" });
+    }
+  });
+
+  // ─── Analysis PDF Email ───────────────────────────────────────────────────
+
+  app.post("/api/analysis/send-pdf", async (req, res) => {
+    try {
+      const ip = clientIp(req);
+      if (!emailIpLimiter.check(ip)) {
+        const retryAfter = emailIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
+      const { email, carInfo, parts } = req.body;
+
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "البريد الإلكتروني غير صحيح" });
+      }
+
+      if (!carInfo || !Array.isArray(parts)) {
+        return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
+      }
+
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts);
+      const filename = `laqit-analysis-${Date.now()}.pdf`;
+      const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
+
+      if (!result.success) {
+        return res.status(500).json({ error: "فشل في إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
+      }
+
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("send-pdf error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إنشاء أو إرسال التقرير" });
     }
   });
 
