@@ -57,19 +57,28 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+type PdfLocale = "ar" | "en" | "bilingual";
+
 interface EmailModalProps {
   visible: boolean;
   defaultEmail: string;
   onClose: () => void;
-  onSend: (email: string) => void;
+  onSend: (email: string, locale: PdfLocale) => void;
   sending: boolean;
   error: string | null;
 }
+
+const LOCALE_OPTIONS: { key: PdfLocale; label: string }[] = [
+  { key: "ar", label: "عربي" },
+  { key: "en", label: "English" },
+  { key: "bilingual", label: "ثنائي" },
+];
 
 function EmailModal({ visible, defaultEmail, onClose, onSend, sending, error }: EmailModalProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState(defaultEmail);
+  const [locale, setLocale] = useState<PdfLocale>("ar");
 
   React.useEffect(() => {
     if (visible) setEmail(defaultEmail);
@@ -113,6 +122,35 @@ function EmailModal({ visible, defaultEmail, onClose, onSend, sending, error }: 
             />
           </View>
 
+          <ThemedText style={[styles.localeLabel, { color: theme.textSecondary, fontFamily: "Cairo_600SemiBold" }]}>
+            لغة التقرير
+          </ThemedText>
+          <View style={[styles.localeToggle, { backgroundColor: theme.backgroundRoot, borderColor: theme.border }]}>
+            {LOCALE_OPTIONS.map((opt) => {
+              const isSelected = locale === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setLocale(opt.key)}
+                  style={[
+                    styles.localeOption,
+                    isSelected && { backgroundColor: theme.primary },
+                  ]}
+                  testID={`button-locale-${opt.key}`}
+                >
+                  <ThemedText
+                    style={[
+                      styles.localeOptionText,
+                      { fontFamily: "Cairo_600SemiBold", color: isSelected ? "#FFFFFF" : theme.textSecondary },
+                    ]}
+                  >
+                    {opt.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {error != null ? (
             <View style={[styles.errorBanner, { backgroundColor: theme.error + "15" }]}>
               <Feather name="alert-circle" size={14} color={theme.error} />
@@ -133,7 +171,7 @@ function EmailModal({ visible, defaultEmail, onClose, onSend, sending, error }: 
             </Pressable>
 
             <Pressable
-              onPress={() => onSend(email)}
+              onPress={() => onSend(email, locale)}
               disabled={sending}
               style={[styles.sendButton, { backgroundColor: theme.primary, opacity: sending ? 0.7 : 1 }]}
               testID="button-send-pdf"
@@ -484,7 +522,7 @@ export default function ResultsScreen() {
     }
   };
 
-  const handleSendPdf = async (email: string) => {
+  const handleSendPdf = async (email: string, locale: PdfLocale) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
       setSendError("يرجى إدخال بريد إلكتروني صحيح");
@@ -499,7 +537,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, carInfo, parts, imageUri }),
+        body: JSON.stringify({ email, carInfo, parts, imageUri, locale }),
       });
 
       const json = await resp.json();
@@ -1306,6 +1344,26 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     height: "100%",
+  },
+  localeLabel: {
+    fontSize: 13,
+    textAlign: "right",
+    marginTop: -Spacing.xs,
+  },
+  localeToggle: {
+    flexDirection: "row-reverse",
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  localeOption: {
+    flex: 1,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  localeOptionText: {
+    fontSize: 13,
   },
   errorBanner: {
     flexDirection: "row-reverse",
