@@ -12,33 +12,13 @@ import {
 import { eq } from "drizzle-orm";
 import { pathToFileURL } from "url";
 
-export async function seedReferenceData() {
-  console.log("Seeding reference data...");
-
-  // ── Cities ────────────────────────────────────────────────────────────────
-  const cityData = [
-    { nameAr: "الرياض", nameEn: "Riyadh" },
-    { nameAr: "جدة", nameEn: "Jeddah" },
-    { nameAr: "الدمام", nameEn: "Dammam" },
-    { nameAr: "المدينة المنورة", nameEn: "Medina" },
-    { nameAr: "مكة المكرمة", nameEn: "Mecca" },
-    { nameAr: "الخبر", nameEn: "Khobar" },
-    { nameAr: "تبوك", nameEn: "Tabuk" },
-    { nameAr: "أبها", nameEn: "Abha" },
-    { nameAr: "القصيم", nameEn: "Qassim" },
-    { nameAr: "حائل", nameEn: "Hail" },
-  ];
-
-  const insertedCities = await db
-    .insert(cities)
-    .values(cityData.map((c) => ({ nameAr: c.nameAr, nameEn: c.nameEn, countryCode: "SA" })))
-    .onConflictDoNothing()
-    .returning();
-
-  const allCities = await db.select().from(cities);
-  console.log(`Cities: ${allCities.length} rows`);
-
-  // ── Car Makes ─────────────────────────────────────────────────────────────
+/**
+ * Upsert the car makes and models catalog.
+ * Safe to call on every server startup — fully idempotent.
+ * New makes/models added to the seed list will appear automatically
+ * without wiping any existing data.
+ */
+export async function syncCarCatalog() {
   const makesData: { makeName: string; nameAr: string }[] = [
     { makeName: "Toyota",        nameAr: "تويوتا" },
     { makeName: "Honda",         nameAr: "هوندا" },
@@ -67,12 +47,9 @@ export async function seedReferenceData() {
     { makeName: "Porsche",       nameAr: "بورشه" },
     { makeName: "Volvo",         nameAr: "فولفو" },
     { makeName: "Lincoln",       nameAr: "لينكولن" },
-    // ── Korean ────────────────────────────────────────────────────────────────
     { makeName: "Genesis",       nameAr: "جينيسيس" },
-    // ── Japanese ──────────────────────────────────────────────────────────────
     { makeName: "Subaru",        nameAr: "سوبارو" },
     { makeName: "Isuzu",         nameAr: "إيسوزو" },
-    // ── Chinese ───────────────────────────────────────────────────────────────
     { makeName: "BYD",           nameAr: "بي واي دي" },
     { makeName: "Geely",         nameAr: "جيلي" },
     { makeName: "Chery",         nameAr: "شيري" },
@@ -100,7 +77,6 @@ export async function seedReferenceData() {
   const makeMap: Record<string, string> = {};
   allMakes.forEach((m) => (makeMap[m.makeName] = m.makeId));
 
-  // ── Car Models ────────────────────────────────────────────────────────────
   const modelsData: { make: string; models: string[] }[] = [
     { make: "Toyota",        models: ["Camry", "Corolla", "Land Cruiser", "Hilux", "RAV4", "Yaris", "Prado", "Rush", "FJ Cruiser", "Fortuner"] },
     { make: "Honda",         models: ["Accord", "Civic", "CR-V", "Pilot", "Odyssey", "HR-V"] },
@@ -129,12 +105,9 @@ export async function seedReferenceData() {
     { make: "Porsche",       models: ["Cayenne", "Macan", "Panamera", "911", "Taycan"] },
     { make: "Volvo",         models: ["XC90", "XC60", "XC40", "S90", "S60", "V90"] },
     { make: "Lincoln",       models: ["Navigator", "Aviator", "Nautilus", "Corsair", "Continental"] },
-    // ── Korean ────────────────────────────────────────────────────────────────
     { make: "Genesis",       models: ["G70", "G80", "G90", "GV70", "GV80", "GV60"] },
-    // ── Japanese ──────────────────────────────────────────────────────────────
     { make: "Subaru",        models: ["Outback", "Forester", "XV", "Impreza", "Legacy", "BRZ"] },
     { make: "Isuzu",         models: ["D-Max", "MU-X", "Trooper", "Elf"] },
-    // ── Chinese ───────────────────────────────────────────────────────────────
     { make: "BYD",           models: ["Seal", "Atto 3", "Han", "Tang", "Song Plus", "Dolphin", "Seal U", "Sea Lion 6"] },
     { make: "Geely",         models: ["Coolray", "Tugella", "Okavango", "Preface", "Monjaro", "Emgrand"] },
     { make: "Chery",         models: ["Tiggo 4 Pro", "Tiggo 7 Pro", "Tiggo 8 Pro", "Arrizo 6 Pro", "Arrizo 8"] },
@@ -154,11 +127,48 @@ export async function seedReferenceData() {
     }
   }
 
-  await db.insert(carModels).values(modelInserts).onConflictDoNothing();
+  if (modelInserts.length > 0) {
+    await db.insert(carModels).values(modelInserts).onConflictDoNothing();
+  }
 
   const allModels = await db.select().from(carModels);
   console.log(`Car models: ${allModels.length} rows`);
+}
 
+export async function seedReferenceData() {
+  console.log("Seeding reference data...");
+
+  // ── Cities ────────────────────────────────────────────────────────────────
+  const cityData = [
+    { nameAr: "الرياض", nameEn: "Riyadh" },
+    { nameAr: "جدة", nameEn: "Jeddah" },
+    { nameAr: "الدمام", nameEn: "Dammam" },
+    { nameAr: "المدينة المنورة", nameEn: "Medina" },
+    { nameAr: "مكة المكرمة", nameEn: "Mecca" },
+    { nameAr: "الخبر", nameEn: "Khobar" },
+    { nameAr: "تبوك", nameEn: "Tabuk" },
+    { nameAr: "أبها", nameEn: "Abha" },
+    { nameAr: "القصيم", nameEn: "Qassim" },
+    { nameAr: "حائل", nameEn: "Hail" },
+  ];
+
+  const insertedCities = await db
+    .insert(cities)
+    .values(cityData.map((c) => ({ nameAr: c.nameAr, nameEn: c.nameEn, countryCode: "SA" })))
+    .onConflictDoNothing()
+    .returning();
+
+  const allCities = await db.select().from(cities);
+  console.log(`Cities: ${allCities.length} rows`);
+
+  // ── Car Makes + Models ───────────────────────────────────────────────────
+  await syncCarCatalog();
+
+  const allMakes = await db.select().from(carMakes);
+  const makeMap: Record<string, string> = {};
+  allMakes.forEach((m) => (makeMap[m.makeName] = m.makeId));
+
+  const allModels = await db.select().from(carModels);
   const modelMap: Record<string, string> = {};
   allModels.forEach((m) => (modelMap[`${m.makeId}:${m.modelName}`] = m.carModelId));
 
