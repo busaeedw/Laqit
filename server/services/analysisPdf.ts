@@ -463,7 +463,7 @@ export async function generateAnalysisPdf(
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("ArabicBold").fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
-          .text(part.nameAr, cName, rowTop + 6, { width: nameW, align: "right" });
+          .text(part.nameAr, cName, rowTop + tableRowStyle.paddingTop, { width: nameW, align: "right" });
         doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
           .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW, align: "right" });
         doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
