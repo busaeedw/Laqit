@@ -5,6 +5,10 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -47,6 +51,12 @@ export default function InspectionDetailScreen() {
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const [emailModalVisible, setEmailModalVisible] = useState(false);
+  const [emailAddress, setEmailAddress] = useState("");
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [sendEmailError, setSendEmailError] = useState<string | null>(null);
+  const [sendEmailSuccess, setSendEmailSuccess] = useState(false);
 
   const { data, isLoading } = useQuery<{
     inspection: any;
@@ -112,6 +122,51 @@ export default function InspectionDetailScreen() {
     }
   };
 
+  const handleOpenEmailModal = () => {
+    setSendEmailError(null);
+    setSendEmailSuccess(false);
+    setEmailModalVisible(true);
+  };
+
+  const handleSendEmail = async () => {
+    const trimmed = emailAddress.trim();
+    if (!trimmed) {
+      setSendEmailError("يرجى إدخال البريد الإلكتروني");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      setSendEmailError("البريد الإلكتروني غير صحيح");
+      return;
+    }
+
+    setSendEmailError(null);
+    setSendingEmail(true);
+
+    try {
+      const url = new URL(`/api/laqit-inspections/${inspectionId}/send-pdf`, getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ email: trimmed, locale: "ar" }),
+      });
+
+      const json = await resp.json();
+      if (!resp.ok) {
+        setSendEmailError(json.error ?? "فشل إرسال البريد الإلكتروني");
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSendEmailSuccess(true);
+      setTimeout(() => setEmailModalVisible(false), 1500);
+    } catch {
+      setSendEmailError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: theme.backgroundRoot }]}>
@@ -132,137 +187,249 @@ export default function InspectionDetailScreen() {
   const currentStepIdx = statusIndex(inspection.status);
 
   return (
-    <ScrollView
-      style={[styles.scroll, { backgroundColor: theme.backgroundRoot }]}
-      contentContainerStyle={{
-        paddingTop: headerHeight + Spacing.lg,
-        paddingBottom: insets.bottom + Spacing["4xl"],
-        paddingHorizontal: Spacing.lg,
-      }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Inspection No */}
-      <View style={[styles.inspNoCard, { backgroundColor: theme.primary }]}>
-        <ThemedText style={[styles.inspNoLabel, { fontFamily: "Cairo_400Regular" }]}>رقم الفحص</ThemedText>
-        <ThemedText style={[styles.inspNoValue, { fontFamily: "Cairo_700Bold" }]}>
-          {inspection.inspectionNo}
-        </ThemedText>
-      </View>
-
-      {/* Status timeline */}
-      <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
-        <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
-          حالة الطلب
-        </ThemedText>
-        <View style={styles.timeline}>
-          {STATUS_STEPS.map((step, idx) => {
-            const done = idx <= currentStepIdx;
-            const active = idx === currentStepIdx;
-            return (
-              <View key={step.key} style={styles.timelineRow}>
-                <View style={styles.timelineLeft}>
-                  {idx < STATUS_STEPS.length - 1 && (
-                    <View style={[styles.timelineLine, { backgroundColor: done ? theme.primary : theme.border }]} />
-                  )}
-                  <View
-                    style={[
-                      styles.timelineDot,
-                      { backgroundColor: done ? theme.primary : theme.border },
-                    ]}
-                  >
-                    {done && <Feather name="check" size={10} color="#fff" />}
-                  </View>
-                </View>
-                <ThemedText
-                  style={[
-                    styles.timelineLabel,
-                    {
-                      fontFamily: active ? "Cairo_700Bold" : "Cairo_400Regular",
-                      color: done ? theme.text : theme.textSecondary,
-                    },
-                  ]}
-                >
-                  {step.label}
-                </ThemedText>
-              </View>
-            );
-          })}
+    <>
+      <ScrollView
+        style={[styles.scroll, { backgroundColor: theme.backgroundRoot }]}
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.lg,
+          paddingBottom: insets.bottom + Spacing["4xl"],
+          paddingHorizontal: Spacing.lg,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Inspection No */}
+        <View style={[styles.inspNoCard, { backgroundColor: theme.primary }]}>
+          <ThemedText style={[styles.inspNoLabel, { fontFamily: "Cairo_400Regular" }]}>رقم الفحص</ThemedText>
+          <ThemedText style={[styles.inspNoValue, { fontFamily: "Cairo_700Bold" }]}>
+            {inspection.inspectionNo}
+          </ThemedText>
         </View>
-      </View>
 
-      {/* Parts */}
-      {parts.length > 0 ? (
+        {/* Status timeline */}
         <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
           <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
-            القطع المطلوبة ({parts.length})
+            حالة الطلب
           </ThemedText>
-          {parts.map((p: any, idx: number) => (
-            <View key={p.inspectionPartId} style={styles.partRow}>
-              <ThemedText style={[styles.partNum, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {idx + 1}.
-              </ThemedText>
-              <ThemedText style={[styles.partName, { fontFamily: "Cairo_400Regular" }]}>
-                {p.partName}
-              </ThemedText>
+          <View style={styles.timeline}>
+            {STATUS_STEPS.map((step, idx) => {
+              const done = idx <= currentStepIdx;
+              const active = idx === currentStepIdx;
+              return (
+                <View key={step.key} style={styles.timelineRow}>
+                  <View style={styles.timelineLeft}>
+                    {idx < STATUS_STEPS.length - 1 && (
+                      <View style={[styles.timelineLine, { backgroundColor: done ? theme.primary : theme.border }]} />
+                    )}
+                    <View
+                      style={[
+                        styles.timelineDot,
+                        { backgroundColor: done ? theme.primary : theme.border },
+                      ]}
+                    >
+                      {done && <Feather name="check" size={10} color="#fff" />}
+                    </View>
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.timelineLabel,
+                      {
+                        fontFamily: active ? "Cairo_700Bold" : "Cairo_400Regular",
+                        color: done ? theme.text : theme.textSecondary,
+                      },
+                    ]}
+                  >
+                    {step.label}
+                  </ThemedText>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Parts */}
+        {parts.length > 0 ? (
+          <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
+            <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
+              القطع المطلوبة ({parts.length})
+            </ThemedText>
+            {parts.map((p: any, idx: number) => (
+              <View key={p.inspectionPartId} style={styles.partRow}>
+                <ThemedText style={[styles.partNum, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                  {idx + 1}.
+                </ThemedText>
+                <ThemedText style={[styles.partName, { fontFamily: "Cairo_400Regular" }]}>
+                  {p.partName}
+                </ThemedText>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* PDF actions — only when parts exist */}
+        {parts.length > 0 ? (
+          <View style={styles.pdfSection}>
+            <View style={styles.pdfBtnRow}>
+              {/* Download */}
+              <Pressable
+                testID="button-download-pdf"
+                onPress={handleDownloadPdf}
+                disabled={downloading}
+                style={({ pressed }) => [
+                  styles.pdfBtn,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: theme.border,
+                    opacity: pressed || downloading ? 0.7 : 1,
+                    flex: 1,
+                  },
+                ]}
+              >
+                {downloading ? (
+                  <ActivityIndicator size="small" color={theme.primary} />
+                ) : (
+                  <Feather name="download" size={18} color={theme.primary} />
+                )}
+                <ThemedText style={[styles.pdfBtnText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                  {downloading ? "جارٍ..." : "تنزيل PDF"}
+                </ThemedText>
+              </Pressable>
+
+              {/* Email */}
+              <Pressable
+                testID="button-email-pdf"
+                onPress={handleOpenEmailModal}
+                style={({ pressed }) => [
+                  styles.pdfBtn,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: theme.border,
+                    opacity: pressed ? 0.7 : 1,
+                    flex: 1,
+                  },
+                ]}
+              >
+                <Feather name="mail" size={18} color={theme.primary} />
+                <ThemedText style={[styles.pdfBtnText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+                  إرسال بالبريد
+                </ThemedText>
+              </Pressable>
             </View>
-          ))}
-        </View>
-      ) : null}
 
-      {/* Download PDF button — only when parts exist */}
-      {parts.length > 0 ? (
-        <View style={styles.pdfSection}>
+            {downloadError != null ? (
+              <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
+                {downloadError}
+              </ThemedText>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Quotes CTA */}
+        {quotes.length > 0 ? (
           <Pressable
-            testID="button-download-pdf"
-            onPress={handleDownloadPdf}
-            disabled={downloading}
-            style={({ pressed }) => [
-              styles.pdfBtn,
-              {
-                backgroundColor: theme.backgroundDefault,
-                borderColor: theme.border,
-                opacity: pressed || downloading ? 0.7 : 1,
-              },
-            ]}
+            testID="button-view-quotes"
+            onPress={() => navigation.navigate("QuotesList", { inspectionId })}
+            style={[styles.quotesBtn, { backgroundColor: theme.primary }]}
           >
-            {downloading ? (
-              <ActivityIndicator size="small" color={theme.primary} />
-            ) : (
-              <Feather name="download" size={18} color={theme.primary} />
-            )}
-            <ThemedText style={[styles.pdfBtnText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
-              {downloading ? "جارٍ إنشاء التقرير..." : "تنزيل PDF"}
+            <ThemedText style={[styles.quotesBtnText, { fontFamily: "Cairo_700Bold" }]}>
+              عرض {quotes.length} {quotes.length === 1 ? "عرض سعر" : "عروض أسعار"}
             </ThemedText>
+            <Feather name="arrow-left" size={18} color="#fff" />
           </Pressable>
-          {downloadError != null ? (
-            <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
-              {downloadError}
+        ) : (
+          <View style={[styles.waitCard, { backgroundColor: theme.backgroundSecondary }]}>
+            <Feather name="clock" size={24} color={theme.textSecondary} />
+            <ThemedText style={[styles.waitText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              بانتظار ردود الموردين...
             </ThemedText>
-          ) : null}
-        </View>
-      ) : null}
+          </View>
+        )}
+      </ScrollView>
 
-      {/* Quotes CTA */}
-      {quotes.length > 0 ? (
-        <Pressable
-          testID="button-view-quotes"
-          onPress={() => navigation.navigate("QuotesList", { inspectionId })}
-          style={[styles.quotesBtn, { backgroundColor: theme.primary }]}
+      {/* Email modal */}
+      <Modal
+        visible={emailModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setEmailModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
         >
-          <ThemedText style={[styles.quotesBtnText, { fontFamily: "Cairo_700Bold" }]}>
-            عرض {quotes.length} {quotes.length === 1 ? "عرض سعر" : "عروض أسعار"}
-          </ThemedText>
-          <Feather name="arrow-left" size={18} color="#fff" />
-        </Pressable>
-      ) : (
-        <View style={[styles.waitCard, { backgroundColor: theme.backgroundSecondary }]}>
-          <Feather name="clock" size={24} color={theme.textSecondary} />
-          <ThemedText style={[styles.waitText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-            بانتظار ردود الموردين...
-          </ThemedText>
-        </View>
-      )}
-    </ScrollView>
+          <Pressable style={styles.modalBackdrop} onPress={() => setEmailModalVisible(false)} />
+          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundDefault }]}>
+            {/* Handle */}
+            <View style={[styles.modalHandle, { backgroundColor: theme.border }]} />
+
+            <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
+              إرسال تقرير PDF
+            </ThemedText>
+            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              أدخل عنوان بريدك الإلكتروني أو بريد الورشة
+            </ThemedText>
+
+            <TextInput
+              testID="input-email-pdf"
+              value={emailAddress}
+              onChangeText={(t) => { setEmailAddress(t); setSendEmailError(null); setSendEmailSuccess(false); }}
+              placeholder="example@email.com"
+              placeholderTextColor={theme.textSecondary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[
+                styles.emailInput,
+                {
+                  backgroundColor: theme.backgroundRoot,
+                  borderColor: sendEmailError ? (theme.error ?? "#d32f2f") : theme.border,
+                  color: theme.text,
+                  fontFamily: "Cairo_400Regular",
+                },
+              ]}
+            />
+
+            {sendEmailError != null ? (
+              <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
+                {sendEmailError}
+              </ThemedText>
+            ) : null}
+
+            {sendEmailSuccess ? (
+              <View style={[styles.successBanner, { backgroundColor: "#16A34A15" }]}>
+                <Feather name="check-circle" size={16} color="#16A34A" />
+                <ThemedText style={[styles.successText, { color: "#16A34A", fontFamily: "Cairo_700Bold" }]}>
+                  تم إرسال التقرير بنجاح
+                </ThemedText>
+              </View>
+            ) : null}
+
+            <Pressable
+              testID="button-send-pdf-confirm"
+              onPress={handleSendEmail}
+              disabled={sendingEmail || sendEmailSuccess}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: pressed || sendingEmail || sendEmailSuccess ? 0.7 : 1,
+                },
+              ]}
+            >
+              {sendingEmail ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="send" size={18} color="#fff" />
+              )}
+              <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                {sendingEmail ? "جارٍ الإرسال..." : "إرسال التقرير"}
+              </ThemedText>
+            </Pressable>
+
+            <View style={{ height: insets.bottom + Spacing.md }} />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -311,6 +478,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     gap: Spacing.sm,
   },
+  pdfBtnRow: {
+    flexDirection: "row-reverse",
+    gap: Spacing.sm,
+  },
   pdfBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -320,7 +491,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
   },
-  pdfBtnText: { fontSize: 15 },
+  pdfBtnText: { fontSize: 14 },
   errorText: { fontSize: 13, textAlign: "center" },
   quotesBtn: {
     flexDirection: "row-reverse",
@@ -341,4 +512,54 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   waitText: { fontSize: 14 },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  modalSheet: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: Spacing.sm,
+  },
+  modalTitle: { fontSize: 18, textAlign: "right" },
+  modalSubtitle: { fontSize: 13, textAlign: "right", marginTop: -Spacing.xs },
+  emailInput: {
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    fontSize: 15,
+    textAlign: "left",
+  },
+  successBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+  },
+  successText: { fontSize: 14 },
+  sendBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.xs,
+  },
+  sendBtnText: { color: "#fff", fontSize: 16 },
 });

@@ -966,6 +966,103 @@ Rules:
     }
   });
 
+  // ─── Inspection PDF Email ─────────────────────────────────────────────────
+  app.post("/api/laqit-inspections/:id/send-pdf", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const ip = clientIp(req);
+      if (!emailIpLimiter.check(ip)) {
+        const retryAfter = emailIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
+      const { email, locale } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "البريد الإلكتروني غير صحيح" });
+      }
+
+      const callerCustomerId: string = res.locals.customerId;
+      const [inspection] = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, req.params.id))
+        .limit(1);
+      if (!inspection) return res.status(404).json({ error: "غير موجود" });
+      if (inspection.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
+
+      const parts = await db
+        .select()
+        .from(inspectionParts)
+        .where(eq(inspectionParts.inspectionId, req.params.id));
+
+      if (parts.length === 0) {
+        return res.status(400).json({ error: "لا توجد قطع مرتبطة بهذا الفحص" });
+      }
+
+      const [carModel] = await db
+        .select()
+        .from(carModels)
+        .where(eq(carModels.carModelId, inspection.carModelId))
+        .limit(1);
+
+      const makeName = carModel
+        ? await db
+            .select({ makeName: carMakes.makeName, nameAr: carMakes.nameAr })
+            .from(carMakes)
+            .where(eq(carMakes.makeId, carModel.makeId))
+            .limit(1)
+            .then((rows) => rows[0] ?? null)
+        : null;
+
+      const mediaRows = await db
+        .select()
+        .from(inspectionMedia)
+        .where(eq(inspectionMedia.inspectionId, req.params.id));
+      const damagePhoto = mediaRows.find((m) => m.mediaType === "damage_photo") ?? mediaRows[0] ?? null;
+      const safeImageUri =
+        damagePhoto?.fileUrl &&
+        typeof damagePhoto.fileUrl === "string" &&
+        damagePhoto.fileUrl.startsWith("https://")
+          ? damagePhoto.fileUrl
+          : undefined;
+
+      const carInfo = {
+        make: makeName?.makeName ?? "",
+        makeAr: makeName?.nameAr ?? makeName?.makeName ?? "",
+        model: carModel?.modelName ?? "",
+        modelAr: carModel?.modelName ?? "",
+        year: inspection.carYear ? String(inspection.carYear) : "",
+      };
+
+      const partEntries = parts.map((p) => ({
+        id: p.inspectionPartId,
+        name: p.partName,
+        nameAr: p.partName,
+        confidence: 1,
+        price: 0,
+      }));
+
+      const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+      const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
+
+      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
+      const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
+      const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
+      if (!result.success) {
+        return res.status(500).json({ error: "فشل في إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("POST inspection send-pdf error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إنشاء أو إرسال التقرير" });
+    }
+  });
+
   app.post("/api/laqit-inspections/:id/media", requireCustomer, async (req: Request, res: Response) => {
     try {
       const callerCustomerId: string = res.locals.customerId;
