@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import * as path from "path";
 
 const AMIRI_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Regular.ttf");
+const AMIRI_BOLD_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Bold.ttf");
 
 export type PdfLocale = "ar" | "en" | "bilingual";
 
@@ -204,6 +205,7 @@ export async function generateAnalysisPdf(
     doc.on("error", reject);
 
     doc.registerFont("Arabic", AMIRI_FONT_PATH);
+    doc.registerFont("ArabicBold", AMIRI_BOLD_FONT_PATH);
 
     const blue = "#1E74F2";
     const gray = "#6B7280";
@@ -223,7 +225,7 @@ export async function generateAnalysisPdf(
           .text(enText, 55, textY, { width: pageWidth * 0.5, align: "left" });
       }
       if (arText) {
-        doc.font("Arabic").fontSize(bgColor === blue ? 13 : 12)
+        doc.font("ArabicBold").fontSize(bgColor === blue ? 13 : 12)
           .fillColor(bgColor === blue ? "#FFFFFF" : blue)
           .text(arText, 50, textY, { width: pageWidth - 10, align: "right" });
       }
@@ -237,7 +239,7 @@ export async function generateAnalysisPdf(
         .text(L.appNameEn, 50, 55, { width: pageWidth / 2, align: "left" });
     }
     if (L.appNameAr) {
-      doc.font("Arabic").fontSize(18).fillColor("#FFFFFF")
+      doc.font("ArabicBold").fontSize(18).fillColor("#FFFFFF")
         .text(L.appNameAr, 50, 55, { width: pageWidth, align: "right" });
     }
 
@@ -253,7 +255,7 @@ export async function generateAnalysisPdf(
 
     let titleBottom = 120;
     if (L.reportTitleAr) {
-      doc.font("Arabic").fontSize(isAr ? 15 : 13).fillColor(dark)
+      doc.font("ArabicBold").fontSize(isAr ? 15 : 13).fillColor(dark)
         .text(L.reportTitleAr, 50, 120, { width: pageWidth, align: "center" });
       titleBottom = isAr ? 125 : 120;
     }
@@ -465,7 +467,7 @@ export async function generateAnalysisPdf(
 
     const totalY = doc.y;
     if (L.totalAr(totalStr)) {
-      doc.font("Arabic").fontSize(12).fillColor(dark)
+      doc.font("ArabicBold").fontSize(12).fillColor(dark)
         .text(L.totalAr(totalStr), 50, totalY, { width: pageWidth, align: "right" });
     }
     if (L.totalEn(totalStr)) {
