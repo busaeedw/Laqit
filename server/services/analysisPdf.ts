@@ -4,6 +4,13 @@ import * as path from "path";
 const AMIRI_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Regular.ttf");
 const AMIRI_BOLD_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Bold.ttf");
 
+// ── PDF color palette ──────────────────────────────────────────────────────────
+const PDF_COLOR_BLUE  = "#1E74F2";
+const PDF_COLOR_GRAY  = "#6B7280";
+const PDF_COLOR_LIGHT = "#F3F4F6";
+const PDF_COLOR_DARK  = "#111827";
+const PDF_COLOR_WHITE = "#FFFFFF";
+
 export type PdfLocale = "ar" | "en" | "bilingual";
 
 export interface CarInfo {
@@ -207,10 +214,11 @@ export async function generateAnalysisPdf(
     doc.registerFont("Arabic", AMIRI_FONT_PATH);
     doc.registerFont("ArabicBold", AMIRI_BOLD_FONT_PATH);
 
-    const blue = "#1E74F2";
-    const gray = "#6B7280";
-    const light = "#F3F4F6";
-    const dark = "#111827";
+    const blue  = PDF_COLOR_BLUE;
+    const gray  = PDF_COLOR_GRAY;
+    const light = PDF_COLOR_LIGHT;
+    const dark  = PDF_COLOR_DARK;
+    const white = PDF_COLOR_WHITE;
     const pageWidth = doc.page.width - 100;
 
     // ── Shared style configs ───────────────────────────────────────────────────
@@ -264,12 +272,12 @@ export async function generateAnalysisPdf(
       const textY = y + 8;
       if (enText) {
         doc.font("Helvetica-Bold").fontSize(bgColor === blue ? 12 : 11)
-          .fillColor(bgColor === blue ? "#FFFFFF" : blue)
+          .fillColor(bgColor === blue ? white : blue)
           .text(enText, 55, textY, { width: pageWidth * 0.5, align: "left" });
       }
       if (arText) {
         doc.font("ArabicBold").fontSize(bgColor === blue ? 13 : 12)
-          .fillColor(bgColor === blue ? "#FFFFFF" : blue)
+          .fillColor(bgColor === blue ? white : blue)
           .text(arText, 50, textY, { width: pageWidth - 10, align: "right" });
       }
     };
@@ -278,11 +286,11 @@ export async function generateAnalysisPdf(
     doc.rect(50, 40, pageWidth, 60).fill(blue);
 
     if (L.appNameEn) {
-      doc.font("Helvetica-Bold").fontSize(14).fillColor("#FFFFFF")
+      doc.font("Helvetica-Bold").fontSize(14).fillColor(white)
         .text(L.appNameEn, 50, 55, { width: pageWidth / 2, align: "left" });
     }
     if (L.appNameAr) {
-      doc.font("ArabicBold").fontSize(18).fillColor("#FFFFFF")
+      doc.font("ArabicBold").fontSize(18).fillColor(white)
         .text(L.appNameAr, 50, 55, { width: pageWidth, align: "right" });
     }
 
