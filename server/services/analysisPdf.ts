@@ -1,4 +1,7 @@
 import PDFDocument from "pdfkit";
+import * as path from "path";
+
+const AMIRI_FONT_PATH = path.resolve(__dirname, "../assets/fonts/Amiri-Regular.ttf");
 
 export interface CarInfo {
   make: string;
@@ -21,11 +24,9 @@ const PRIVATE_HOSTNAME_RE =
   /^(localhost|.*\.local)$|^127\.|^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^169\.254\.|^\[?::1\]?$|^\[?fc|^\[?fd/i;
 
 function isSafeImageUri(uri: string): boolean {
-  // Only allow HTTPS — blocks http://, file://, data:, ftp:// etc.
   if (!uri.startsWith("https://")) return false;
   try {
     const { hostname } = new URL(uri);
-    // Block private IPs, loopback, and link-local
     if (PRIVATE_HOSTNAME_RE.test(hostname)) return false;
     return true;
   } catch {
@@ -47,7 +48,7 @@ async function fetchImageBuffer(uri: string): Promise<Buffer | null> {
   try {
     const resp = await fetch(uri, {
       signal: controller.signal,
-      redirect: "error", // Never follow redirects — avoids redirect-based SSRF
+      redirect: "error",
     });
 
     if (!resp.ok) {
@@ -97,20 +98,57 @@ export async function generateAnalysisPdf(
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    // Register Arabic font (Amiri — full OpenType shaping via fontkit)
+    doc.registerFont("Arabic", AMIRI_FONT_PATH);
+
     const blue = "#1E74F2";
     const gray = "#6B7280";
     const light = "#F3F4F6";
     const dark = "#111827";
     const pageWidth = doc.page.width - 100;
 
+    // Helper: write Arabic text with the Amiri font, RTL alignment
+    const arText = (
+      text: string,
+      x: number,
+      y: number,
+      opts: Record<string, unknown> = {}
+    ) => {
+      doc
+        .font("Arabic")
+        .fontSize((opts.fontSize as number | undefined) ?? 10)
+        .fillColor((opts.fillColor as string | undefined) ?? dark)
+        .text(text, x, y, { align: "right", ...opts, font: undefined });
+    };
+
+    // Helper: switch back to Helvetica for Latin text
+    const latText = (
+      text: string,
+      x: number,
+      y: number,
+      opts: Record<string, unknown> = {}
+    ) => {
+      doc
+        .font((opts.bold ? "Helvetica-Bold" : "Helvetica") as string)
+        .fontSize((opts.fontSize as number | undefined) ?? 10)
+        .fillColor((opts.fillColor as string | undefined) ?? dark)
+        .text(text, x, y, { ...opts, bold: undefined, font: undefined });
+    };
+
     // ── Header bar ────────────────────────────────────────────────────────────
     doc.rect(50, 40, pageWidth, 60).fill(blue);
 
     doc
-      .fillColor("#FFFFFF")
       .font("Helvetica-Bold")
-      .fontSize(22)
-      .text("Laqit — لاقط", 50, 57, { width: pageWidth, align: "center" });
+      .fontSize(14)
+      .fillColor("#FFFFFF")
+      .text("Laqit", 50, 52, { width: pageWidth / 2, align: "left" });
+
+    doc
+      .font("Arabic")
+      .fontSize(18)
+      .fillColor("#FFFFFF")
+      .text("لاقط", 50, 52, { width: pageWidth, align: "right" });
 
     doc.moveDown(3);
 
@@ -122,22 +160,25 @@ export async function generateAnalysisPdf(
     });
 
     doc
-      .fillColor(dark)
       .font("Helvetica-Bold")
-      .fontSize(16)
-      .text("Car Damage Analysis Report", 50, 120, {
-        width: pageWidth,
-        align: "center",
-      });
+      .fontSize(15)
+      .fillColor(dark)
+      .text("Car Damage Analysis Report", 50, 120, { width: pageWidth, align: "center" });
 
     doc
-      .fillColor(gray)
+      .font("Arabic")
+      .fontSize(13)
+      .fillColor(dark)
+      .text("تقرير تشخيص أضرار السيارة", 50, 138, { width: pageWidth, align: "center" });
+
+    doc
       .font("Helvetica")
-      .fontSize(11)
-      .text(`Date: ${dateStr}`, 50, 142, { width: pageWidth, align: "center" });
+      .fontSize(10)
+      .fillColor(gray)
+      .text(`Date: ${dateStr}`, 50, 158, { width: pageWidth, align: "center" });
 
     // ── Divider ───────────────────────────────────────────────────────────────
-    doc.moveDown(1.5);
+    doc.moveDown(1.2);
     doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y).strokeColor(blue).lineWidth(1.5).stroke();
     doc.moveDown(1);
 
@@ -145,55 +186,63 @@ export async function generateAnalysisPdf(
     const carY = doc.y;
     doc.rect(50, carY, pageWidth, 28).fill(light);
 
+    // Section label: bilingual
     doc
-      .fillColor(blue)
       .font("Helvetica-Bold")
+      .fontSize(11)
+      .fillColor(blue)
+      .text("Vehicle Information", 55, carY + 8, { width: pageWidth * 0.5, align: "left" });
+
+    doc
+      .font("Arabic")
       .fontSize(12)
-      .text("Vehicle Information / معلومات السيارة", 55, carY + 8, {
-        width: pageWidth - 10,
-        align: "left",
-      });
+      .fillColor(blue)
+      .text("معلومات السيارة", 50, carY + 8, { width: pageWidth - 10, align: "right" });
 
     doc.moveDown(0.3);
 
     const colW = pageWidth / 3;
-    const rowY = doc.y + 6;
+    const labelY = doc.y + 4;
+    const valueY = labelY + 14;
 
-    doc
-      .fillColor(gray)
-      .font("Helvetica")
-      .fontSize(10)
-      .text("Make / الماركة", 50, rowY, { width: colW })
-      .text("Model / الموديل", 50 + colW, rowY, { width: colW })
-      .text("Year / السنة", 50 + colW * 2, rowY, { width: colW });
+    // Column labels (Latin)
+    doc.font("Helvetica").fontSize(9).fillColor(gray)
+      .text("Make", 50, labelY, { width: colW })
+      .text("Model", 50 + colW, labelY, { width: colW })
+      .text("Year", 50 + colW * 2, labelY, { width: colW });
 
-    doc
-      .fillColor(dark)
-      .font("Helvetica-Bold")
-      .fontSize(12)
-      .text(`${carInfo.makeAr} (${carInfo.make})`, 50, rowY + 14, { width: colW })
-      .text(`${carInfo.modelAr} (${carInfo.model})`, 50 + colW, rowY + 14, { width: colW })
-      .text(carInfo.year, 50 + colW * 2, rowY + 14, { width: colW });
+    // Make: Arabic + English
+    doc.font("Arabic").fontSize(12).fillColor(dark)
+      .text(carInfo.makeAr, 50, valueY, { width: colW, align: "left" });
+    doc.font("Helvetica").fontSize(10).fillColor(gray)
+      .text(`(${carInfo.make})`, 50, valueY + 14, { width: colW });
 
-    doc.moveDown(2.5);
+    // Model: Arabic + English
+    doc.font("Arabic").fontSize(12).fillColor(dark)
+      .text(carInfo.modelAr, 50 + colW, valueY, { width: colW, align: "left" });
+    doc.font("Helvetica").fontSize(10).fillColor(gray)
+      .text(`(${carInfo.model})`, 50 + colW, valueY + 14, { width: colW });
 
-    // ── Damage photo ──────────────────────────────────────────────────────────
+    // Year (Latin only)
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(dark)
+      .text(carInfo.year, 50 + colW * 2, valueY, { width: colW });
+
+    doc.moveDown(3.2);
+
+    // ── Damage photo (if available) ───────────────────────────────────────────
     if (imageBuffer) {
       const imgSectionY = doc.y;
       doc.rect(50, imgSectionY, pageWidth, 28).fill(light);
-      doc
-        .fillColor(blue)
-        .font("Helvetica-Bold")
-        .fontSize(12)
-        .text("Damage Photo / صورة الضرر", 55, imgSectionY + 8, {
-          width: pageWidth - 10,
-          align: "left",
-        });
+
+      doc.font("Helvetica-Bold").fontSize(11).fillColor(blue)
+        .text("Damage Photo", 55, imgSectionY + 8, { width: pageWidth * 0.5, align: "left" });
+      doc.font("Arabic").fontSize(12).fillColor(blue)
+        .text("صورة الضرر", 50, imgSectionY + 8, { width: pageWidth - 10, align: "right" });
 
       doc.moveDown(0.5);
 
       const maxImgWidth = pageWidth;
-      const maxImgHeight = 220;
+      const maxImgHeight = 200;
 
       try {
         doc.image(imageBuffer, 50, doc.y, {
@@ -201,18 +250,11 @@ export async function generateAnalysisPdf(
           align: "center",
           valign: "center",
         });
-        doc.moveDown(0.5);
-        // Move cursor past the image
-        const imgY = doc.y;
-        if (imgY < imgSectionY + 28 + maxImgHeight + 10) {
-          doc.y = imgSectionY + 28 + maxImgHeight + 10;
-        }
+        // Advance cursor past the image
+        doc.y = Math.max(doc.y, imgSectionY + 28 + maxImgHeight + 8);
       } catch (imgErr: any) {
         console.warn(`[analysisPdf] Could not embed image: ${imgErr?.message}`);
-        doc
-          .fillColor(gray)
-          .font("Helvetica")
-          .fontSize(10)
+        doc.font("Helvetica").fontSize(10).fillColor(gray)
           .text("[Photo could not be embedded]", 50, doc.y, { width: pageWidth, align: "center" });
         doc.moveDown(1);
       }
@@ -221,43 +263,39 @@ export async function generateAnalysisPdf(
     doc.moveDown(0.5);
 
     // ── Parts table ───────────────────────────────────────────────────────────
-    const tableY = doc.y;
-
-    if (tableY > doc.page.height - 150) {
-      doc.addPage();
-    }
+    if (doc.y > doc.page.height - 150) doc.addPage();
 
     const tableActualY = doc.y;
     doc.rect(50, tableActualY, pageWidth, 28).fill(blue);
 
-    doc
-      .fillColor("#FFFFFF")
-      .font("Helvetica-Bold")
-      .fontSize(12)
-      .text("Detected Parts / القطع المكتشفة", 55, tableActualY + 8, {
-        width: pageWidth - 10,
-        align: "left",
-      });
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#FFFFFF")
+      .text("Detected Parts", 55, tableActualY + 8, { width: pageWidth * 0.5, align: "left" });
+    doc.font("Arabic").fontSize(13).fillColor("#FFFFFF")
+      .text("القطع المكتشفة", 50, tableActualY + 7, { width: pageWidth - 10, align: "right" });
 
-    const col1 = 50;
-    const col2 = 50 + pageWidth * 0.42;
-    const col3 = 50 + pageWidth * 0.67;
-    const col4 = 50 + pageWidth * 0.82;
+    // Column widths
+    const c1 = 50;                          // Arabic name
+    const c2 = 50 + pageWidth * 0.36;       // English name
+    const c3 = 50 + pageWidth * 0.63;       // Confidence
+    const c4 = 50 + pageWidth * 0.78;       // Price
 
-    let rowTop = tableActualY + 28 + 6;
+    let rowTop = tableActualY + 28 + 5;
 
-    doc
-      .fillColor(gray)
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .text("Arabic Name / الاسم", col1, rowTop, { width: pageWidth * 0.40 })
-      .text("English Name", col2, rowTop, { width: pageWidth * 0.23 })
-      .text("Confidence", col3, rowTop, { width: pageWidth * 0.14 })
-      .text("Est. Price (SAR)", col4, rowTop, { width: pageWidth * 0.18 });
+    // Header row labels
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(gray)
+      .text("Arabic Name", c1, rowTop, { width: pageWidth * 0.34 })
+      .text("English Name", c2, rowTop, { width: pageWidth * 0.25 })
+      .text("Confidence", c3, rowTop, { width: pageWidth * 0.14 })
+      .text("Est. Price (SAR)", c4, rowTop, { width: pageWidth * 0.22 });
+
+    // Arabic header label above column
+    doc.font("Arabic").fontSize(9).fillColor(gray)
+      .text("الاسم بالعربية", c1, rowTop, { width: pageWidth * 0.34, align: "right" });
 
     rowTop += 18;
     doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
 
+    // Data rows
     parts.forEach((part, i) => {
       if (rowTop > doc.page.height - 100) {
         doc.addPage();
@@ -265,24 +303,32 @@ export async function generateAnalysisPdf(
       }
 
       if (i % 2 === 0) {
-        doc.rect(50, rowTop, pageWidth, 22).fill(light);
+        doc.rect(50, rowTop, pageWidth, 24).fill(light);
       }
 
       const conf = part.confidence;
-      const confColor = conf >= 90 ? "#16A34A" : conf >= 75 ? "#22C55E" : conf >= 60 ? "#D97706" : "#DC2626";
+      const confColor =
+        conf >= 90 ? "#16A34A" :
+        conf >= 75 ? "#22C55E" :
+        conf >= 60 ? "#D97706" : "#DC2626";
 
-      doc
-        .fillColor(dark)
-        .font("Helvetica")
-        .fontSize(9)
-        .text(part.nameAr, col1 + 2, rowTop + 6, { width: pageWidth * 0.40 })
-        .text(part.name, col2, rowTop + 6, { width: pageWidth * 0.23 })
-        .fillColor(confColor)
-        .text(`${conf}%`, col3, rowTop + 6, { width: pageWidth * 0.14 })
-        .fillColor(dark)
-        .text(`${part.price.toLocaleString()} SAR`, col4, rowTop + 6, { width: pageWidth * 0.18 });
+      // Arabic name column — Amiri font
+      doc.font("Arabic").fontSize(10).fillColor(dark)
+        .text(part.nameAr, c1, rowTop + 6, { width: pageWidth * 0.34, align: "right" });
 
-      rowTop += 22;
+      // English name — Helvetica
+      doc.font("Helvetica").fontSize(9).fillColor(dark)
+        .text(part.name, c2, rowTop + 8, { width: pageWidth * 0.25 });
+
+      // Confidence — colored
+      doc.font("Helvetica-Bold").fontSize(9).fillColor(confColor)
+        .text(`${conf}%`, c3, rowTop + 8, { width: pageWidth * 0.14 });
+
+      // Price — Helvetica
+      doc.font("Helvetica").fontSize(9).fillColor(dark)
+        .text(`${part.price.toLocaleString()} SAR`, c4, rowTop + 8, { width: pageWidth * 0.22 });
+
+      rowTop += 24;
       doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.3).stroke();
     });
 
@@ -293,27 +339,23 @@ export async function generateAnalysisPdf(
     doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y).strokeColor(blue).lineWidth(1).stroke();
     doc.moveDown(0.5);
 
-    doc
-      .fillColor(dark)
-      .font("Helvetica-Bold")
-      .fontSize(12)
-      .text(
-        `Total Estimated Price / الإجمالي التقديري: ${total.toLocaleString()} SAR`,
-        50,
-        doc.y,
-        { width: pageWidth, align: "right" }
-      );
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(dark)
+      .text(`Total Estimated: ${total.toLocaleString()} SAR`, 50, doc.y, {
+        width: pageWidth * 0.5,
+      });
+
+    doc.font("Arabic").fontSize(12).fillColor(dark)
+      .text(`الإجمالي التقديري: ${total.toLocaleString()} ريال`, 50, doc.y - 16, {
+        width: pageWidth,
+        align: "right",
+      });
 
     // ── Footer ────────────────────────────────────────────────────────────────
     const footerY = doc.page.height - 50;
-    doc
-      .fillColor(gray)
-      .font("Helvetica")
-      .fontSize(9)
+    doc.font("Helvetica").fontSize(8).fillColor(gray)
       .text(
         "Generated by Laqit — لاقط | laqit.app — All prices are estimates only.",
-        50,
-        footerY,
+        50, footerY,
         { width: pageWidth, align: "center" }
       );
 
