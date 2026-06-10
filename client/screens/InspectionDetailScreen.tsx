@@ -52,6 +52,7 @@ export default function InspectionDetailScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const { pdfLocale, savePdfLocale } = usePdfLocale();
+  const [showPageNumbers, setShowPageNumbers] = useState(true);
 
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
@@ -74,6 +75,7 @@ export default function InspectionDetailScreen() {
     try {
       const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
       url.searchParams.set("locale", pdfLocale);
+      url.searchParams.set("showPageNumbers", showPageNumbers ? "true" : "false");
       const resp = await fetch(url.toString(), {
         method: "GET",
         headers: { ...authHeaders() },
@@ -150,7 +152,7 @@ export default function InspectionDetailScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ email: trimmed, locale: pdfLocale }),
+        body: JSON.stringify({ email: trimmed, locale: pdfLocale, showPageNumbers }),
       });
 
       const json = await resp.json();
@@ -302,6 +304,20 @@ export default function InspectionDetailScreen() {
                 </Pressable>
               ))}
             </View>
+
+            {/* Page numbers toggle */}
+            <Pressable
+              testID="button-toggle-page-numbers"
+              onPress={() => setShowPageNumbers((v) => !v)}
+              style={[styles.pageNumToggle, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
+            >
+              <View style={[styles.pageNumCheckbox, { borderColor: theme.primary, backgroundColor: showPageNumbers ? theme.primary : "transparent" }]}>
+                {showPageNumbers ? <Feather name="check" size={12} color="#fff" /> : null}
+              </View>
+              <ThemedText style={[styles.pageNumLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                إظهار أرقام الصفحات في PDF
+              </ThemedText>
+            </Pressable>
 
             <View style={styles.pdfBtnRow}>
               {/* Download */}
@@ -551,6 +567,23 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   pdfBtnText: { fontSize: 14 },
+  pageNumToggle: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+  },
+  pageNumCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pageNumLabel: { fontSize: 13, flex: 1, textAlign: "right" },
   errorText: { fontSize: 13, textAlign: "center" },
   quotesBtn: {
     flexDirection: "row-reverse",
