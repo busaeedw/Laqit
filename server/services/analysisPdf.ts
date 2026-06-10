@@ -410,20 +410,22 @@ export async function generateAnalysisPdf(
       const c3 = 50 + pageWidth * 0.63;
       const c4 = 50 + pageWidth * 0.78;
 
-      // Column headers
-      doc.font("Arabic").fontSize(tableHeaderStyle.fontSizeAr).fillColor(tableHeaderStyle.fillColor)
-        .text(L.colNameAr, c1, rowTop, { width: pageWidth * 0.34, align: "right" });
-      doc.font("Helvetica-Bold").fontSize(tableHeaderStyle.fontSizeEn).fillColor(tableHeaderStyle.fillColor)
-        .text(L.colNameEn, c2, rowTop, { width: pageWidth * 0.25 })
-        .text(L.colConfidence, c3, rowTop, { width: pageWidth * 0.14 })
-        .text(L.colPrice, c4, rowTop, { width: pageWidth * 0.22 });
+      const drawBilingualHeaders = () => {
+        doc.font("Arabic").fontSize(tableHeaderStyle.fontSizeAr).fillColor(tableHeaderStyle.fillColor)
+          .text(L.colNameAr, c1, rowTop, { width: pageWidth * 0.34, align: "right" });
+        doc.font("Helvetica-Bold").fontSize(tableHeaderStyle.fontSizeEn).fillColor(tableHeaderStyle.fillColor)
+          .text(L.colNameEn, c2, rowTop, { width: pageWidth * 0.25 })
+          .text(L.colConfidence, c3, rowTop, { width: pageWidth * 0.14 })
+          .text(L.colPrice, c4, rowTop, { width: pageWidth * 0.22 });
+        rowTop += 18;
+        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+          .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
+      };
 
-      rowTop += 18;
-      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
-        .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
+      drawBilingualHeaders();
 
       parts.forEach((part, i) => {
-        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; }
+        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; drawBilingualHeaders(); }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("ArabicBold").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
@@ -448,18 +450,20 @@ export async function generateAnalysisPdf(
       const confW = pageWidth * 0.14;
       const priceW = pageWidth * 0.22;
 
-      // Column headers
-      doc.font("Arabic").fontSize(tableHeaderStyle.fontSizeAr).fillColor(tableHeaderStyle.fillColor)
-        .text(L.colPrice, cPrice, rowTop, { width: priceW, align: "right" })
-        .text(L.colConfidence, cConf, rowTop, { width: confW, align: "right" })
-        .text(L.colNameAr, cName, rowTop, { width: nameW, align: "right" });
+      const drawArHeaders = () => {
+        doc.font("Arabic").fontSize(tableHeaderStyle.fontSizeAr).fillColor(tableHeaderStyle.fillColor)
+          .text(L.colPrice, cPrice, rowTop, { width: priceW, align: "right" })
+          .text(L.colConfidence, cConf, rowTop, { width: confW, align: "right" })
+          .text(L.colNameAr, cName, rowTop, { width: nameW, align: "right" });
+        rowTop += 18;
+        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+          .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
+      };
 
-      rowTop += 18;
-      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
-        .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
+      drawArHeaders();
 
       parts.forEach((part, i) => {
-        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; }
+        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; drawArHeaders(); }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("ArabicBold").fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
@@ -482,18 +486,20 @@ export async function generateAnalysisPdf(
       const confW = pageWidth * 0.14;
       const priceW = pageWidth * 0.22;
 
-      // Column headers
-      doc.font("Helvetica-Bold").fontSize(tableHeaderStyle.fontSizeEn).fillColor(tableHeaderStyle.fillColor)
-        .text(L.colNameEn, cName, rowTop, { width: nameW })
-        .text(L.colConfidence, cConf, rowTop, { width: confW })
-        .text(L.colPrice, cPrice, rowTop, { width: priceW });
+      const drawEnHeaders = () => {
+        doc.font("Helvetica-Bold").fontSize(tableHeaderStyle.fontSizeEn).fillColor(tableHeaderStyle.fillColor)
+          .text(L.colNameEn, cName, rowTop, { width: nameW })
+          .text(L.colConfidence, cConf, rowTop, { width: confW })
+          .text(L.colPrice, cPrice, rowTop, { width: priceW });
+        rowTop += 18;
+        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+          .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
+      };
 
-      rowTop += 18;
-      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
-        .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
+      drawEnHeaders();
 
       parts.forEach((part, i) => {
-        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; }
+        if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; drawEnHeaders(); }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
