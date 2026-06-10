@@ -272,7 +272,7 @@ export async function generateAnalysisPdf(
     const footerStyle = { fontSize: 8, fillColor: gray, lineSpacing: 12 };
 
     // Page-number text in the bottom margin
-    const pageNumberStyle = { fontSize: 7, fillColor: gray };
+    const pageNumberStyle = { fontSize: 7, fillColor: gray, bottomOffset: 14 };
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -588,7 +588,7 @@ export async function generateAnalysisPdf(
     // We also reset doc.y to a safe value before each text draw for the same reason.
     const totalPages = doc.bufferedPageRange().count;
     if (totalPages > 1) {
-      const pageNumY = doc.page.height - doc.page.margins.bottom - 14;
+      const pageNumY = doc.page.height - doc.page.margins.bottom - pageNumberStyle.bottomOffset;
       for (let p = 0; p < totalPages; p++) {
         doc.switchToPage(p);
         doc.y = doc.page.margins.top; // prevent overflow-guard false-positive
