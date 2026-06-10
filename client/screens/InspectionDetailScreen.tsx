@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { WebView } from "react-native-webview";
 import { arrayBufferToBase64 } from "../lib/pdfUtils";
 import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
@@ -42,6 +43,123 @@ function statusIndex(status: string) {
   return STATUS_STEPS.findIndex((s) => s.key === status);
 }
 
+interface PdfPreviewModalProps {
+  visible: boolean;
+  pdfBase64: string | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onShare: () => void;
+  sharing: boolean;
+}
+
+function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare, sharing }: PdfPreviewModalProps) {
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [webViewLoading, setWebViewLoading] = useState(true);
+
+  useEffect(() => {
+    if (visible) setWebViewLoading(true);
+  }, [visible, pdfBase64]);
+
+  const pdfSource = pdfBase64
+    ? { uri: `data:application/pdf;base64,${pdfBase64}` }
+    : null;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+      testID="modal-pdf-preview"
+    >
+      <View style={[previewStyles.container, { backgroundColor: theme.backgroundRoot }]}>
+        <View
+          style={[
+            previewStyles.topBar,
+            { backgroundColor: theme.backgroundDefault, borderBottomColor: theme.border, paddingTop: insets.top + Spacing.sm },
+          ]}
+        >
+          <Pressable
+            style={({ pressed }) => [previewStyles.topBarButton, { opacity: pressed ? 0.6 : 1 }]}
+            onPress={onClose}
+            testID="button-close-preview"
+          >
+            <Feather name="x" size={22} color={theme.text} />
+          </Pressable>
+          <ThemedText style={[previewStyles.topBarTitle, { fontFamily: "Cairo_700Bold" }]}>
+            معاينة PDF
+          </ThemedText>
+          <View style={previewStyles.topBarSpacer} />
+        </View>
+
+        <View style={previewStyles.webViewContainer}>
+          {loading ? (
+            <View style={previewStyles.centerState}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <ThemedText style={[previewStyles.stateText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                جارٍ تحميل التقرير...
+              </ThemedText>
+            </View>
+          ) : error != null ? (
+            <View style={previewStyles.centerState}>
+              <View style={[previewStyles.errorIcon, { backgroundColor: (theme.error ?? "#d32f2f") + "15" }]}>
+                <Feather name="alert-circle" size={32} color={theme.error ?? "#d32f2f"} />
+              </View>
+              <ThemedText style={[previewStyles.stateText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_600SemiBold" }]}>
+                {error}
+              </ThemedText>
+            </View>
+          ) : pdfSource != null ? (
+            <View style={{ flex: 1 }}>
+              {webViewLoading ? (
+                <View style={[previewStyles.centerState, previewStyles.webViewOverlay]}>
+                  <ActivityIndicator size="large" color={theme.primary} />
+                </View>
+              ) : null}
+              <WebView
+                source={pdfSource}
+                style={previewStyles.webView}
+                onLoadStart={() => setWebViewLoading(true)}
+                onLoadEnd={() => setWebViewLoading(false)}
+                originWhitelist={["*"]}
+                testID="webview-pdf"
+              />
+            </View>
+          ) : null}
+        </View>
+
+        <View
+          style={[
+            previewStyles.bottomBar,
+            { backgroundColor: theme.backgroundDefault, borderTopColor: theme.border, paddingBottom: insets.bottom + Spacing.sm },
+          ]}
+        >
+          <Pressable
+            onPress={onShare}
+            disabled={sharing || pdfBase64 == null}
+            style={({ pressed }) => [
+              previewStyles.shareButton,
+              { backgroundColor: theme.primary, opacity: pressed || sharing || pdfBase64 == null ? 0.7 : 1 },
+            ]}
+            testID="button-share-from-preview"
+          >
+            {sharing ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Feather name="share-2" size={18} color="#fff" />
+            )}
+            <ThemedText style={[previewStyles.shareButtonText, { fontFamily: "Cairo_700Bold" }]}>
+              {sharing ? "جارٍ المشاركة..." : "مشاركة أو حفظ"}
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function InspectionDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -60,6 +178,13 @@ export default function InspectionDetailScreen() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
   const [sendEmailSuccess, setSendEmailSuccess] = useState(false);
+
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewBase64, setPreviewBase64] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewSharing, setPreviewSharing] = useState(false);
+  const [previewFileUri, setPreviewFileUri] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<{
     inspection: any;
@@ -119,6 +244,75 @@ export default function InspectionDetailScreen() {
       setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPreviewError(null);
+    setPreviewBase64(null);
+    setPreviewFileUri(null);
+    setPreviewLoading(true);
+    setPreviewVisible(true);
+
+    try {
+      const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
+      url.searchParams.set("locale", pdfLocale);
+      url.searchParams.set("showPageNumbers", showPageNumbers ? "true" : "false");
+      const resp = await fetch(url.toString(), {
+        method: "GET",
+        headers: { ...authHeaders() },
+      });
+
+      if (!resp.ok) {
+        let errorMsg = "حدث خطأ أثناء إنشاء التقرير";
+        try {
+          const json = await resp.json();
+          errorMsg = json.error ?? errorMsg;
+        } catch {}
+        setPreviewError(errorMsg);
+        return;
+      }
+
+      const arrayBuffer = await resp.arrayBuffer();
+      const base64 = arrayBufferToBase64(arrayBuffer);
+
+      const filename = `laqit-preview-${Date.now()}.pdf`;
+      const fileUri =
+        (FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "") +
+        filename;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      setPreviewFileUri(fileUri);
+      setPreviewBase64(base64);
+    } catch {
+      setPreviewError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleShareFromPreview = async () => {
+    if (previewFileUri == null) return;
+    setPreviewSharing(true);
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(previewFileUri, {
+          mimeType: "application/pdf",
+          dialogTitle: "مشاركة أو حفظ تقرير PDF",
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        setPreviewError("المشاركة غير متاحة على هذا الجهاز");
+      }
+    } catch {
+      setPreviewError("تعذر فتح خيارات المشاركة");
+    } finally {
+      setPreviewSharing(false);
     }
   };
 
@@ -315,6 +509,24 @@ export default function InspectionDetailScreen() {
               </ThemedText>
             </Pressable>
 
+            {/* Preview button — full width */}
+            <Pressable
+              testID="button-preview-pdf"
+              onPress={handlePreviewPdf}
+              style={({ pressed }) => [
+                styles.pdfPreviewBtn,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Feather name="eye" size={18} color="#fff" />
+              <ThemedText style={[styles.pdfPreviewBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                معاينة PDF
+              </ThemedText>
+            </Pressable>
+
             <View style={styles.pdfBtnRow}>
               {/* Download */}
               <Pressable
@@ -391,6 +603,17 @@ export default function InspectionDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* PDF Preview modal */}
+      <PdfPreviewModal
+        visible={previewVisible}
+        pdfBase64={previewBase64}
+        loading={previewLoading}
+        error={previewError}
+        onClose={() => setPreviewVisible(false)}
+        onShare={handleShareFromPreview}
+        sharing={previewSharing}
+      />
 
       {/* Email modal */}
       <Modal
@@ -489,6 +712,62 @@ export default function InspectionDetailScreen() {
   );
 }
 
+const previewStyles = StyleSheet.create({
+  container: { flex: 1 },
+  topBar: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+  },
+  topBarButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topBarTitle: { fontSize: 17 },
+  topBarSpacer: { width: 36 },
+  webViewContainer: { flex: 1 },
+  centerState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+    padding: Spacing["2xl"],
+  },
+  stateText: { fontSize: 14, textAlign: "center" },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  webView: { flex: 1 },
+  webViewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    backgroundColor: "rgba(255,255,255,0.85)",
+  },
+  bottomBar: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+  },
+  shareButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
+  shareButtonText: { color: "#fff", fontSize: 16 },
+});
+
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -549,6 +828,15 @@ const styles = StyleSheet.create({
   localeOptionText: {
     fontSize: 13,
   },
+  pdfPreviewBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
+  pdfPreviewBtnText: { color: "#fff", fontSize: 15 },
   pdfBtnRow: {
     flexDirection: "row-reverse",
     gap: Spacing.sm,
