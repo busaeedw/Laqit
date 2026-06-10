@@ -478,7 +478,7 @@ export async function generateAnalysisPdf(
     // ── Footer ────────────────────────────────────────────────────────────────
     const footerY = doc.page.height - 50;
     if (L.footerEn) {
-      doc.font("Helvetica").fontSize(8).fillColor(gray)
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(gray)
         .text(L.footerEn, 50, footerY, { width: pageWidth, align: "center" });
     }
     if (L.footerAr) {
