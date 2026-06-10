@@ -63,6 +63,7 @@ import { Pool } from "pg";
 var schema_exports = {};
 __export(schema_exports, {
   auditLog: () => auditLog,
+  carMakeAgents: () => carMakeAgents,
   carMakes: () => carMakes,
   carModels: () => carModels,
   cities: () => cities,
@@ -71,6 +72,7 @@ __export(schema_exports, {
   customers: () => customers,
   deliveryStatusEnum: () => deliveryStatusEnum,
   insertAuditLogSchema: () => insertAuditLogSchema,
+  insertCarMakeAgentSchema: () => insertCarMakeAgentSchema,
   insertCarMakeSchema: () => insertCarMakeSchema,
   insertCarModelSchema: () => insertCarModelSchema,
   insertCitySchema: () => insertCitySchema,
@@ -264,6 +266,7 @@ var cities = pgTable(
 var carMakes = pgTable("car_makes", {
   makeId: uuid("make_id").primaryKey().default(sql`gen_random_uuid()`),
   makeName: varchar("make_name", { length: 50 }).notNull().unique(),
+  nameAr: varchar("name_ar", { length: 80 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 var carModels = pgTable(
@@ -484,7 +487,8 @@ var quotes = pgTable(
   (t) => [
     index("idx_quotes_inspection_id").on(t.inspectionId),
     index("idx_quotes_vendor_id").on(t.vendorId),
-    index("idx_quotes_status").on(t.status)
+    index("idx_quotes_status").on(t.status),
+    uniqueIndex("uq_one_accepted_quote_per_inspection").on(t.inspectionId).where(sql`status = 'accepted'`)
   ]
 );
 var payments = pgTable(
@@ -505,7 +509,8 @@ var payments = pgTable(
   (t) => [
     index("idx_payments_inspection_id").on(t.inspectionId),
     index("idx_payments_customer_id").on(t.customerId),
-    index("idx_payments_status").on(t.status)
+    index("idx_payments_status").on(t.status),
+    uniqueIndex("uq_one_live_payment_per_inspection").on(t.inspectionId).where(sql`status IN ('initiated', 'captured')`)
   ]
 );
 var notifications = pgTable(
@@ -549,6 +554,19 @@ var auditLog = pgTable(
     index("idx_audit_log_entity").on(t.entityType, t.entityId),
     index("idx_audit_log_created_at").on(t.createdAt)
   ]
+);
+var carMakeAgents = pgTable(
+  "car_make_agents",
+  {
+    agentId: uuid("agent_id").primaryKey().default(sql`gen_random_uuid()`),
+    makeId: uuid("make_id").notNull().unique().references(() => carMakes.makeId),
+    agentNameEn: varchar("agent_name_en", { length: 200 }).notNull(),
+    agentNameAr: varchar("agent_name_ar", { length: 200 }),
+    website: varchar("website", { length: 300 }),
+    phone: varchar("phone", { length: 30 }),
+    headquartersCity: varchar("headquarters_city", { length: 100 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  }
 );
 var insertCitySchema = createInsertSchema(cities).omit({
   cityId: true,
@@ -620,6 +638,10 @@ var insertNotificationSchema = createInsertSchema(notifications).omit({
 });
 var insertAuditLogSchema = createInsertSchema(auditLog).omit({
   auditId: true,
+  createdAt: true
+});
+var insertCarMakeAgentSchema = createInsertSchema(carMakeAgents).omit({
+  agentId: true,
   createdAt: true
 });
 
@@ -711,6 +733,50 @@ function requireCustomer(req, res, next) {
   res.locals.customerId = claims.customerId;
   next();
 }
+function optionalCustomer(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const claims = verifyToken(authHeader.slice(7));
+    if (claims) {
+      res.locals.customerId = claims.customerId;
+    }
+  }
+  next();
+}
+var RateLimiter = class {
+  store = /* @__PURE__ */ new Map();
+  windowMs;
+  maxRequests;
+  constructor(windowMs, maxRequests) {
+    this.windowMs = windowMs;
+    this.maxRequests = maxRequests;
+  }
+  /** Returns true if the request is allowed, false if over limit. */
+  check(key) {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+    const bucket = this.store.get(key) ?? { timestamps: [] };
+    bucket.timestamps = bucket.timestamps.filter((t) => t > cutoff);
+    if (bucket.timestamps.length >= this.maxRequests) {
+      this.store.set(key, bucket);
+      return false;
+    }
+    bucket.timestamps.push(now);
+    this.store.set(key, bucket);
+    return true;
+  }
+  /** Seconds until the caller can retry. */
+  retryAfterSeconds(key) {
+    const bucket = this.store.get(key);
+    if (!bucket || bucket.timestamps.length === 0) return 0;
+    const oldest = Math.min(...bucket.timestamps);
+    return Math.max(0, Math.ceil((oldest + this.windowMs - Date.now()) / 1e3));
+  }
+};
+var otpIpLimiter = new RateLimiter(15 * 60 * 1e3, 5);
+var aiCustomerLimiter = new RateLimiter(60 * 60 * 1e3, 20);
+var aiIpLimiter = new RateLimiter(60 * 60 * 1e3, 40);
+var emailIpLimiter = new RateLimiter(60 * 1e3, 5);
 var OTP_TTL_MS = 5 * 60 * 1e3;
 var OTP_RESEND_COOLDOWN_MS = 60 * 1e3;
 var OTP_MAX_ATTEMPTS = 5;
@@ -732,6 +798,10 @@ function issueOtp(mobileE164) {
     lastSentAt: now
   });
   return { code };
+}
+function hasPendingOtp(mobileE164) {
+  const entry = otpStore.get(mobileE164);
+  return !!entry && Date.now() <= entry.expiresAt;
 }
 function verifyOtp(mobileE164, code) {
   const entry = otpStore.get(mobileE164);
@@ -856,7 +926,7 @@ Where:
 - confidence: integer 0-100, how confident you are in the total extraction`;
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5",
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -868,7 +938,7 @@ Where:
         }
       ],
       response_format: { type: "json_object" },
-      max_tokens: 500
+      max_completion_tokens: 2048
     });
     const content = response.choices[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(content);
@@ -923,11 +993,245 @@ async function createPaymentIntent(amount, currency, metadata) {
   };
 }
 
+// server/services/analysisPdf.ts
+import PDFDocument from "pdfkit";
+import * as path from "path";
+var AMIRI_FONT_PATH = path.resolve(__dirname, "../assets/fonts/Amiri-Regular.ttf");
+var PRIVATE_HOSTNAME_RE = /^(localhost|.*\.local)$|^127\.|^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^169\.254\.|^\[?::1\]?$|^\[?fc|^\[?fd/i;
+function isSafeImageUri(uri) {
+  if (!uri.startsWith("https://")) return false;
+  try {
+    const { hostname } = new URL(uri);
+    if (PRIVATE_HOSTNAME_RE.test(hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+async function fetchImageBuffer(uri) {
+  if (!isSafeImageUri(uri)) {
+    console.warn(`[analysisPdf] Image URI rejected by SSRF guard: ${uri.slice(0, 80)}`);
+    return null;
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8e3);
+  try {
+    const resp = await fetch(uri, {
+      signal: controller.signal,
+      redirect: "error"
+    });
+    if (!resp.ok) {
+      console.warn(`[analysisPdf] Image fetch failed: HTTP ${resp.status}`);
+      return null;
+    }
+    const contentType = resp.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) {
+      console.warn(`[analysisPdf] Rejected non-image content-type: ${contentType}`);
+      return null;
+    }
+    const contentLength = parseInt(resp.headers.get("content-length") ?? "0", 10);
+    if (contentLength > MAX_IMAGE_BYTES) {
+      console.warn(`[analysisPdf] Image too large (content-length): ${contentLength}`);
+      return null;
+    }
+    const arrayBuffer = await resp.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
+      console.warn(`[analysisPdf] Image too large after download: ${arrayBuffer.byteLength}`);
+      return null;
+    }
+    return Buffer.from(arrayBuffer);
+  } catch (err) {
+    console.warn(`[analysisPdf] Image fetch error: ${err?.message ?? err}`);
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function generateAnalysisPdf(carInfo, parts, imageUri) {
+  const imageBuffer = imageUri ? await fetchImageBuffer(imageUri) : null;
+  return new Promise((resolve3, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve3(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    doc.registerFont("Arabic", AMIRI_FONT_PATH);
+    const blue = "#1E74F2";
+    const gray = "#6B7280";
+    const light = "#F3F4F6";
+    const dark = "#111827";
+    const pageWidth = doc.page.width - 100;
+    const arText = (text2, x, y, opts = {}) => {
+      doc.font("Arabic").fontSize(opts.fontSize ?? 10).fillColor(opts.fillColor ?? dark).text(text2, x, y, { align: "right", ...opts, font: void 0 });
+    };
+    const latText = (text2, x, y, opts = {}) => {
+      doc.font(opts.bold ? "Helvetica-Bold" : "Helvetica").fontSize(opts.fontSize ?? 10).fillColor(opts.fillColor ?? dark).text(text2, x, y, { ...opts, bold: void 0, font: void 0 });
+    };
+    doc.rect(50, 40, pageWidth, 60).fill(blue);
+    doc.font("Helvetica-Bold").fontSize(14).fillColor("#FFFFFF").text("Laqit", 50, 52, { width: pageWidth / 2, align: "left" });
+    doc.font("Arabic").fontSize(18).fillColor("#FFFFFF").text("\u0644\u0627\u0642\u0637", 50, 52, { width: pageWidth, align: "right" });
+    doc.moveDown(3);
+    const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+    doc.font("Helvetica-Bold").fontSize(15).fillColor(dark).text("Car Damage Analysis Report", 50, 120, { width: pageWidth, align: "center" });
+    doc.font("Arabic").fontSize(13).fillColor(dark).text("\u062A\u0642\u0631\u064A\u0631 \u062A\u0634\u062E\u064A\u0635 \u0623\u0636\u0631\u0627\u0631 \u0627\u0644\u0633\u064A\u0627\u0631\u0629", 50, 138, { width: pageWidth, align: "center" });
+    doc.font("Helvetica").fontSize(10).fillColor(gray).text(`Date: ${dateStr}`, 50, 158, { width: pageWidth, align: "center" });
+    doc.moveDown(1.2);
+    doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y).strokeColor(blue).lineWidth(1.5).stroke();
+    doc.moveDown(1);
+    const carY = doc.y;
+    doc.rect(50, carY, pageWidth, 28).fill(light);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(blue).text("Vehicle Information", 55, carY + 8, { width: pageWidth * 0.5, align: "left" });
+    doc.font("Arabic").fontSize(12).fillColor(blue).text("\u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0627\u0644\u0633\u064A\u0627\u0631\u0629", 50, carY + 8, { width: pageWidth - 10, align: "right" });
+    doc.moveDown(0.3);
+    const colW = pageWidth / 3;
+    const labelY = doc.y + 4;
+    const valueY = labelY + 14;
+    doc.font("Helvetica").fontSize(9).fillColor(gray).text("Make", 50, labelY, { width: colW }).text("Model", 50 + colW, labelY, { width: colW }).text("Year", 50 + colW * 2, labelY, { width: colW });
+    doc.font("Arabic").fontSize(12).fillColor(dark).text(carInfo.makeAr, 50, valueY, { width: colW, align: "left" });
+    doc.font("Helvetica").fontSize(10).fillColor(gray).text(`(${carInfo.make})`, 50, valueY + 14, { width: colW });
+    doc.font("Arabic").fontSize(12).fillColor(dark).text(carInfo.modelAr, 50 + colW, valueY, { width: colW, align: "left" });
+    doc.font("Helvetica").fontSize(10).fillColor(gray).text(`(${carInfo.model})`, 50 + colW, valueY + 14, { width: colW });
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(dark).text(carInfo.year, 50 + colW * 2, valueY, { width: colW });
+    doc.moveDown(3.2);
+    if (imageBuffer) {
+      const imgSectionY = doc.y;
+      doc.rect(50, imgSectionY, pageWidth, 28).fill(light);
+      doc.font("Helvetica-Bold").fontSize(11).fillColor(blue).text("Damage Photo", 55, imgSectionY + 8, { width: pageWidth * 0.5, align: "left" });
+      doc.font("Arabic").fontSize(12).fillColor(blue).text("\u0635\u0648\u0631\u0629 \u0627\u0644\u0636\u0631\u0631", 50, imgSectionY + 8, { width: pageWidth - 10, align: "right" });
+      doc.moveDown(0.5);
+      const maxImgWidth = pageWidth;
+      const maxImgHeight = 200;
+      try {
+        doc.image(imageBuffer, 50, doc.y, {
+          fit: [maxImgWidth, maxImgHeight],
+          align: "center",
+          valign: "center"
+        });
+        doc.y = Math.max(doc.y, imgSectionY + 28 + maxImgHeight + 8);
+      } catch (imgErr) {
+        console.warn(`[analysisPdf] Could not embed image: ${imgErr?.message}`);
+        doc.font("Helvetica").fontSize(10).fillColor(gray).text("[Photo could not be embedded]", 50, doc.y, { width: pageWidth, align: "center" });
+        doc.moveDown(1);
+      }
+    }
+    doc.moveDown(0.5);
+    if (doc.y > doc.page.height - 150) doc.addPage();
+    const tableActualY = doc.y;
+    doc.rect(50, tableActualY, pageWidth, 28).fill(blue);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#FFFFFF").text("Detected Parts", 55, tableActualY + 8, { width: pageWidth * 0.5, align: "left" });
+    doc.font("Arabic").fontSize(13).fillColor("#FFFFFF").text("\u0627\u0644\u0642\u0637\u0639 \u0627\u0644\u0645\u0643\u062A\u0634\u0641\u0629", 50, tableActualY + 7, { width: pageWidth - 10, align: "right" });
+    const c1 = 50;
+    const c2 = 50 + pageWidth * 0.36;
+    const c3 = 50 + pageWidth * 0.63;
+    const c4 = 50 + pageWidth * 0.78;
+    let rowTop = tableActualY + 28 + 5;
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(gray).text("Arabic Name", c1, rowTop, { width: pageWidth * 0.34 }).text("English Name", c2, rowTop, { width: pageWidth * 0.25 }).text("Confidence", c3, rowTop, { width: pageWidth * 0.14 }).text("Est. Price (SAR)", c4, rowTop, { width: pageWidth * 0.22 });
+    doc.font("Arabic").fontSize(9).fillColor(gray).text("\u0627\u0644\u0627\u0633\u0645 \u0628\u0627\u0644\u0639\u0631\u0628\u064A\u0629", c1, rowTop, { width: pageWidth * 0.34, align: "right" });
+    rowTop += 18;
+    doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
+    parts.forEach((part, i) => {
+      if (rowTop > doc.page.height - 100) {
+        doc.addPage();
+        rowTop = 60;
+      }
+      if (i % 2 === 0) {
+        doc.rect(50, rowTop, pageWidth, 24).fill(light);
+      }
+      const conf = part.confidence;
+      const confColor = conf >= 90 ? "#16A34A" : conf >= 75 ? "#22C55E" : conf >= 60 ? "#D97706" : "#DC2626";
+      doc.font("Arabic").fontSize(10).fillColor(dark).text(part.nameAr, c1, rowTop + 6, { width: pageWidth * 0.34, align: "right" });
+      doc.font("Helvetica").fontSize(9).fillColor(dark).text(part.name, c2, rowTop + 8, { width: pageWidth * 0.25 });
+      doc.font("Helvetica-Bold").fontSize(9).fillColor(confColor).text(`${conf}%`, c3, rowTop + 8, { width: pageWidth * 0.14 });
+      doc.font("Helvetica").fontSize(9).fillColor(dark).text(`${part.price.toLocaleString()} SAR`, c4, rowTop + 8, { width: pageWidth * 0.22 });
+      rowTop += 24;
+      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.3).stroke();
+    });
+    const total = parts.reduce((sum, p) => sum + p.price, 0);
+    doc.y = rowTop + 8;
+    doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y).strokeColor(blue).lineWidth(1).stroke();
+    doc.moveDown(0.5);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(dark).text(`Total Estimated: ${total.toLocaleString()} SAR`, 50, doc.y, {
+      width: pageWidth * 0.5
+    });
+    doc.font("Arabic").fontSize(12).fillColor(dark).text(`\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u062A\u0642\u062F\u064A\u0631\u064A: ${total.toLocaleString()} \u0631\u064A\u0627\u0644`, 50, doc.y - 16, {
+      width: pageWidth,
+      align: "right"
+    });
+    const footerY = doc.page.height - 50;
+    doc.font("Helvetica").fontSize(8).fillColor(gray).text(
+      "Generated by Laqit \u2014 \u0644\u0627\u0642\u0637 | laqit.app \u2014 All prices are estimates only.",
+      50,
+      footerY,
+      { width: pageWidth, align: "center" }
+    );
+    doc.end();
+  });
+}
+
+// server/services/email.ts
+async function sendAnalysisPdfEmail(to, pdfBuffer, filename) {
+  const host = process.env.EMAIL_HOST;
+  const port = parseInt(process.env.EMAIL_PORT ?? "587", 10);
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASS;
+  const from = process.env.EMAIL_FROM ?? user ?? "noreply@laqit.app";
+  if (!host || !user || !pass) {
+    console.log(`[Email STUB] Would send PDF to: ${to}`);
+    console.log(`  From: ${from}`);
+    console.log(`  Subject: \u062A\u0642\u0631\u064A\u0631 \u062A\u0634\u062E\u064A\u0635 \u0627\u0644\u0633\u064A\u0627\u0631\u0629 - \u0644\u0627\u0642\u0637`);
+    console.log(`  Attachment: ${filename} (${pdfBuffer.length} bytes)`);
+    return { success: true, messageId: `mock_email_${Date.now()}` };
+  }
+  try {
+    const nodemailer = await import("nodemailer");
+    const transporter = nodemailer.default.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass }
+    });
+    const info = await transporter.sendMail({
+      from,
+      to,
+      subject: "\u062A\u0642\u0631\u064A\u0631 \u062A\u0634\u062E\u064A\u0635 \u0627\u0644\u0633\u064A\u0627\u0631\u0629 - \u0644\u0627\u0642\u0637",
+      html: `
+        <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #1E74F2;">\u0644\u0627\u0642\u0637 \u2014 \u062A\u0642\u0631\u064A\u0631 \u062A\u0634\u062E\u064A\u0635 \u0627\u0644\u0633\u064A\u0627\u0631\u0629</h2>
+          <p>\u0645\u0631\u062D\u0628\u0627\u064B\u060C</p>
+          <p>\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0637\u0644\u0627\u0639 \u0639\u0644\u0649 \u062A\u0642\u0631\u064A\u0631 \u062A\u0634\u062E\u064A\u0635 \u0633\u064A\u0627\u0631\u062A\u0643 \u0627\u0644\u0645\u0631\u0641\u0642 \u0623\u062F\u0646\u0627\u0647.</p>
+          <p>\u064A\u062D\u062A\u0648\u064A \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0639\u0644\u0649 \u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0627\u0644\u0633\u064A\u0627\u0631\u0629 \u0648\u0627\u0644\u0642\u0637\u0639 \u0627\u0644\u0645\u0643\u062A\u0634\u0641\u0629 \u0645\u0639 \u0627\u0644\u0623\u0633\u0639\u0627\u0631 \u0627\u0644\u062A\u0642\u062F\u064A\u0631\u064A\u0629.</p>
+          <hr />
+          <p style="color: #888; font-size: 12px;">\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0647\u0630\u0627 \u0627\u0644\u0628\u0631\u064A\u062F \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0645\u0646 \u0645\u0646\u0635\u0629 \u0644\u0627\u0642\u0637.</p>
+        </div>
+      `,
+      attachments: [
+        {
+          filename,
+          content: pdfBuffer,
+          contentType: "application/pdf"
+        }
+      ]
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error("[Email] Send error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
 // server/routes.ts
 var openai2 = new OpenAI2({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
 });
+function clientIp(req) {
+  return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+}
 async function registerRoutes(app2) {
   app2.post("/api/register", async (req, res) => {
     try {
@@ -959,12 +1263,20 @@ async function registerRoutes(app2) {
   app2.get("/api/inspections/:userId", (_req, res) => {
     res.status(410).json({ error: "\u0647\u0630\u0647 \u0627\u0644\u062E\u062F\u0645\u0629 \u0644\u0645 \u062A\u0639\u062F \u0645\u062A\u0627\u062D\u0629" });
   });
-  app2.post("/api/analyze", requireCustomer, async (req, res) => {
+  app2.post("/api/analyze", optionalCustomer, async (req, res) => {
     try {
+      const customerId = res.locals.customerId;
+      if (customerId && !aiCustomerLimiter.check(customerId)) {
+        const retryAfter = aiCustomerLimiter.retryAfterSeconds(customerId);
+        return res.status(429).json({ error: `\u062A\u062C\u0627\u0648\u0632\u062A \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0645\u0646 \u0637\u0644\u0628\u0627\u062A \u0627\u0644\u062A\u062D\u0644\u064A\u0644\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F ${retryAfter} \u062B\u0627\u0646\u064A\u0629` });
+      }
+      const ip = clientIp(req);
+      if (!aiIpLimiter.check(ip)) {
+        const retryAfter = aiIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `\u0637\u0644\u0628\u0627\u062A \u0643\u062B\u064A\u0631\u0629 \u062C\u062F\u0627\u064B\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F ${retryAfter} \u062B\u0627\u0646\u064A\u0629` });
+      }
       const { imageUri, carInfo } = req.body;
       console.log("Received analyze request");
-      console.log("Image URI length:", imageUri?.length || 0);
-      console.log("Image starts with:", imageUri?.substring(0, 50));
       const systemPrompt = `You are an expert automotive damage and missing parts detection system. You MUST analyze the image and identify the car, then detect any missing, damaged, broken, or worn parts.
 
 IMPORTANT: You MUST ALWAYS return valid JSON in the exact format specified below. NEVER return error messages or plain text.
@@ -975,12 +1287,17 @@ STEP 1 - Identify the car:
 - Study the body shape, taillights, and distinctive features
 - Estimate the year based on the generation/design
 
-STEP 2 - Detect missing or damaged parts:
-- Look carefully for any MISSING parts (e.g., missing bumper, missing mirror, missing headlight, missing trim piece, missing emblem, missing grille)
-- Look for DAMAGED parts (cracked bumpers, broken lights, dented panels, scratched paint, broken mirrors, cracked windshield)
-- Look for WORN parts (faded paint, worn tires, rusted areas, deteriorated rubber seals)
-- For each issue found, describe the condition: "missing", "damaged", "cracked", "broken", "dented", "scratched", "worn", "faded", etc.
-- Provide realistic replacement/repair prices in Saudi Riyals (SAR)
+STEP 2 - Systematically inspect for damage (scan EVERY zone):
+This is a damage inspection tool; missing real damage is the worst possible outcome. Work zone by zone and report EVERY visible defect as its own separate part entry:
+- FRONT: bumper, grille, headlights, fog lights, hood, emblem, license plate area
+- REAR: bumper, tail lights, trunk/tailgate, exhaust tip, emblem
+- SIDES: front/rear doors, fenders, side mirrors, door handles, side moldings/trim, rocker panels
+- GLASS: windshield, rear window, side windows (look for chips, cracks, shattering)
+- WHEELS & TIRES: rims (scuffs, bends, curb rash), tires (wear, flats, sidewall cuts)
+- LIGHTS: any cracked, broken, fogged, hazed, or missing lamp/lens
+- PAINT & BODY: scratches, scuffs, dents, dings, rust, faded/peeling/chipped paint, paint transfer, misaligned panels or uneven gaps
+
+For EACH defect, create a SEPARATE entry. Report damage even when minor (small scratches, light scuffs, paint chips, curb rash). Describe the condition precisely: "missing", "damaged", "cracked", "broken", "dented", "scratched", "worn", "faded", etc. Provide a realistic replacement/repair price in Saudi Riyals (SAR) for each.
 
 You MUST return this exact JSON structure (no exceptions):
 {
@@ -1019,17 +1336,19 @@ CONDITION VALUES:
 - "cracked" / "\u0645\u062A\u0634\u0642\u0642" - Part has cracks
 
 RULES:
-- Focus on finding MISSING and DAMAGED parts - this is a damage inspection tool
-- If the car appears in good condition with no visible damage, still check carefully for minor issues like scratches, worn tires, faded paint, etc.
-- If truly no damage is found, return an empty parts array
+- Be thorough: report EVERY visible defect as its own part entry. Err on the side of reporting borderline or minor damage rather than missing it.
+- Examine the whole image methodically; do not stop after finding one issue. A single photo often shows several separate damaged parts.
+- Only return an empty parts array if the image clearly shows an undamaged car in pristine condition, or if there is genuinely no car in the image.
+- If the image is blurry or a region is partly unclear, still report what is visibly wrong and lower the confidence accordingly instead of skipping it.
+- boundingBox must tightly frame the damaged area using normalized 0-1 coordinates (x,y = top-left corner; width,height = size). Provide one for every part.
 - ALWAYS provide Arabic translations (makeAr, modelAr, nameAr, descriptionAr, conditionAr, primaryUseAr)
 - Confidence should reflect how certain you are about the damage (60-100)
 - Prices should be realistic replacement/repair estimates in SAR
 - NEVER return an error message - always return the JSON structure above`;
       const userMessage = carInfo ? `The user has selected: ${carInfo.make} ${carInfo.model} ${carInfo.year}. Inspect the car image carefully for any missing, damaged, broken, worn, or defective parts.` : `Identify the car make, model, year, then inspect the image carefully for any missing, damaged, broken, worn, or defective parts.`;
-      console.log("Calling OpenAI API with model gpt-4o...");
+      console.log("Calling OpenAI API with model gpt-5...");
       const response = await openai2.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5",
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -1038,19 +1357,23 @@ RULES:
               { type: "text", text: userMessage },
               {
                 type: "image_url",
-                image_url: { url: imageUri }
+                image_url: { url: imageUri, detail: "high" }
               }
             ]
           }
         ],
         response_format: { type: "json_object" },
-        max_tokens: 2048
+        reasoning_effort: "medium",
+        max_completion_tokens: 8192
       });
-      console.log("OpenAI API response received");
+      const finishReason = response.choices[0]?.finish_reason;
+      console.log(`OpenAI API response received (finish_reason=${finishReason})`);
+      if (finishReason === "length") {
+        console.warn("Analyze response was truncated (hit max_completion_tokens)");
+      }
       const content = response.choices[0]?.message?.content || "{}";
-      console.log("Response content:", content.substring(0, 300));
       const result = JSON.parse(content);
-      if (!result.carInfo || !result.parts) {
+      if (!result.carInfo || !Array.isArray(result.parts)) {
         console.log("Invalid response structure, returning default");
         return res.json({
           carInfo: {
@@ -1085,12 +1408,22 @@ RULES:
       });
     }
   });
-  app2.post("/api/identify-car", requireCustomer, async (req, res) => {
+  app2.post("/api/identify-car", optionalCustomer, async (req, res) => {
     try {
+      const customerId = res.locals.customerId;
+      if (customerId && !aiCustomerLimiter.check(customerId)) {
+        const retryAfter = aiCustomerLimiter.retryAfterSeconds(customerId);
+        return res.status(429).json({ error: `\u062A\u062C\u0627\u0648\u0632\u062A \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0645\u0646 \u0637\u0644\u0628\u0627\u062A \u0627\u0644\u062A\u062D\u0644\u064A\u0644\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F ${retryAfter} \u062B\u0627\u0646\u064A\u0629` });
+      }
+      const ip = clientIp(req);
+      if (!aiIpLimiter.check(ip)) {
+        const retryAfter = aiIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `\u0637\u0644\u0628\u0627\u062A \u0643\u062B\u064A\u0631\u0629 \u062C\u062F\u0627\u064B\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F ${retryAfter} \u062B\u0627\u0646\u064A\u0629` });
+      }
       const { imageUri } = req.body;
       if (!imageUri) return res.status(400).json({ error: "imageUri required" });
       const response = await openai2.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5",
         messages: [
           {
             role: "system",
@@ -1117,7 +1450,7 @@ Rules:
           }
         ],
         response_format: { type: "json_object" },
-        max_tokens: 256
+        max_completion_tokens: 2048
       });
       const raw = response.choices[0]?.message?.content ?? "{}";
       const result = JSON.parse(raw);
@@ -1125,6 +1458,37 @@ Rules:
     } catch (err) {
       console.error("identify-car error:", err?.message);
       res.status(500).json({ error: "\u0641\u0634\u0644 \u0641\u064A \u062A\u062D\u0644\u064A\u0644 \u0635\u0648\u0631\u0629 \u0627\u0644\u0633\u064A\u0627\u0631\u0629" });
+    }
+  });
+  app2.post("/api/analysis/send-pdf", async (req, res) => {
+    try {
+      const ip = clientIp(req);
+      if (!emailIpLimiter.check(ip)) {
+        const retryAfter = emailIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `\u0637\u0644\u0628\u0627\u062A \u0643\u062B\u064A\u0631\u0629 \u062C\u062F\u0627\u064B\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F ${retryAfter} \u062B\u0627\u0646\u064A\u0629` });
+      }
+      const { email, carInfo, parts, imageUri } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u0637\u0644\u0648\u0628" });
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D" });
+      }
+      if (!carInfo || !Array.isArray(parts)) {
+        return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629" });
+      }
+      const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : void 0;
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri);
+      const filename = `laqit-analysis-${Date.now()}.pdf`;
+      const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
+      if (!result.success) {
+        return res.status(500).json({ error: "\u0641\u0634\u0644 \u0641\u064A \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0644\u0627\u062D\u0642\u0627\u064B" });
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("send-pdf error:", err?.message);
+      res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0625\u0646\u0634\u0627\u0621 \u0623\u0648 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062A\u0642\u0631\u064A\u0631" });
     }
   });
   app2.get("/api/cities", async (_req, res) => {
@@ -1138,11 +1502,66 @@ Rules:
   });
   app2.get("/api/car-makes", async (_req, res) => {
     try {
-      const result = await db.select().from(carMakes).orderBy(carMakes.makeName);
-      res.json({ makes: result });
+      const rows = await db.select({
+        makeId: carMakes.makeId,
+        makeName: carMakes.makeName,
+        nameAr: carMakes.nameAr,
+        createdAt: carMakes.createdAt,
+        agentNameEn: carMakeAgents.agentNameEn,
+        agentNameAr: carMakeAgents.agentNameAr,
+        website: carMakeAgents.website,
+        phone: carMakeAgents.phone,
+        headquartersCity: carMakeAgents.headquartersCity
+      }).from(carMakes).leftJoin(carMakeAgents, eq(carMakeAgents.makeId, carMakes.makeId)).orderBy(carMakes.makeName);
+      const makes = rows.map((r) => ({
+        makeId: r.makeId,
+        makeName: r.makeName,
+        nameAr: r.nameAr,
+        createdAt: r.createdAt,
+        agent: r.agentNameEn ? {
+          agentNameEn: r.agentNameEn,
+          agentNameAr: r.agentNameAr,
+          website: r.website,
+          phone: r.phone,
+          headquartersCity: r.headquartersCity
+        } : null
+      }));
+      res.json({ makes });
     } catch (err) {
       console.error("GET /api/car-makes error:", err?.message);
       res.status(500).json({ error: "\u062E\u0637\u0623 \u0641\u064A \u062C\u0644\u0628 \u0627\u0644\u0645\u0627\u0631\u0643\u0627\u062A" });
+    }
+  });
+  app2.patch("/api/car-makes/:makeId/agent", requireAdmin, async (req, res) => {
+    try {
+      const { makeId } = req.params;
+      const { agentNameEn, agentNameAr, website, phone, headquartersCity } = req.body;
+      if (!agentNameEn) {
+        return res.status(400).json({ error: "agentNameEn is required" });
+      }
+      const [agent] = await db.insert(carMakeAgents).values({ makeId, agentNameEn, agentNameAr: agentNameAr || null, website: website || null, phone: phone || null, headquartersCity: headquartersCity || null }).onConflictDoUpdate({
+        target: carMakeAgents.makeId,
+        set: {
+          agentNameEn,
+          agentNameAr: agentNameAr || null,
+          website: website || null,
+          phone: phone || null,
+          headquartersCity: headquartersCity || null
+        }
+      }).returning();
+      res.json({ success: true, agent });
+    } catch (err) {
+      console.error("PATCH /api/car-makes/:makeId/agent error:", err?.message);
+      res.status(500).json({ error: err?.message });
+    }
+  });
+  app2.get("/api/car-models/counts", async (_req, res) => {
+    try {
+      const result = await db.select().from(carModels);
+      res.json({ models: result.map((m) => ({ makeId: m.makeId })) });
+    } catch (err) {
+      console.error("GET /api/car-models/counts error:", err?.message);
+      res.status(500).json({ error: "\u062E\u0637\u0623 \u0641\u064A \u062C\u0644\u0628 \u0639\u062F\u062F \u0627\u0644\u0645\u0648\u062F\u064A\u0644\u0627\u062A" });
     }
   });
   app2.get("/api/car-models/:makeId", async (req, res) => {
@@ -1157,32 +1576,63 @@ Rules:
   });
   app2.post("/api/customers/register", async (req, res) => {
     try {
+      const ip = clientIp(req);
+      if (!otpIpLimiter.check(ip)) {
+        const retryAfter = otpIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `\u0637\u0644\u0628\u0627\u062A \u0643\u062B\u064A\u0631\u0629 \u062C\u062F\u0627\u064B\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F ${retryAfter} \u062B\u0627\u0646\u064A\u0629` });
+      }
       const { fullName, mobileE164, email, cityId } = req.body;
       if (!mobileE164 || !email || !cityId) {
         return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0648\u0627\u0644\u0628\u0631\u064A\u062F \u0648\u0627\u0644\u0645\u062F\u064A\u0646\u0629 \u0645\u0637\u0644\u0648\u0628\u0629" });
       }
-      const [customer] = await db.insert(customers).values({ fullName: fullName ?? null, mobileE164, email, cityId }).returning();
-      const result = issueOtp(mobileE164);
-      const code = "code" in result ? result.code : null;
-      if (code) {
-        const { sendSms: sendSms2 } = await Promise.resolve().then(() => (init_sms(), sms_exports));
-        await sendSms2(mobileE164, `\u0644\u0627\u0642\u0637: \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0627\u0644\u062E\u0627\u0635 \u0628\u0643 \u0647\u0648 ${code}. \u0635\u0627\u0644\u062D \u0644\u0645\u062F\u0629 5 \u062F\u0642\u0627\u0626\u0642.`);
+      const [existingMobile] = await db.select({ customerId: customers.customerId }).from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
+      if (existingMobile) {
+        return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B" });
       }
-      res.json({ success: true, message: "\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u062D\u0633\u0627\u0628. \u0623\u062F\u062E\u0644 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0627\u0644\u0645\u0631\u0633\u0644 \u0625\u0644\u0649 \u062C\u0648\u0627\u0644\u0643" });
+      const [existingEmail] = await db.select({ customerId: customers.customerId }).from(customers).where(eq(customers.email, email)).limit(1);
+      if (existingEmail) {
+        return res.status(400).json({ error: "\u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B" });
+      }
+      let customer;
+      try {
+        [customer] = await db.insert(customers).values({
+          fullName: fullName ?? null,
+          mobileE164,
+          email,
+          cityId,
+          lastLoginAt: /* @__PURE__ */ new Date()
+        }).returning();
+      } catch (insertErr) {
+        if (insertErr?.code === "23505") {
+          return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0623\u0648 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B" });
+        }
+        throw insertErr;
+      }
+      const token = signToken(customer.customerId);
+      res.json({ success: true, customer, token });
     } catch (err) {
-      if (err?.code === "23505") {
-        return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0623\u0648 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B" });
-      }
       console.error("Customer register error:", err?.message);
       res.status(500).json({ error: "\u062D\u062F\u062B \u062E\u0637\u0623 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0633\u062C\u064A\u0644" });
     }
   });
   app2.post("/api/customers/login", async (req, res) => {
     try {
+      const ip = clientIp(req);
+      if (!otpIpLimiter.check(ip)) {
+        const retryAfter = otpIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `\u0637\u0644\u0628\u0627\u062A \u0643\u062B\u064A\u0631\u0629 \u062C\u062F\u0627\u064B\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0628\u0639\u062F ${retryAfter} \u062B\u0627\u0646\u064A\u0629` });
+      }
       const { mobileE164 } = req.body;
       if (!mobileE164) return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0645\u0637\u0644\u0648\u0628" });
       const [customer] = await db.select().from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
-      if (!customer) return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      if (customer) {
+        await db.update(customers).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(customers.customerId, customer.customerId));
+        const token = signToken(customer.customerId);
+        return res.json({ success: true, customer, token });
+      }
+      if (!hasPendingOtp(mobileE164)) {
+        return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+      }
       const result = issueOtp(mobileE164);
       if ("cooldownRemaining" in result && !("code" in result)) {
         return res.status(429).json({ error: `\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 ${result.cooldownRemaining} \u062B\u0627\u0646\u064A\u0629 \u0642\u0628\u0644 \u0637\u0644\u0628 \u0631\u0645\u0632 \u062C\u062F\u064A\u062F` });
@@ -1198,15 +1648,36 @@ Rules:
   });
   app2.post("/api/customers/verify-otp", async (req, res) => {
     try {
-      const { mobileE164, otp } = req.body;
+      const { mobileE164, otp, fullName, email, cityId } = req.body;
       if (!mobileE164 || !otp) return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0648\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0637\u0644\u0648\u0628\u0627\u0646" });
       const result = verifyOtp(mobileE164, String(otp));
       if (!result.success) {
         return res.status(400).json({ error: result.error, attemptsLeft: result.attemptsLeft });
       }
-      const [customer] = await db.select().from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
-      if (!customer) return res.status(404).json({ error: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-      await db.update(customers).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(customers.customerId, customer.customerId));
+      const [existing] = await db.select().from(customers).where(eq(customers.mobileE164, mobileE164)).limit(1);
+      let customer;
+      if (!existing) {
+        if (!email || !cityId) {
+          return res.status(400).json({ error: "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629" });
+        }
+        try {
+          [customer] = await db.insert(customers).values({
+            fullName: fullName ?? null,
+            mobileE164,
+            email,
+            cityId,
+            lastLoginAt: /* @__PURE__ */ new Date()
+          }).returning();
+        } catch (insertErr) {
+          if (insertErr?.code === "23505") {
+            return res.status(400).json({ error: "\u0631\u0642\u0645 \u0627\u0644\u062C\u0648\u0627\u0644 \u0623\u0648 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u0633\u062C\u0644 \u0645\u0633\u0628\u0642\u0627\u064B" });
+          }
+          throw insertErr;
+        }
+      } else {
+        await db.update(customers).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(customers.customerId, existing.customerId));
+        customer = existing;
+      }
       const token = signToken(customer.customerId);
       res.json({ success: true, customer, token });
     } catch (err) {
@@ -1415,7 +1886,20 @@ Rules:
       if (!inspection) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
       const { status } = req.body;
-      const [updated] = await db.update(laqitInspections).set({ status, updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, req.params.id)).returning();
+      if (typeof status !== "string" || !inspectionStatusEnum.enumValues.includes(status)) {
+        return res.status(400).json({ error: "\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629" });
+      }
+      if (status !== "cancelled") {
+        return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D \u0628\u062A\u0639\u064A\u064A\u0646 \u0647\u0630\u0647 \u0627\u0644\u062D\u0627\u0644\u0629" });
+      }
+      if (inspection.status === "cancelled") {
+        return res.json({ success: true, inspection });
+      }
+      const CUSTOMER_CANCELLABLE_FROM = ["draft", "rfq_sent", "waiting_quotes", "quotes_received"];
+      if (!CUSTOMER_CANCELLABLE_FROM.includes(inspection.status)) {
+        return res.status(409).json({ error: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u0637\u0644\u0628 \u0641\u064A \u0647\u0630\u0647 \u0627\u0644\u0645\u0631\u062D\u0644\u0629" });
+      }
+      const [updated] = await db.update(laqitInspections).set({ status: "cancelled", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, req.params.id)).returning();
       res.json({ success: true, inspection: updated });
     } catch (err) {
       res.status(500).json({ error: err?.message });
@@ -1428,10 +1912,18 @@ Rules:
       const [inspection] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
       if (!inspection) return res.status(404).json({ error: "\u0627\u0644\u0641\u062D\u0635 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      const claimed = await db.update(laqitInspections).set({ status: "rfq_sent", updatedAt: /* @__PURE__ */ new Date() }).where(
+        and(
+          eq(laqitInspections.inspectionId, inspectionId),
+          eq(laqitInspections.status, "draft")
+        )
+      ).returning();
+      if (claimed.length === 0) {
+        return res.status(409).json({ error: "\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628 \u0645\u0646 \u0642\u0628\u0644" });
+      }
       const locationRows = await db.select({ vendorId: vendorLocations.vendorId }).from(vendorLocations).where(eq(vendorLocations.cityId, inspection.cityId));
       const cityVendorIds = locationRows.map((r) => r.vendorId);
       if (cityVendorIds.length === 0) {
-        await db.update(laqitInspections).set({ status: "rfq_sent", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, inspectionId));
         return res.json({ success: true, vendorsNotified: 0, message: "\u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0648\u0631\u062F\u0648\u0646 \u0641\u064A \u0645\u062F\u064A\u0646\u062A\u0643 \u0628\u0639\u062F" });
       }
       const modelRows = await db.select({ vendorId: vendorSupportedModels.vendorId }).from(vendorSupportedModels).where(
@@ -1476,7 +1968,6 @@ ${partsText}
         });
         if (sendResult.success) vendorsNotified++;
       }
-      await db.update(laqitInspections).set({ status: "rfq_sent", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, inspectionId));
       res.json({ success: true, vendorsNotified });
     } catch (err) {
       console.error("Submit RFQ error:", err?.message);
@@ -1644,6 +2135,26 @@ ${partsText}
       const [insp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId)).limit(1);
       if (!insp) return res.status(404).json({ error: "\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
       if (insp.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+      const lockedStatuses = [
+        "payment_pending",
+        "paid",
+        "cancelled",
+        "vendor_notified",
+        "ready_for_pickup",
+        "closed"
+      ];
+      if (lockedStatuses.includes(insp.status)) {
+        return res.status(409).json({ error: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0639\u0631\u0636 \u0628\u0639\u062F \u0628\u062F\u0621 \u0627\u0644\u062F\u0641\u0639 \u0623\u0648 \u0627\u0643\u062A\u0645\u0627\u0644\u0647" });
+      }
+      const [activePayment] = await db.select().from(payments).where(
+        and(
+          eq(payments.inspectionId, inspectionId),
+          inArray(payments.status, ["initiated", "captured"])
+        )
+      ).limit(1);
+      if (activePayment) {
+        return res.status(409).json({ error: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0639\u0631\u0636 \u0628\u0639\u062F \u0628\u062F\u0621 \u0627\u0644\u062F\u0641\u0639 \u0623\u0648 \u0627\u0643\u062A\u0645\u0627\u0644\u0647" });
+      }
       const [targetQuote] = await db.select().from(quotes).where(and(eq(quotes.quoteId, quoteId), eq(quotes.inspectionId, inspectionId))).limit(1);
       if (!targetQuote) return res.status(404).json({ error: "\u0627\u0644\u0639\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u0644\u0627 \u064A\u0646\u062A\u0645\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628" });
       const allQuotes = await db.select().from(quotes).where(eq(quotes.inspectionId, inspectionId));
@@ -1684,17 +2195,28 @@ ${partsText}
         quoteId,
         customerId
       });
-      const [payment] = await db.insert(payments).values({
-        inspectionId,
-        quoteId,
-        customerId,
-        amount: String(amount),
-        currency: quote.currency,
-        status: "initiated",
-        gateway: "stripe",
-        gatewayRef: intent.id
-      }).returning();
-      await db.update(laqitInspections).set({ status: "payment_pending", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, inspectionId));
+      let payment;
+      try {
+        payment = await db.transaction(async (tx) => {
+          const [inserted] = await tx.insert(payments).values({
+            inspectionId,
+            quoteId,
+            customerId,
+            amount: String(amount),
+            currency: quote.currency,
+            status: "initiated",
+            gateway: "stripe",
+            gatewayRef: intent.id
+          }).returning();
+          await tx.update(laqitInspections).set({ status: "payment_pending", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, inspectionId));
+          return inserted;
+        });
+      } catch (insertErr) {
+        if (insertErr?.code === "23505") {
+          return res.status(409).json({ error: "\u064A\u0648\u062C\u062F \u062F\u0641\u0639 \u0646\u0634\u0637 \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628 \u0628\u0627\u0644\u0641\u0639\u0644" });
+        }
+        throw insertErr;
+      }
       res.json({ success: true, payment, clientSecret: intent.clientSecret });
     } catch (err) {
       console.error("Create payment error:", err?.message);
@@ -1753,6 +2275,14 @@ ${partsText}
         if (!gatewayRef) return res.sendStatus(200);
         const [payment] = await db.select().from(payments).where(eq(payments.gatewayRef, gatewayRef)).limit(1);
         if (!payment) return res.sendStatus(200);
+        if (payment.status === "captured") return res.sendStatus(200);
+        const [webhookInsp] = await db.select().from(laqitInspections).where(eq(laqitInspections.inspectionId, payment.inspectionId)).limit(1);
+        if (!webhookInsp || webhookInsp.status !== "payment_pending") return res.sendStatus(200);
+        const [paymentQuote] = await db.select().from(quotes).where(and(eq(quotes.quoteId, payment.quoteId), eq(quotes.inspectionId, payment.inspectionId))).limit(1);
+        if (!paymentQuote || paymentQuote.status !== "accepted") {
+          console.warn(`Payment webhook: quote ${payment.quoteId} is no longer accepted \u2014 skipping paid transition`);
+          return res.sendStatus(200);
+        }
         await db.update(payments).set({ status: "captured", paidAt: /* @__PURE__ */ new Date() }).where(eq(payments.paymentId, payment.paymentId));
         await db.update(laqitInspections).set({ status: "paid", updatedAt: /* @__PURE__ */ new Date() }).where(eq(laqitInspections.inspectionId, payment.inspectionId));
         const [acceptedQuote] = await db.select().from(quotes).where(eq(quotes.quoteId, payment.quoteId)).limit(1);
@@ -1817,43 +2347,98 @@ async function seedReferenceData() {
   const allCities = await db.select().from(cities);
   console.log(`Cities: ${allCities.length} rows`);
   const makesData = [
-    "Toyota",
-    "Honda",
-    "Nissan",
-    "Hyundai",
-    "Kia",
-    "Renault",
-    "Mercedes-Benz",
-    "BMW",
-    "Lexus",
-    "Chevrolet",
-    "Ford",
-    "GMC",
-    "Audi",
-    "Mitsubishi",
-    "Cadillac"
+    { makeName: "Toyota", nameAr: "\u062A\u0648\u064A\u0648\u062A\u0627" },
+    { makeName: "Honda", nameAr: "\u0647\u0648\u0646\u062F\u0627" },
+    { makeName: "Nissan", nameAr: "\u0646\u064A\u0633\u0627\u0646" },
+    { makeName: "Hyundai", nameAr: "\u0647\u064A\u0648\u0646\u062F\u0627\u064A" },
+    { makeName: "Kia", nameAr: "\u0643\u064A\u0627" },
+    { makeName: "Renault", nameAr: "\u0631\u064A\u0646\u0648" },
+    { makeName: "Mercedes-Benz", nameAr: "\u0645\u0631\u0633\u064A\u062F\u0633 \u0628\u0646\u0632" },
+    { makeName: "BMW", nameAr: "\u0628\u064A \u0625\u0645 \u062F\u0628\u0644\u064A\u0648" },
+    { makeName: "Lexus", nameAr: "\u0644\u0643\u0632\u0633" },
+    { makeName: "Chevrolet", nameAr: "\u0634\u064A\u0641\u0631\u0648\u0644\u064A\u0647" },
+    { makeName: "Ford", nameAr: "\u0641\u0648\u0631\u062F" },
+    { makeName: "GMC", nameAr: "\u062C\u064A \u0625\u0645 \u0633\u064A" },
+    { makeName: "Audi", nameAr: "\u0623\u0648\u062F\u064A" },
+    { makeName: "Mitsubishi", nameAr: "\u0645\u064A\u062A\u0633\u0648\u0628\u064A\u0634\u064A" },
+    { makeName: "Cadillac", nameAr: "\u0643\u0627\u062F\u064A\u0644\u0627\u0643" },
+    { makeName: "Land Rover", nameAr: "\u0644\u0627\u0646\u062F \u0631\u0648\u0641\u0631" },
+    { makeName: "Jeep", nameAr: "\u062C\u064A\u0628" },
+    { makeName: "Infiniti", nameAr: "\u0625\u0646\u0641\u064A\u0646\u064A\u062A\u064A" },
+    { makeName: "Volkswagen", nameAr: "\u0641\u0648\u0644\u0643\u0633 \u0648\u0627\u062C\u0646" },
+    { makeName: "Mazda", nameAr: "\u0645\u0627\u0632\u062F\u0627" },
+    { makeName: "Dodge", nameAr: "\u062F\u0648\u062F\u062C" },
+    { makeName: "RAM", nameAr: "\u0631\u0627\u0645" },
+    { makeName: "Suzuki", nameAr: "\u0633\u0648\u0632\u0648\u0643\u064A" },
+    { makeName: "MG", nameAr: "\u0625\u0645 \u062C\u064A" },
+    { makeName: "Porsche", nameAr: "\u0628\u0648\u0631\u0634\u0647" },
+    { makeName: "Volvo", nameAr: "\u0641\u0648\u0644\u0641\u0648" },
+    { makeName: "Lincoln", nameAr: "\u0644\u064A\u0646\u0643\u0648\u0644\u0646" },
+    // ── Korean ────────────────────────────────────────────────────────────────
+    { makeName: "Genesis", nameAr: "\u062C\u064A\u0646\u064A\u0633\u064A\u0633" },
+    // ── Japanese ──────────────────────────────────────────────────────────────
+    { makeName: "Subaru", nameAr: "\u0633\u0648\u0628\u0627\u0631\u0648" },
+    { makeName: "Isuzu", nameAr: "\u0625\u064A\u0633\u0648\u0632\u0648" },
+    // ── Chinese ───────────────────────────────────────────────────────────────
+    { makeName: "BYD", nameAr: "\u0628\u064A \u0648\u0627\u064A \u062F\u064A" },
+    { makeName: "Geely", nameAr: "\u062C\u064A\u0644\u064A" },
+    { makeName: "Chery", nameAr: "\u0634\u064A\u0631\u064A" },
+    { makeName: "Haval", nameAr: "\u0647\u0627\u0641\u0627\u0644" },
+    { makeName: "Changan", nameAr: "\u0634\u0627\u0646\u063A\u0627\u0646" },
+    { makeName: "JETOUR", nameAr: "\u062C\u064A\u062A\u0648\u0631" },
+    { makeName: "GAC", nameAr: "\u062C\u0627\u0643" },
+    { makeName: "Exeed", nameAr: "\u0625\u0643\u0633\u064A\u062F" }
   ];
-  await db.insert(carMakes).values(makesData.map((m) => ({ makeName: m }))).onConflictDoNothing();
+  for (const m of makesData) {
+    await db.insert(carMakes).values({ makeName: m.makeName, nameAr: m.nameAr }).onConflictDoNothing();
+    await db.update(carMakes).set({ nameAr: m.nameAr }).where(eq2(carMakes.makeName, m.makeName));
+  }
   const allMakes = await db.select().from(carMakes);
   console.log(`Car makes: ${allMakes.length} rows`);
   const makeMap = {};
   allMakes.forEach((m) => makeMap[m.makeName] = m.makeId);
   const modelsData = [
-    { make: "Toyota", models: ["Camry", "Corolla", "Land Cruiser", "Hilux", "RAV4", "Yaris", "Prado", "Rush"] },
-    { make: "Honda", models: ["Accord", "Civic", "CR-V", "Pilot", "Odyssey"] },
-    { make: "Nissan", models: ["Altima", "Patrol", "Sentra", "Pathfinder", "X-Trail", "Sunny"] },
-    { make: "Hyundai", models: ["Elantra", "Sonata", "Tucson", "Accent", "Santa Fe", "Creta", "Palisade", "i10", "i20", "i30"] },
-    { make: "Kia", models: ["Sportage", "Optima", "Sorento", "Picanto", "Cerato", "Carnival"] },
-    { make: "Renault", models: ["Duster", "Logan", "Symbol", "Megane", "Fluence"] },
-    { make: "Mercedes-Benz", models: ["C-Class", "E-Class", "S-Class", "GLC", "GLE"] },
-    { make: "BMW", models: ["3 Series", "5 Series", "7 Series", "X5", "X6"] },
-    { make: "Lexus", models: ["LX", "GX", "RX", "ES", "IS"] },
-    { make: "Chevrolet", models: ["Malibu", "Tahoe", "Suburban", "Silverado", "Captiva"] },
-    { make: "Ford", models: ["F-150", "F-250", "F-350", "Explorer", "Expedition", "Expedition MAX", "Escape", "Fusion", "Edge", "Flex", "Bronco", "Bronco Sport", "Maverick", "Ranger", "Mustang", "Mustang Mach-E", "EcoSport", "Kuga", "Everest", "Focus", "Fiesta", "Mondeo", "Taurus", "Transit", "Transit Connect", "Galaxy", "S-Max", "Puma", "Territory"] },
-    { make: "GMC", models: ["Yukon", "Sierra", "Terrain", "Acadia"] },
-    { make: "Audi", models: ["A4", "A6", "Q5", "Q7"] },
-    { make: "Mitsubishi", models: ["Pajero", "L200", "Eclipse Cross", "ASX"] },
-    { make: "Cadillac", models: ["Escalade", "Escalade ESV", "CT4", "CT5", "CT6", "XT4", "XT5", "XT6", "ATS", "CTS", "SRX", "STS", "DTS"] }
+    { make: "Toyota", models: ["Camry", "Corolla", "Land Cruiser", "Hilux", "RAV4", "Yaris", "Prado", "Rush", "FJ Cruiser", "Fortuner"] },
+    { make: "Honda", models: ["Accord", "Civic", "CR-V", "Pilot", "Odyssey", "HR-V"] },
+    { make: "Nissan", models: ["Altima", "Patrol", "Sentra", "Pathfinder", "X-Trail", "Sunny", "Navara", "Kicks", "Xterra"] },
+    { make: "Hyundai", models: ["Elantra", "Sonata", "Tucson", "Accent", "Santa Fe", "Creta", "Palisade", "i10", "i20", "i30", "Azera", "Staria"] },
+    { make: "Kia", models: ["Sportage", "Optima", "Sorento", "Picanto", "Cerato", "Carnival", "Telluride", "Stinger"] },
+    { make: "Renault", models: ["Duster", "Logan", "Symbol", "Megane", "Fluence", "Koleos", "Captur", "Sandero"] },
+    { make: "Mercedes-Benz", models: ["C-Class", "E-Class", "S-Class", "GLC", "GLE", "GLS", "A-Class", "CLA", "G-Class"] },
+    { make: "BMW", models: ["3 Series", "5 Series", "7 Series", "X3", "X5", "X6", "X7", "M3", "M5"] },
+    { make: "Lexus", models: ["LX", "GX", "RX", "ES", "IS", "LS", "NX", "UX"] },
+    { make: "Chevrolet", models: ["Malibu", "Tahoe", "Suburban", "Silverado", "Captiva", "TrailBlazer", "Spark"] },
+    { make: "Ford", models: ["F-150", "Explorer", "Expedition", "Ranger", "Bronco", "Edge", "Mustang", "Escape", "Fusion", "Taurus", "Transit", "Everest"] },
+    { make: "GMC", models: ["Yukon", "Sierra", "Terrain", "Acadia", "Suburban", "Canyon"] },
+    { make: "Audi", models: ["A4", "A6", "A8", "Q3", "Q5", "Q7", "Q8", "e-tron"] },
+    { make: "Mitsubishi", models: ["Pajero", "L200", "Eclipse Cross", "ASX", "Outlander", "Attrage"] },
+    { make: "Cadillac", models: ["Escalade", "Escalade ESV", "CT5", "XT5", "XT6"] },
+    { make: "Land Rover", models: ["Range Rover", "Range Rover Sport", "Range Rover Evoque", "Defender", "Discovery", "Discovery Sport"] },
+    { make: "Jeep", models: ["Wrangler", "Grand Cherokee", "Cherokee", "Compass", "Renegade", "Gladiator"] },
+    { make: "Infiniti", models: ["QX80", "QX60", "QX50", "Q50", "Q60", "QX30"] },
+    { make: "Volkswagen", models: ["Passat", "Tiguan", "Golf", "Touareg", "Polo", "Jetta"] },
+    { make: "Mazda", models: ["CX-5", "CX-9", "Mazda3", "Mazda6", "CX-3", "BT-50"] },
+    { make: "Dodge", models: ["Charger", "Challenger", "Durango", "Journey"] },
+    { make: "RAM", models: ["1500", "2500", "3500", "ProMaster"] },
+    { make: "Suzuki", models: ["Vitara", "Swift", "Jimny", "Ertiga", "Baleno", "Ciaz"] },
+    { make: "MG", models: ["MG5", "MG6", "HS", "ZS", "RX5", "T60"] },
+    { make: "Porsche", models: ["Cayenne", "Macan", "Panamera", "911", "Taycan"] },
+    { make: "Volvo", models: ["XC90", "XC60", "XC40", "S90", "S60", "V90"] },
+    { make: "Lincoln", models: ["Navigator", "Aviator", "Nautilus", "Corsair", "Continental"] },
+    // ── Korean ────────────────────────────────────────────────────────────────
+    { make: "Genesis", models: ["G70", "G80", "G90", "GV70", "GV80", "GV60"] },
+    // ── Japanese ──────────────────────────────────────────────────────────────
+    { make: "Subaru", models: ["Outback", "Forester", "XV", "Impreza", "Legacy", "BRZ"] },
+    { make: "Isuzu", models: ["D-Max", "MU-X", "Trooper", "Elf"] },
+    // ── Chinese ───────────────────────────────────────────────────────────────
+    { make: "BYD", models: ["Seal", "Atto 3", "Han", "Tang", "Song Plus", "Dolphin", "Seal U", "Sea Lion 6"] },
+    { make: "Geely", models: ["Coolray", "Tugella", "Okavango", "Preface", "Monjaro", "Emgrand"] },
+    { make: "Chery", models: ["Tiggo 4 Pro", "Tiggo 7 Pro", "Tiggo 8 Pro", "Arrizo 6 Pro", "Arrizo 8"] },
+    { make: "Haval", models: ["H6", "Jolion", "H2", "Dargo", "Big Dog", "Raptor"] },
+    { make: "Changan", models: ["CS35 Plus", "CS55 Plus", "CS75 Plus", "Alsvin", "Uni-K", "Uni-T", "Hunter"] },
+    { make: "JETOUR", models: ["X70 Plus", "X90 Plus", "Dashing", "T2", "X70S", "Traveler"] },
+    { make: "GAC", models: ["GS3", "GS4", "GS8", "GA4", "Trumpchi GS4", "Emkoo"] },
+    { make: "Exeed", models: ["TXL", "VX", "RX", "LX", "Sterra ES", "Sterra ET"] }
   ];
   const modelInserts = [];
   for (const entry of modelsData) {
@@ -1868,6 +2453,59 @@ async function seedReferenceData() {
   console.log(`Car models: ${allModels.length} rows`);
   const modelMap = {};
   allModels.forEach((m) => modelMap[`${m.makeId}:${m.modelName}`] = m.carModelId);
+  const agentsData = [
+    { makeName: "Toyota", agentNameEn: "Abdul Latif Jameel Motors", agentNameAr: "\u0639\u0628\u062F \u0627\u0644\u0644\u0637\u064A\u0641 \u062C\u0645\u064A\u0644 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "toyota.com.sa", phone: "920000655", headquartersCity: "Jeddah" },
+    { makeName: "Lexus", agentNameEn: "Abdul Latif Jameel Motors", agentNameAr: "\u0639\u0628\u062F \u0627\u0644\u0644\u0637\u064A\u0641 \u062C\u0645\u064A\u0644 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "lexus-alj.com", phone: "920000655", headquartersCity: "Jeddah" },
+    { makeName: "JETOUR", agentNameEn: "Abdul Latif Jameel Motors", agentNameAr: "\u0639\u0628\u062F \u0627\u0644\u0644\u0637\u064A\u0641 \u062C\u0645\u064A\u0644 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "jetour-ksa.com", phone: "920000655", headquartersCity: "Jeddah" },
+    { makeName: "Honda", agentNameEn: "Abdullah Hashim Company", agentNameAr: "\u0634\u0631\u0643\u0629 \u0639\u0628\u062F\u0627\u0644\u0644\u0647 \u0647\u0627\u0634\u0645", website: "hondasaudi.com", phone: "920002208", headquartersCity: "Jeddah" },
+    { makeName: "Nissan", agentNameEn: "E.A. Juffali & Brothers", agentNameAr: "\u0625.\u0623. \u062C\u0641\u0627\u0644\u064A \u0648\u0625\u062E\u0648\u0627\u0646\u0647", website: "nissan.com.sa", phone: "920001666", headquartersCity: "Riyadh" },
+    { makeName: "Infiniti", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "al-jazirah.com", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "Mercedes-Benz", agentNameEn: "SAMACO Automotive", agentNameAr: "\u0633\u0627\u0645\u0643\u0648 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "mercedes-benz-arabia.com", phone: "920000724", headquartersCity: "Riyadh" },
+    { makeName: "BMW", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "bmwksa.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Hyundai", agentNameEn: "Olayan Financing Company", agentNameAr: "\u0634\u0631\u0643\u0629 \u0623\u0648\u0644\u064A\u0627\u0646 \u0644\u0644\u062A\u0645\u0648\u064A\u0644", website: "hyundai.com.sa", phone: "920001234", headquartersCity: "Riyadh" },
+    { makeName: "Genesis", agentNameEn: "Almajdouie Motors", agentNameAr: "\u0627\u0644\u0645\u062C\u062F\u0648\u0639\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "genesis.com/sa", phone: "920001000", headquartersCity: "Dammam" },
+    { makeName: "Kia", agentNameEn: "Al Jabr Trading & NMC", agentNameAr: "\u0627\u0644\u062C\u0627\u0628\u0631 \u0644\u0644\u062A\u062C\u0627\u0631\u0629", website: "kia.com.sa", phone: "920001522", headquartersCity: "Riyadh" },
+    { makeName: "Renault", agentNameEn: "Wallan Trading Company", agentNameAr: "\u0634\u0631\u0643\u0629 \u0648\u0639\u0644\u0627\u0646 \u0644\u0644\u062A\u062C\u0627\u0631\u0629", website: "renault.sa", phone: "920000525", headquartersCity: "Jeddah" },
+    { makeName: "Geely", agentNameEn: "Wallan Trading Company", agentNameAr: "\u0634\u0631\u0643\u0629 \u0648\u0639\u0644\u0627\u0646 \u0644\u0644\u062A\u062C\u0627\u0631\u0629", website: "geely.com.sa", phone: "920000525", headquartersCity: "Jeddah" },
+    { makeName: "Ford", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "my-naghi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Lincoln", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "my-naghi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Chevrolet", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "my-naghi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "GMC", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "my-naghi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Cadillac", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "my-naghi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Land Rover", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "my-naghi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Volvo", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "my-naghi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Chery", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "chery-saudi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Exeed", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "exeed-saudi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Haval", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "haval-saudi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Subaru", agentNameEn: "Mohamed Yousuf Naghi Motors", agentNameAr: "\u0645\u062D\u0645\u062F \u064A\u0648\u0633\u0641 \u0646\u0627\u063A\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "subaru-saudi.com", phone: "920003040", headquartersCity: "Jeddah" },
+    { makeName: "Audi", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "al-jazirah.com", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "Volkswagen", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "al-jazirah.com", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "Porsche", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "al-jazirah.com", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "Jeep", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "al-jazirah.com", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "Dodge", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "al-jazirah.com", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "RAM", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "al-jazirah.com", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "Mitsubishi", agentNameEn: "Algosaibi Motors", agentNameAr: "\u0634\u0631\u0643\u0629 \u0627\u0644\u063A\u0635\u064A\u0628\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "algosaibi-motors.com", phone: "920002202", headquartersCity: "Riyadh" },
+    { makeName: "MG", agentNameEn: "SAMACO Automotive", agentNameAr: "\u0633\u0627\u0645\u0643\u0648 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "samaco.com.sa", phone: "920000724", headquartersCity: "Riyadh" },
+    { makeName: "Mazda", agentNameEn: "Al Jazirah Vehicles Agencies", agentNameAr: "\u0627\u0644\u062C\u0632\u064A\u0631\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "mazda.sa", phone: "920002100", headquartersCity: "Riyadh" },
+    { makeName: "Suzuki", agentNameEn: "National Auto Company", agentNameAr: "\u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0648\u0637\u0646\u064A\u0629 \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "suzuki.sa", phone: "920001900", headquartersCity: "Riyadh" },
+    { makeName: "BYD", agentNameEn: "Al-Futtaim Electric Mobility", agentNameAr: "\u0627\u0644\u0641\u0637\u064A\u0645 \u0644\u0644\u062A\u0646\u0642\u0644 \u0627\u0644\u0643\u0647\u0631\u0628\u0627\u0626\u064A", website: "byd.sa", phone: "8003020006", headquartersCity: "Riyadh" },
+    { makeName: "Changan", agentNameEn: "Almajdouie Motors", agentNameAr: "\u0627\u0644\u0645\u062C\u062F\u0648\u0639\u064A \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "changanauto.com.sa", phone: "920001000", headquartersCity: "Dammam" },
+    { makeName: "GAC", agentNameEn: "Aljomaih Automotive", agentNameAr: "\u0627\u0644\u062C\u0645\u064A\u062D \u0644\u0644\u0633\u064A\u0627\u0631\u0627\u062A", website: "gac-motor.com.sa", phone: "920001199", headquartersCity: "Riyadh" },
+    { makeName: "Isuzu", agentNameEn: "Xenel Industries / Isuzu Arabia", agentNameAr: "\u0632\u064A\u0646\u064A\u0644 / \u0625\u064A\u0633\u0648\u0632\u0648 \u0627\u0644\u0639\u0631\u0628\u064A\u0629", website: "isuzuarabia.com", phone: "920002255", headquartersCity: "Riyadh" }
+  ];
+  for (const a of agentsData) {
+    const makeId = makeMap[a.makeName];
+    if (!makeId) continue;
+    await db.insert(carMakeAgents).values({
+      makeId,
+      agentNameEn: a.agentNameEn,
+      agentNameAr: a.agentNameAr,
+      website: a.website,
+      phone: a.phone,
+      headquartersCity: a.headquartersCity
+    }).onConflictDoNothing();
+  }
+  console.log(`Car make agents: seeded ${agentsData.length} entries`);
   const riyadhCity = allCities.find((c) => c.nameEn === "Riyadh");
   const jeddahCity = allCities.find((c) => c.nameEn === "Jeddah");
   const dammamCity = allCities.find((c) => c.nameEn === "Dammam");
@@ -2067,7 +2705,7 @@ if (__isDirectSeedRun) {
 
 // server/index.ts
 import * as fs from "fs";
-import * as path from "path";
+import * as path2 from "path";
 var app = express();
 var log = console.log;
 function setupCors(app2) {
@@ -2112,7 +2750,7 @@ function setupBodyParsing(app2) {
 function setupRequestLogging(app2) {
   app2.use((req, res, next) => {
     const start = Date.now();
-    const path2 = req.path;
+    const path3 = req.path;
     let capturedJsonResponse = void 0;
     const originalResJson = res.json;
     res.json = function(bodyJson, ...args) {
@@ -2120,10 +2758,10 @@ function setupRequestLogging(app2) {
       return originalResJson.apply(res, [bodyJson, ...args]);
     };
     res.on("finish", () => {
-      if (!path2.startsWith("/api")) return;
+      if (!path3.startsWith("/api")) return;
       const duration = Date.now() - start;
-      let logLine = `${req.method} ${path2} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      let logLine = `${req.method} ${path3} ${res.statusCode} in ${duration}ms`;
+      if (process.env.NODE_ENV !== "production" && capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
       if (logLine.length > 80) {
@@ -2135,7 +2773,7 @@ function setupRequestLogging(app2) {
   });
 }
 function serveExpoManifest(platform, res) {
-  const manifestPath = path.resolve(
+  const manifestPath = path2.resolve(
     process.cwd(),
     "static-build",
     platform,
@@ -2149,16 +2787,6 @@ function serveExpoManifest(platform, res) {
   res.setHeader("content-type", "application/json");
   const manifest = fs.readFileSync(manifestPath, "utf-8");
   res.send(manifest);
-}
-function getSeoLandingHtml(req) {
-  const forwardedProto = req.header("x-forwarded-proto");
-  const protocol = forwardedProto || req.protocol || "https";
-  const forwardedHost = req.header("x-forwarded-host");
-  const host = forwardedHost || req.get("host");
-  const baseUrl = `${protocol}://${host}`;
-  const templatePath = path.resolve(process.cwd(), "server", "templates", "seo-landing.html");
-  const template = fs.readFileSync(templatePath, "utf-8");
-  return template.replace(/BASE_URL_PLACEHOLDER/g, baseUrl);
 }
 function configureExpoAndLanding(app2) {
   const isDev = process.env.NODE_ENV === "development";
@@ -2221,7 +2849,16 @@ Sitemap: ${baseUrl}/sitemap.xml
     }
     next();
   });
-  app2.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
+  app2.use("/assets", express.static(path2.resolve(process.cwd(), "assets")));
+  app2.get("/admin", (_req, res) => {
+    const templatePath = path2.resolve(process.cwd(), "server", "templates", "admin-agents.html");
+    if (fs.existsSync(templatePath)) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.sendFile(templatePath);
+    } else {
+      res.status(404).send("Admin page not found");
+    }
+  });
   if (isDev) {
     const expoProxy = createProxyMiddleware({
       target: "http://localhost:8081",
@@ -2238,24 +2875,18 @@ Sitemap: ${baseUrl}/sitemap.xml
       expoProxy(req, res, next);
     });
   } else {
-    const webDir = path.resolve(process.cwd(), "static-build", "web");
+    const webDir = path2.resolve(process.cwd(), "static-build", "web");
     app2.get("/", (req, res) => {
-      try {
-        const html = getSeoLandingHtml(req);
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.status(200).send(html);
-      } catch {
-        const indexPath = path.join(webDir, "index.html");
-        if (fs.existsSync(indexPath)) {
-          res.sendFile(indexPath);
-        } else {
-          res.status(404).send("Not found");
-        }
+      const indexPath = path2.join(webDir, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Not found");
       }
     });
     app2.use(express.static(webDir));
     app2.get("/web-app", (req, res, next) => {
-      const indexPath = path.join(webDir, "index.html");
+      const indexPath = path2.join(webDir, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
@@ -2264,7 +2895,7 @@ Sitemap: ${baseUrl}/sitemap.xml
     });
     app2.get("*", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
-      const indexPath = path.join(webDir, "index.html");
+      const indexPath = path2.join(webDir, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
@@ -2302,6 +2933,7 @@ ${list}
   }
 }
 (async () => {
+  app.set("trust proxy", 1);
   setupCors(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
