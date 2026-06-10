@@ -24,6 +24,7 @@ import { WebView } from "react-native-webview";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
@@ -57,8 +58,6 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
-type PdfLocale = "ar" | "en" | "bilingual";
-
 interface EmailModalProps {
   visible: boolean;
   defaultEmail: string;
@@ -78,7 +77,7 @@ function EmailModal({ visible, defaultEmail, onClose, onSend, sending, error }: 
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState(defaultEmail);
-  const [locale, setLocale] = useState<PdfLocale>("ar");
+  const { pdfLocale: locale, savePdfLocale: setLocale } = usePdfLocale();
 
   React.useEffect(() => {
     if (visible) setEmail(defaultEmail);

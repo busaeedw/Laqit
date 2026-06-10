@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   View,
@@ -19,10 +19,9 @@ import { useQuery } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { usePdfLocale } from "@/hooks/usePdfLocale";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
@@ -52,20 +51,7 @@ export default function InspectionDetailScreen() {
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [pdfLocale, setPdfLocale] = useState<"ar" | "en" | "bilingual">("ar");
-
-  useEffect(() => {
-    AsyncStorage.getItem("pdfLocale").then((saved) => {
-      if (saved === "ar" || saved === "en" || saved === "bilingual") {
-        setPdfLocale(saved);
-      }
-    });
-  }, []);
-
-  function savePdfLocale(locale: "ar" | "en" | "bilingual") {
-    setPdfLocale(locale);
-    AsyncStorage.setItem("pdfLocale", locale);
-  }
+  const { pdfLocale, savePdfLocale } = usePdfLocale();
 
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
