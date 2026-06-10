@@ -150,7 +150,7 @@ export default function InspectionDetailScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ email: trimmed, locale: "ar" }),
+        body: JSON.stringify({ email: trimmed, locale: pdfLocale }),
       });
 
       const json = await resp.json();
@@ -403,6 +403,15 @@ export default function InspectionDetailScreen() {
               أدخل عنوان بريدك الإلكتروني أو بريد الورشة
             </ThemedText>
 
+            <View style={[styles.localeBadgeRow]}>
+              <View style={[styles.localeBadge, { backgroundColor: theme.primary + "18", borderColor: theme.primary + "40" }]}>
+                <Feather name="file-text" size={13} color={theme.primary} />
+                <ThemedText style={[styles.localeBadgeText, { color: theme.primary, fontFamily: "Cairo_400Regular" }]}>
+                  {pdfLocale === "ar" ? "لغة التقرير: عربي" : pdfLocale === "en" ? "لغة التقرير: English" : "لغة التقرير: عربي / English"}
+                </ThemedText>
+              </View>
+            </View>
+
             <TextInput
               testID="input-email-pdf"
               value={emailAddress}
@@ -586,6 +595,20 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, textAlign: "right" },
   modalSubtitle: { fontSize: 13, textAlign: "right", marginTop: -Spacing.xs },
+  localeBadgeRow: {
+    flexDirection: "row-reverse",
+    marginTop: Spacing.md,
+  },
+  localeBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  localeBadgeText: { fontSize: 12 },
   emailInput: {
     borderWidth: 1.5,
     borderRadius: BorderRadius.md,
