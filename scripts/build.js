@@ -551,8 +551,12 @@ async function main() {
     metroProcess = null;
   }
 
-  // Build the web version for browser access
-  await buildWebVersion(domain);
+  // Build the web version for browser access (non-fatal — mobile bundles are primary)
+  try {
+    await buildWebVersion(domain);
+  } catch (webErr) {
+    console.warn("Warning: web build failed (mobile app will still work):", webErr.message);
+  }
 
   console.log("Build complete! Deploy to:", baseUrl);
   process.exit(0);
@@ -569,6 +573,8 @@ async function buildWebVersion(domain) {
         env: {
           ...process.env,
           EXPO_PUBLIC_DOMAIN: domain,
+          // Extra heap to avoid OOM kills during web bundling
+          NODE_OPTIONS: "--max-old-space-size=4096",
         },
       }
     );
