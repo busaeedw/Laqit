@@ -205,7 +205,7 @@ export async function generateAnalysisPdf(
   const isBilingual = locale === "bilingual";
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    const doc = new PDFDocument({ bufferPages: true, margin: 50, size: "A4" });
     const chunks: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -557,7 +557,7 @@ export async function generateAnalysisPdf(
         .text(L.totalEn(totalStr), 50, isBilingual ? totalY : totalY, { width: isBilingual ? pageWidth * 0.5 : pageWidth, align: "left" });
     }
 
-    // ── Footer ────────────────────────────────────────────────────────────────
+    // ── Disclaimer footer (last page only) ────────────────────────────────────
     const footerY = doc.page.height - 50;
     if (L.footerEn) {
       doc.font("Helvetica-Bold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
@@ -567,6 +567,33 @@ export async function generateAnalysisPdf(
       const arFooterY = L.footerEn ? footerY + footerStyle.lineSpacing : footerY;
       doc.font("ArabicBold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
         .text(L.footerAr, 50, arFooterY, { width: pageWidth, align: "center" });
+    }
+
+    // ── Page numbers (every page) ──────────────────────────────────────────────
+    // pageNumY must stay within the page margin (< page.height - bottomMargin)
+    // to avoid PDFKit's overflow guard triggering doc.addPage() in switchToPage loops.
+    // We also reset doc.y to a safe value before each text draw for the same reason.
+    const totalPages = doc.bufferedPageRange().count;
+    if (totalPages > 1) {
+      const pageNumY = doc.page.height - doc.page.margins.bottom - 14;
+      for (let p = 0; p < totalPages; p++) {
+        doc.switchToPage(p);
+        doc.y = doc.page.margins.top; // prevent overflow-guard false-positive
+        const pageNum = p + 1;
+        if (isBilingual) {
+          doc.font("Helvetica").fontSize(7).fillColor(gray)
+            .text(`Page ${pageNum} / ${totalPages}`, 50, pageNumY, { width: pageWidth * 0.5, align: "left", lineBreak: false });
+          doc.y = doc.page.margins.top;
+          doc.font("Arabic").fontSize(7).fillColor(gray)
+            .text(`${totalPages} / ${pageNum} صفحة`, 50 + pageWidth * 0.5, pageNumY, { width: pageWidth * 0.5, align: "right", lineBreak: false });
+        } else if (isAr) {
+          doc.font("Arabic").fontSize(7).fillColor(gray)
+            .text(`${totalPages} / ${pageNum} صفحة`, 50, pageNumY, { width: pageWidth, align: "right", lineBreak: false });
+        } else {
+          doc.font("Helvetica").fontSize(7).fillColor(gray)
+            .text(`Page ${pageNum} / ${totalPages}`, 50, pageNumY, { width: pageWidth, align: "left", lineBreak: false });
+        }
+      }
     }
 
     doc.end();
