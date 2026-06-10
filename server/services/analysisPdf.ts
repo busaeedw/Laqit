@@ -382,7 +382,7 @@ export async function generateAnalysisPdf(
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, 24).fill(light);
 
         doc.font("ArabicBold").fontSize(9).fillColor(dark)
-          .text(part.nameAr, c1, rowTop + 6, { width: pageWidth * 0.34, align: "right" });
+          .text(part.nameAr, c1, rowTop + 8, { width: pageWidth * 0.34, align: "right" });
         doc.font("Helvetica-Bold").fontSize(9).fillColor(dark)
           .text(part.name, c2, rowTop + 8, { width: pageWidth * 0.25 });
         doc.font("Helvetica").fontSize(9).fillColor(confColor(part.confidence))
