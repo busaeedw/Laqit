@@ -32,7 +32,7 @@ import { sendWhatsAppMessage } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
 import { createPaymentIntent } from "./services/payment";
-import { generateAnalysisPdf } from "./services/analysisPdf";
+import { generateAnalysisPdf, PdfLocale } from "./services/analysisPdf";
 import { sendAnalysisPdfEmail } from "./services/email";
 
 const openai = new OpenAI({
@@ -321,7 +321,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { email, carInfo, parts, imageUri } = req.body;
+      const { email, carInfo, parts, imageUri, locale } = req.body;
 
       if (!email || typeof email !== "string") {
         return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
@@ -337,7 +337,9 @@ Rules:
       }
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
-      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri);
+      const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+      const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
       const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
 
