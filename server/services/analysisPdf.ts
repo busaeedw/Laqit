@@ -270,7 +270,7 @@ export async function generateAnalysisPdf(
     };
 
     // Footer text (font size, color, and spacing between EN and AR lines)
-    const footerStyle = { fontSize: 8, fillColor: gray, lineSpacing: 12 };
+    const footerStyle = { fontSize: 8, fillColor: gray, lineSpacing: 12, bottomOffset: 50 };
 
     // Page-number text in the bottom margin
     const pageNumberStyle = { fontSize: 7, fillColor: gray, bottomOffset: 14 };
@@ -572,7 +572,7 @@ export async function generateAnalysisPdf(
     }
 
     // ── Disclaimer footer (last page only) ────────────────────────────────────
-    const footerY = doc.page.height - 50;
+    const footerY = doc.page.height - footerStyle.bottomOffset;
     if (L.footerEn) {
       doc.font("Helvetica-Bold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
         .text(L.footerEn, 50, footerY, { width: pageWidth, align: "center" });
