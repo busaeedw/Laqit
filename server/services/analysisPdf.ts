@@ -16,21 +16,69 @@ export interface PartEntry {
   price: number;
 }
 
-async function fetchImageBuffer(uri: string): Promise<Buffer | null> {
+// Private/reserved IP patterns that must not be fetched server-side (SSRF guard).
+const PRIVATE_HOSTNAME_RE =
+  /^(localhost|.*\.local)$|^127\.|^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^169\.254\.|^\[?::1\]?$|^\[?fc|^\[?fd/i;
+
+function isSafeImageUri(uri: string): boolean {
+  // Only allow HTTPS — blocks http://, file://, data:, ftp:// etc.
+  if (!uri.startsWith("https://")) return false;
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const resp = await fetch(uri, { signal: controller.signal });
-    clearTimeout(timeoutId);
+    const { hostname } = new URL(uri);
+    // Block private IPs, loopback, and link-local
+    if (PRIVATE_HOSTNAME_RE.test(hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+async function fetchImageBuffer(uri: string): Promise<Buffer | null> {
+  if (!isSafeImageUri(uri)) {
+    console.warn(`[analysisPdf] Image URI rejected by SSRF guard: ${uri.slice(0, 80)}`);
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const resp = await fetch(uri, {
+      signal: controller.signal,
+      redirect: "error", // Never follow redirects — avoids redirect-based SSRF
+    });
+
     if (!resp.ok) {
-      console.warn(`[analysisPdf] Image fetch failed: HTTP ${resp.status} for ${uri.slice(0, 80)}`);
+      console.warn(`[analysisPdf] Image fetch failed: HTTP ${resp.status}`);
       return null;
     }
+
+    const contentType = resp.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) {
+      console.warn(`[analysisPdf] Rejected non-image content-type: ${contentType}`);
+      return null;
+    }
+
+    const contentLength = parseInt(resp.headers.get("content-length") ?? "0", 10);
+    if (contentLength > MAX_IMAGE_BYTES) {
+      console.warn(`[analysisPdf] Image too large (content-length): ${contentLength}`);
+      return null;
+    }
+
     const arrayBuffer = await resp.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
+      console.warn(`[analysisPdf] Image too large after download: ${arrayBuffer.byteLength}`);
+      return null;
+    }
+
     return Buffer.from(arrayBuffer);
   } catch (err: any) {
     console.warn(`[analysisPdf] Image fetch error: ${err?.message ?? err}`);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

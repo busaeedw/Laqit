@@ -336,7 +336,7 @@ Rules:
         return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
       }
 
-      const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("http") ? imageUri : undefined;
+      const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
       const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
       const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
