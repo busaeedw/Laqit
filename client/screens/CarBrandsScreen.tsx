@@ -6,6 +6,7 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -16,12 +17,20 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+
+interface AgentInfo {
+  agentNameEn: string;
+  agentNameAr: string | null;
+  website: string | null;
+  phone: string | null;
+  headquartersCity: string | null;
+}
 
 interface CarMake {
   makeId: string;
   makeName: string;
   nameAr: string | null;
+  agent: AgentInfo | null;
   modelCount?: number;
 }
 
@@ -82,6 +91,7 @@ export default function CarBrandsScreen() {
   const { data: modelsData } = useQuery<{ models: { makeId: string }[] }>({
     queryKey: ["/api/car-models-count"],
     queryFn: async () => {
+      const { getApiUrl } = await import("@/lib/query-client");
       const url = new URL("/api/car-models/counts", getApiUrl());
       const res = await fetch(url.toString());
       if (!res.ok) return { models: [] };
@@ -106,9 +116,16 @@ export default function CarBrandsScreen() {
     return makes.filter(
       (m) =>
         m.makeName.toLowerCase().includes(q) ||
-        (m.nameAr ?? "").includes(search.trim())
+        (m.nameAr ?? "").includes(search.trim()) ||
+        (m.agent?.agentNameAr ?? "").includes(search.trim()) ||
+        (m.agent?.agentNameEn ?? "").toLowerCase().includes(q)
     );
   }, [data, search]);
+
+  const handleWebsitePress = useCallback((website: string) => {
+    const url = website.startsWith("http") ? website : `https://${website}`;
+    Linking.openURL(url).catch(() => {});
+  }, []);
 
   const renderItem = useCallback(
     ({ item, index }: { item: CarMake; index: number }) => {
@@ -130,6 +147,25 @@ export default function CarBrandsScreen() {
               >
                 {item.makeName}
               </ThemedText>
+              {item.agent?.agentNameAr ? (
+                <ThemedText
+                  style={[styles.agentName, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
+                  testID={`agent-name-${item.makeId}`}
+                >
+                  {item.agent.agentNameAr}
+                </ThemedText>
+              ) : null}
+              {item.agent?.website ? (
+                <Pressable
+                  onPress={() => handleWebsitePress(item.agent!.website!)}
+                  hitSlop={8}
+                  testID={`agent-website-${item.makeId}`}
+                >
+                  <ThemedText style={[styles.websiteLink, { color, fontFamily: "Cairo_400Regular" }]}>
+                    {item.agent.website}
+                  </ThemedText>
+                </Pressable>
+              ) : null}
             </View>
             {count !== undefined ? (
               <View style={[styles.countBadge, { backgroundColor: color + "15" }]}>
@@ -145,7 +181,7 @@ export default function CarBrandsScreen() {
         </Animated.View>
       );
     },
-    [theme, modelCountByMake]
+    [theme, modelCountByMake, handleWebsitePress]
   );
 
   const headerComponent = useMemo(
@@ -272,6 +308,16 @@ const styles = StyleSheet.create({
   nameEn: {
     fontSize: 13,
     textAlign: "right",
+  },
+  agentName: {
+    fontSize: 11,
+    textAlign: "right",
+    marginTop: 1,
+  },
+  websiteLink: {
+    fontSize: 11,
+    textAlign: "right",
+    textDecorationLine: "underline",
   },
   countBadge: {
     alignItems: "center",

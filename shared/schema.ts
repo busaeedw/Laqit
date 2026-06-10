@@ -638,6 +638,29 @@ export const auditLog = pgTable(
   ]
 );
 
+// ─── Car make agents (authorized Saudi distributors) ─────────────────────────
+
+export const carMakeAgents = pgTable(
+  "car_make_agents",
+  {
+    agentId: uuid("agent_id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    makeId: uuid("make_id")
+      .notNull()
+      .unique()
+      .references(() => carMakes.makeId),
+    agentNameEn: varchar("agent_name_en", { length: 200 }).notNull(),
+    agentNameAr: varchar("agent_name_ar", { length: 200 }),
+    website: varchar("website", { length: 300 }),
+    phone: varchar("phone", { length: 30 }),
+    headquartersCity: varchar("headquarters_city", { length: 100 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  }
+);
+
 // ─── Insert schemas & types for new tables ────────────────────────────────────
 
 export const insertCitySchema = createInsertSchema(cities).omit({
@@ -767,3 +790,10 @@ export const insertAuditLogSchema = createInsertSchema(auditLog).omit({
 });
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLog.$inferSelect;
+
+export const insertCarMakeAgentSchema = createInsertSchema(carMakeAgents).omit({
+  agentId: true,
+  createdAt: true,
+});
+export type InsertCarMakeAgent = z.infer<typeof insertCarMakeAgentSchema>;
+export type CarMakeAgent = typeof carMakeAgents.$inferSelect;

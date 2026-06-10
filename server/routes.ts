@@ -10,6 +10,7 @@ import {
   cities,
   carMakes,
   carModels,
+  carMakeAgents,
   customers,
   vendors,
   vendorUsers,
@@ -322,8 +323,39 @@ Rules:
 
   app.get("/api/car-makes", async (_req, res) => {
     try {
-      const result = await db.select().from(carMakes).orderBy(carMakes.makeName);
-      res.json({ makes: result });
+      const rows = await db
+        .select({
+          makeId: carMakes.makeId,
+          makeName: carMakes.makeName,
+          nameAr: carMakes.nameAr,
+          createdAt: carMakes.createdAt,
+          agentNameEn: carMakeAgents.agentNameEn,
+          agentNameAr: carMakeAgents.agentNameAr,
+          website: carMakeAgents.website,
+          phone: carMakeAgents.phone,
+          headquartersCity: carMakeAgents.headquartersCity,
+        })
+        .from(carMakes)
+        .leftJoin(carMakeAgents, eq(carMakeAgents.makeId, carMakes.makeId))
+        .orderBy(carMakes.makeName);
+
+      const makes = rows.map((r) => ({
+        makeId: r.makeId,
+        makeName: r.makeName,
+        nameAr: r.nameAr,
+        createdAt: r.createdAt,
+        agent: r.agentNameEn
+          ? {
+              agentNameEn: r.agentNameEn,
+              agentNameAr: r.agentNameAr,
+              website: r.website,
+              phone: r.phone,
+              headquartersCity: r.headquartersCity,
+            }
+          : null,
+      }));
+
+      res.json({ makes });
     } catch (err: any) {
       console.error("GET /api/car-makes error:", err?.message);
       res.status(500).json({ error: "خطأ في جلب الماركات" });

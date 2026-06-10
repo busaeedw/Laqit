@@ -3,6 +3,7 @@ import {
   cities,
   carMakes,
   carModels,
+  carMakeAgents,
   vendors,
   vendorUsers,
   vendorLocations,
@@ -160,6 +161,73 @@ export async function seedReferenceData() {
 
   const modelMap: Record<string, string> = {};
   allModels.forEach((m) => (modelMap[`${m.makeId}:${m.modelName}`] = m.carModelId));
+
+  // ── Car Make Agents (authorized Saudi distributors) ───────────────────────
+  const agentsData: {
+    makeName: string;
+    agentNameEn: string;
+    agentNameAr: string;
+    website: string;
+    phone: string;
+    headquartersCity: string;
+  }[] = [
+    { makeName: "Toyota",        agentNameEn: "Abdul Latif Jameel Motors",          agentNameAr: "عبد اللطيف جميل للسيارات",      website: "toyota.com.sa",          phone: "920000655",  headquartersCity: "Jeddah" },
+    { makeName: "Lexus",         agentNameEn: "Abdul Latif Jameel Motors",          agentNameAr: "عبد اللطيف جميل للسيارات",      website: "lexus-alj.com",          phone: "920000655",  headquartersCity: "Jeddah" },
+    { makeName: "JETOUR",        agentNameEn: "Abdul Latif Jameel Motors",          agentNameAr: "عبد اللطيف جميل للسيارات",      website: "jetour-ksa.com",         phone: "920000655",  headquartersCity: "Jeddah" },
+    { makeName: "Honda",         agentNameEn: "Abdullah Hashim Company",            agentNameAr: "شركة عبدالله هاشم",             website: "hondasaudi.com",         phone: "920002208",  headquartersCity: "Jeddah" },
+    { makeName: "Nissan",        agentNameEn: "E.A. Juffali & Brothers",            agentNameAr: "إ.أ. جفالي وإخوانه",            website: "nissan.com.sa",          phone: "920001666",  headquartersCity: "Riyadh" },
+    { makeName: "Infiniti",      agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",         phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "Mercedes-Benz", agentNameEn: "SAMACO Automotive",                  agentNameAr: "سامكو للسيارات",                website: "mercedes-benz-arabia.com",phone: "920000724", headquartersCity: "Riyadh" },
+    { makeName: "BMW",           agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "bmwksa.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Hyundai",       agentNameEn: "Olayan Financing Company",           agentNameAr: "شركة أوليان للتمويل",           website: "hyundai.com.sa",         phone: "920001234",  headquartersCity: "Riyadh" },
+    { makeName: "Genesis",       agentNameEn: "Almajdouie Motors",                  agentNameAr: "المجدوعي للسيارات",             website: "genesis.com/sa",         phone: "920001000",  headquartersCity: "Dammam" },
+    { makeName: "Kia",           agentNameEn: "Al Jabr Trading & NMC",              agentNameAr: "الجابر للتجارة",                website: "kia.com.sa",             phone: "920001522",  headquartersCity: "Riyadh" },
+    { makeName: "Renault",       agentNameEn: "Wallan Trading Company",             agentNameAr: "شركة وعلان للتجارة",            website: "renault.sa",             phone: "920000525",  headquartersCity: "Jeddah" },
+    { makeName: "Geely",         agentNameEn: "Wallan Trading Company",             agentNameAr: "شركة وعلان للتجارة",            website: "geely.com.sa",           phone: "920000525",  headquartersCity: "Jeddah" },
+    { makeName: "Ford",          agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",           phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Lincoln",       agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",           phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Chevrolet",     agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",           phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "GMC",           agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",           phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Cadillac",      agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",           phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Land Rover",    agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",           phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Volvo",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",           phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Chery",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "chery-saudi.com",        phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Exeed",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "exeed-saudi.com",        phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Haval",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "haval-saudi.com",        phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Subaru",        agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "subaru-saudi.com",       phone: "920003040",  headquartersCity: "Jeddah" },
+    { makeName: "Audi",          agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",         phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "Volkswagen",    agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",         phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "Porsche",       agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",         phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "Jeep",          agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",         phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "Dodge",         agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",         phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "RAM",           agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",         phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "Mitsubishi",    agentNameEn: "Algosaibi Motors",                   agentNameAr: "شركة الغصيبي للسيارات",         website: "algosaibi-motors.com",   phone: "920002202",  headquartersCity: "Riyadh" },
+    { makeName: "MG",            agentNameEn: "SAMACO Automotive",                  agentNameAr: "سامكو للسيارات",                website: "samaco.com.sa",          phone: "920000724",  headquartersCity: "Riyadh" },
+    { makeName: "Mazda",         agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "mazda.sa",               phone: "920002100",  headquartersCity: "Riyadh" },
+    { makeName: "Suzuki",        agentNameEn: "National Auto Company",              agentNameAr: "الشركة الوطنية للسيارات",       website: "suzuki.sa",              phone: "920001900",  headquartersCity: "Riyadh" },
+    { makeName: "BYD",           agentNameEn: "Al-Futtaim Electric Mobility",       agentNameAr: "الفطيم للتنقل الكهربائي",       website: "byd.sa",                 phone: "8003020006", headquartersCity: "Riyadh" },
+    { makeName: "Changan",       agentNameEn: "Almajdouie Motors",                  agentNameAr: "المجدوعي للسيارات",             website: "changanauto.com.sa",     phone: "920001000",  headquartersCity: "Dammam" },
+    { makeName: "GAC",           agentNameEn: "Aljomaih Automotive",                agentNameAr: "الجميح للسيارات",               website: "gac-motor.com.sa",       phone: "920001199",  headquartersCity: "Riyadh" },
+    { makeName: "Isuzu",         agentNameEn: "Xenel Industries / Isuzu Arabia",    agentNameAr: "زينيل / إيسوزو العربية",        website: "isuzuarabia.com",        phone: "920002255",  headquartersCity: "Riyadh" },
+  ];
+
+  for (const a of agentsData) {
+    const makeId = makeMap[a.makeName];
+    if (!makeId) continue;
+    await db
+      .insert(carMakeAgents)
+      .values({
+        makeId,
+        agentNameEn: a.agentNameEn,
+        agentNameAr: a.agentNameAr,
+        website: a.website,
+        phone: a.phone,
+        headquartersCity: a.headquartersCity,
+      })
+      .onConflictDoNothing();
+  }
+
+  console.log(`Car make agents: seeded ${agentsData.length} entries`);
 
   // ── Sample Vendors ────────────────────────────────────────────────────────
   const riyadhCity = allCities.find((c) => c.nameEn === "Riyadh");
