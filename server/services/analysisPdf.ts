@@ -483,7 +483,7 @@ export async function generateAnalysisPdf(
     }
     if (L.footerAr) {
       const arFooterY = L.footerEn ? footerY + 12 : footerY;
-      doc.font("Arabic").fontSize(8).fillColor(gray)
+      doc.font("ArabicBold").fontSize(8).fillColor(gray)
         .text(L.footerAr, 50, arFooterY, { width: pageWidth, align: "center" });
     }
 
