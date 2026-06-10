@@ -354,6 +354,36 @@ Rules:
     }
   });
 
+  // ─── Analysis PDF Download (returns raw PDF bytes) ───────────────────────
+
+  app.post("/api/analysis/download-pdf", async (req, res) => {
+    try {
+      const ip = clientIp(req);
+      if (!emailIpLimiter.check(ip)) {
+        const retryAfter = emailIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
+      const { carInfo, parts, imageUri } = req.body;
+
+      if (!carInfo || !Array.isArray(parts)) {
+        return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
+      }
+
+      const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri);
+      const filename = `laqit-analysis-${Date.now()}.pdf`;
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("download-pdf error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إنشاء التقرير" });
+    }
+  });
+
   // ─── Reference Data ──────────────────────────────────────────────────────
 
   app.get("/api/cities", async (_req, res) => {

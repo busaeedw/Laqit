@@ -9,6 +9,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -17,6 +18,8 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -188,6 +191,9 @@ export default function ResultsScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [showDownloadSuccess, setShowDownloadSuccess] = useState(false);
 
   const handleAddToCart = (part: DetectedPart) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -213,6 +219,60 @@ export default function ResultsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSendError(null);
     setEmailModalVisible(true);
+  };
+
+  const handleDownloadPdf = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDownloadError(null);
+    setDownloading(true);
+
+    try {
+      const url = new URL("/api/analysis/download-pdf", getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ carInfo, parts, imageUri }),
+      });
+
+      if (!resp.ok) {
+        let errorMsg = "حدث خطأ أثناء إنشاء التقرير";
+        try {
+          const json = await resp.json();
+          errorMsg = json.error ?? errorMsg;
+        } catch {}
+        setDownloadError(errorMsg);
+        return;
+      }
+
+      const arrayBuffer = await resp.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+      );
+
+      const filename = `laqit-analysis-${Date.now()}.pdf`;
+      const fileUri = (FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "") + filename;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "application/pdf",
+          dialogTitle: "تنزيل تقرير PDF",
+          UTI: "com.adobe.pdf",
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowDownloadSuccess(true);
+      } else {
+        setDownloadError("المشاركة غير متاحة على هذا الجهاز");
+      }
+    } catch {
+      setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleSendPdf = async (email: string) => {
@@ -339,31 +399,76 @@ export default function ResultsScreen() {
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(500).delay(180)}>
-        <Pressable
-          onPress={handleOpenEmailModal}
-          style={({ pressed }) => [
-            styles.pdfButton,
-            {
-              backgroundColor: theme.backgroundDefault,
-              borderColor: theme.primary + "40",
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-          testID="button-send-pdf-open"
-        >
-          <View style={[styles.pdfIcon, { backgroundColor: theme.primary + "15" }]}>
-            <Feather name="file-text" size={22} color={theme.primary} />
-          </View>
-          <View style={styles.pdfContent}>
-            <ThemedText style={[styles.pdfTitle, { fontFamily: "Cairo_700Bold" }]}>
-              إرسال PDF بالبريد الإلكتروني
+        <View style={styles.pdfButtonsRow}>
+          <Pressable
+            onPress={handleOpenEmailModal}
+            style={({ pressed }) => [
+              styles.pdfButtonHalf,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.primary + "40",
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+            testID="button-send-pdf-open"
+          >
+            <View style={[styles.pdfIconSmall, { backgroundColor: theme.primary + "15" }]}>
+              <Feather name="mail" size={18} color={theme.primary} />
+            </View>
+            <View style={styles.pdfContentSmall}>
+              <ThemedText style={[styles.pdfTitleSmall, { fontFamily: "Cairo_700Bold" }]}>
+                إرسال بالبريد
+              </ThemedText>
+              <ThemedText style={[styles.pdfSubtitleSmall, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                PDF إلى بريدك
+              </ThemedText>
+            </View>
+          </Pressable>
+
+          <Pressable
+            onPress={handleDownloadPdf}
+            disabled={downloading}
+            style={({ pressed }) => [
+              styles.pdfButtonHalf,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.success + "40",
+                opacity: pressed || downloading ? 0.85 : 1,
+              },
+            ]}
+            testID="button-download-pdf"
+          >
+            {downloading ? (
+              <View style={[styles.pdfIconSmall, { backgroundColor: theme.success + "15" }]}>
+                <ActivityIndicator size="small" color={theme.success} />
+              </View>
+            ) : (
+              <View style={[styles.pdfIconSmall, { backgroundColor: theme.success + "15" }]}>
+                <Feather name="download" size={18} color={theme.success} />
+              </View>
+            )}
+            <View style={styles.pdfContentSmall}>
+              <ThemedText style={[styles.pdfTitleSmall, { fontFamily: "Cairo_700Bold" }]}>
+                تنزيل PDF
+              </ThemedText>
+              <ThemedText style={[styles.pdfSubtitleSmall, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                حفظ على الجهاز
+              </ThemedText>
+            </View>
+          </Pressable>
+        </View>
+
+        {downloadError != null ? (
+          <Animated.View
+            entering={FadeInDown.duration(300)}
+            style={[styles.downloadErrorBanner, { backgroundColor: theme.error + "15", borderColor: theme.error + "40" }]}
+          >
+            <Feather name="alert-circle" size={14} color={theme.error} />
+            <ThemedText style={[styles.downloadErrorText, { color: theme.error, fontFamily: "Cairo_400Regular" }]}>
+              {downloadError}
             </ThemedText>
-            <ThemedText style={[styles.pdfSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              تقرير مفصّل بالقطع المكتشفة والأسعار
-            </ThemedText>
-          </View>
-          <Feather name="chevron-left" size={20} color={theme.primary} />
-        </Pressable>
+          </Animated.View>
+        ) : null}
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(500).delay(200)}>
@@ -483,6 +588,17 @@ export default function ResultsScreen() {
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       {showSuccess ? (
         <SuccessBanner onDismiss={() => setShowSuccess(false)} />
+      ) : null}
+      {showDownloadSuccess ? (
+        <Animated.View
+          entering={FadeInDown.duration(300)}
+          style={[styles.successBanner, { backgroundColor: theme.success + "18", borderColor: theme.success + "40", top: showSuccess ? 150 : 100 }]}
+        >
+          <Feather name="check-circle" size={18} color={theme.success} />
+          <ThemedText style={[styles.successText, { color: theme.success, fontFamily: "Cairo_600SemiBold" }]}>
+            تم فتح التقرير للحفظ أو المشاركة
+          </ThemedText>
+        </Animated.View>
       ) : null}
 
       <FlatList
@@ -688,6 +804,53 @@ const styles = StyleSheet.create({
   },
   pdfSubtitle: {
     fontSize: 13,
+    textAlign: "right",
+  },
+  pdfButtonsRow: {
+    flexDirection: "row-reverse",
+    gap: Spacing.sm,
+  },
+  pdfButtonHalf: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    gap: Spacing.sm,
+  },
+  pdfIconSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pdfContentSmall: {
+    flex: 1,
+    gap: 2,
+  },
+  pdfTitleSmall: {
+    fontSize: 13,
+    textAlign: "right",
+  },
+  pdfSubtitleSmall: {
+    fontSize: 11,
+    textAlign: "right",
+  },
+  downloadErrorBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
+  },
+  downloadErrorText: {
+    fontSize: 13,
+    flex: 1,
     textAlign: "right",
   },
   sectionHeader: {
