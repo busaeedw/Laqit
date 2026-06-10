@@ -5,11 +5,18 @@ const AMIRI_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-R
 const AMIRI_BOLD_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Bold.ttf");
 
 // ── PDF color palette ──────────────────────────────────────────────────────────
-const PDF_COLOR_BLUE  = "#1E74F2";
-const PDF_COLOR_GRAY  = "#6B7280";
-const PDF_COLOR_LIGHT = "#F3F4F6";
-const PDF_COLOR_DARK  = "#111827";
-const PDF_COLOR_WHITE = "#FFFFFF";
+const PDF_COLOR_BLUE   = "#1E74F2";
+const PDF_COLOR_GRAY   = "#6B7280";
+const PDF_COLOR_LIGHT  = "#F3F4F6";
+const PDF_COLOR_DARK   = "#111827";
+const PDF_COLOR_WHITE  = "#FFFFFF";
+const PDF_COLOR_BORDER = "#E5E7EB";
+
+// Confidence-level traffic-light palette (applied to percentage badges)
+const PDF_CONFIDENCE_VERY_HIGH = "#16A34A"; // >= 90 %
+const PDF_CONFIDENCE_HIGH      = "#22C55E"; // >= 75 %
+const PDF_CONFIDENCE_MEDIUM    = "#D97706"; // >= 60 %
+const PDF_CONFIDENCE_LOW       = "#DC2626"; // <  60 %
 
 export type PdfLocale = "ar" | "en" | "bilingual";
 
@@ -242,7 +249,7 @@ export async function generateAnalysisPdf(
 
     // Thin divider lines between table rows
     const rowDividerStyle = {
-      strokeColor: "#E5E7EB",
+      strokeColor: PDF_COLOR_BORDER,
       lineWidthHeader: 0.5, // separator after column headers
       lineWidthRow: 0.3,    // separator after each data row
     };
@@ -409,7 +416,10 @@ export async function generateAnalysisPdf(
     let rowTop = tableY + 28 + 5;
 
     const confColor = (c: number) =>
-      c >= 90 ? "#16A34A" : c >= 75 ? "#22C55E" : c >= 60 ? "#D97706" : "#DC2626";
+      c >= 90 ? PDF_CONFIDENCE_VERY_HIGH
+      : c >= 75 ? PDF_CONFIDENCE_HIGH
+      : c >= 60 ? PDF_CONFIDENCE_MEDIUM
+      : PDF_CONFIDENCE_LOW;
 
     if (isBilingual) {
       // 4 columns: Arabic name | English name | Confidence | Price
