@@ -20,6 +20,7 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { WebView } from "react-native-webview";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -176,6 +177,139 @@ function SuccessBanner({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
+interface PdfPreviewModalProps {
+  visible: boolean;
+  pdfBase64: string | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onShare: () => void;
+  sharing: boolean;
+}
+
+function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare, sharing }: PdfPreviewModalProps) {
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [webViewLoading, setWebViewLoading] = useState(true);
+
+  React.useEffect(() => {
+    if (visible) setWebViewLoading(true);
+  }, [visible, pdfBase64]);
+
+  const pdfSource = pdfBase64
+    ? { uri: `data:application/pdf;base64,${pdfBase64}` }
+    : undefined;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+      testID="modal-pdf-preview"
+    >
+      <View style={[previewStyles.container, { backgroundColor: theme.backgroundRoot }]}>
+        <View
+          style={[
+            previewStyles.topBar,
+            {
+              backgroundColor: theme.backgroundDefault,
+              paddingTop: insets.top + Spacing.sm,
+              borderBottomColor: theme.border,
+            },
+          ]}
+        >
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [previewStyles.topBarButton, { opacity: pressed ? 0.6 : 1 }]}
+            testID="button-close-preview"
+          >
+            <Feather name="x" size={22} color={theme.text} />
+          </Pressable>
+
+          <ThemedText style={[previewStyles.topBarTitle, { fontFamily: "Cairo_700Bold" }]}>
+            معاينة PDF
+          </ThemedText>
+
+          <View style={previewStyles.topBarSpacer} />
+        </View>
+
+        <View style={previewStyles.webViewContainer}>
+          {loading ? (
+            <View style={previewStyles.centerState}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <ThemedText style={[previewStyles.stateText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                جاري تحضير التقرير...
+              </ThemedText>
+            </View>
+          ) : error != null ? (
+            <View style={previewStyles.centerState}>
+              <View style={[previewStyles.errorIcon, { backgroundColor: theme.error + "15" }]}>
+                <Feather name="alert-circle" size={32} color={theme.error} />
+              </View>
+              <ThemedText style={[previewStyles.stateText, { color: theme.error, fontFamily: "Cairo_600SemiBold" }]}>
+                {error}
+              </ThemedText>
+            </View>
+          ) : pdfSource != null ? (
+            <>
+              {webViewLoading ? (
+                <View style={[previewStyles.centerState, previewStyles.webViewOverlay]}>
+                  <ActivityIndicator size="large" color={theme.primary} />
+                </View>
+              ) : null}
+              <WebView
+                source={pdfSource}
+                style={previewStyles.webView}
+                onLoadStart={() => setWebViewLoading(true)}
+                onLoadEnd={() => setWebViewLoading(false)}
+                originWhitelist={["*"]}
+                allowFileAccess
+                testID="webview-pdf"
+              />
+            </>
+          ) : null}
+        </View>
+
+        <View
+          style={[
+            previewStyles.bottomBar,
+            {
+              backgroundColor: theme.backgroundDefault,
+              paddingBottom: insets.bottom + Spacing.sm,
+              borderTopColor: theme.border,
+            },
+          ]}
+        >
+          <Pressable
+            onPress={onShare}
+            disabled={sharing || loading || error != null}
+            style={({ pressed }) => [
+              previewStyles.shareButton,
+              {
+                backgroundColor: theme.primary,
+                opacity: pressed || sharing || loading || error != null ? 0.7 : 1,
+              },
+            ]}
+            testID="button-share-from-preview"
+          >
+            {sharing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Feather name="share-2" size={18} color="#FFFFFF" />
+                <ThemedText style={[previewStyles.shareButtonText, { fontFamily: "Cairo_700Bold" }]}>
+                  مشاركة / حفظ
+                </ThemedText>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -194,6 +328,13 @@ export default function ResultsScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showDownloadSuccess, setShowDownloadSuccess] = useState(false);
+
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewBase64, setPreviewBase64] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewSharing, setPreviewSharing] = useState(false);
+  const [previewFileUri, setPreviewFileUri] = useState<string | null>(null);
 
   const handleAddToCart = (part: DetectedPart) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -219,6 +360,74 @@ export default function ResultsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSendError(null);
     setEmailModalVisible(true);
+  };
+
+  const handlePreviewPdf = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPreviewError(null);
+    setPreviewBase64(null);
+    setPreviewFileUri(null);
+    setPreviewLoading(true);
+    setPreviewVisible(true);
+
+    try {
+      const url = new URL("/api/analysis/download-pdf", getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ carInfo, parts, imageUri }),
+      });
+
+      if (!resp.ok) {
+        let errorMsg = "حدث خطأ أثناء إنشاء التقرير";
+        try {
+          const json = await resp.json();
+          errorMsg = json.error ?? errorMsg;
+        } catch {}
+        setPreviewError(errorMsg);
+        return;
+      }
+
+      const arrayBuffer = await resp.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+      );
+
+      const filename = `laqit-preview-${Date.now()}.pdf`;
+      const fileUri = (FileSystem.cacheDirectory ?? "") + filename;
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      setPreviewFileUri(fileUri);
+      setPreviewBase64(base64);
+    } catch {
+      setPreviewError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleShareFromPreview = async () => {
+    if (previewFileUri == null) return;
+    setPreviewSharing(true);
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(previewFileUri, {
+          mimeType: "application/pdf",
+          dialogTitle: "مشاركة أو حفظ تقرير PDF",
+          UTI: "com.adobe.pdf",
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setPreviewError("المشاركة غير متاحة على هذا الجهاز");
+      }
+    } catch {
+      setPreviewError("تعذر فتح خيارات المشاركة");
+    } finally {
+      setPreviewSharing(false);
+    }
   };
 
   const handleDownloadPdf = async () => {
@@ -399,6 +608,32 @@ export default function ResultsScreen() {
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(500).delay(180)}>
+        <Pressable
+          onPress={handlePreviewPdf}
+          style={({ pressed }) => [
+            styles.pdfPreviewButton,
+            {
+              backgroundColor: theme.primary,
+              opacity: pressed ? 0.88 : 1,
+            },
+          ]}
+          testID="button-preview-pdf"
+        >
+          <View style={[styles.pdfPreviewIconWrap, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+            <Feather name="eye" size={20} color="#FFFFFF" />
+          </View>
+          <View style={styles.pdfContentSmall}>
+            <ThemedText style={[styles.pdfPreviewTitle, { fontFamily: "Cairo_700Bold" }]}>
+              معاينة PDF
+            </ThemedText>
+            <ThemedText style={[styles.pdfPreviewSubtitle, { fontFamily: "Cairo_400Regular" }]}>
+              استعراض التقرير قبل الحفظ
+            </ThemedText>
+          </View>
+          <Feather name="chevron-left" size={18} color="rgba(255,255,255,0.8)" />
+        </Pressable>
+
+        <View style={{ height: Spacing.sm }} />
         <View style={styles.pdfButtonsRow}>
           <Pressable
             onPress={handleOpenEmailModal}
@@ -662,6 +897,16 @@ export default function ResultsScreen() {
         onSend={handleSendPdf}
         sending={sending}
         error={sendError}
+      />
+
+      <PdfPreviewModal
+        visible={previewVisible}
+        pdfBase64={previewBase64}
+        loading={previewLoading}
+        error={previewError}
+        onClose={() => setPreviewVisible(false)}
+        onShare={handleShareFromPreview}
+        sharing={previewSharing}
       />
     </View>
   );
@@ -1102,5 +1347,107 @@ const styles = StyleSheet.create({
   sendButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
+  },
+  pdfPreviewButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  pdfPreviewIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pdfPreviewTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    textAlign: "right",
+  },
+  pdfPreviewSubtitle: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 11,
+    textAlign: "right",
+  },
+});
+
+const previewStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  topBar: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+  },
+  topBarButton: {
+    width: 36,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  topBarTitle: {
+    fontSize: 17,
+    textAlign: "center",
+    flex: 1,
+  },
+  topBarSpacer: {
+    width: 36,
+  },
+  webViewContainer: {
+    flex: 1,
+  },
+  webView: {
+    flex: 1,
+  },
+  webViewOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    backgroundColor: "transparent",
+  },
+  centerState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+  },
+  stateText: {
+    fontSize: 15,
+    textAlign: "center",
+  },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bottomBar: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+  },
+  shareButton: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    height: 52,
+    borderRadius: BorderRadius.md,
+  },
+  shareButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
   },
 });
