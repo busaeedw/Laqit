@@ -230,7 +230,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, carInfo, parts }),
+        body: JSON.stringify({ email, carInfo, parts, imageUri }),
       });
 
       const json = await resp.json();

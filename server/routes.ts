@@ -321,7 +321,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { email, carInfo, parts } = req.body;
+      const { email, carInfo, parts, imageUri } = req.body;
 
       if (!email || typeof email !== "string") {
         return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
@@ -336,7 +336,8 @@ Rules:
         return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
       }
 
-      const pdfBuffer = await generateAnalysisPdf(carInfo, parts);
+      const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("http") ? imageUri : undefined;
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
       const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
 

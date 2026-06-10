@@ -16,10 +16,31 @@ export interface PartEntry {
   price: number;
 }
 
+async function fetchImageBuffer(uri: string): Promise<Buffer | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch(uri, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) {
+      console.warn(`[analysisPdf] Image fetch failed: HTTP ${resp.status} for ${uri.slice(0, 80)}`);
+      return null;
+    }
+    const arrayBuffer = await resp.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (err: any) {
+    console.warn(`[analysisPdf] Image fetch error: ${err?.message ?? err}`);
+    return null;
+  }
+}
+
 export async function generateAnalysisPdf(
   carInfo: CarInfo,
-  parts: PartEntry[]
+  parts: PartEntry[],
+  imageUri?: string
 ): Promise<Buffer> {
+  const imageBuffer = imageUri ? await fetchImageBuffer(imageUri) : null;
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: "A4" });
     const chunks: Buffer[] = [];
@@ -32,7 +53,7 @@ export async function generateAnalysisPdf(
     const gray = "#6B7280";
     const light = "#F3F4F6";
     const dark = "#111827";
-    const pageWidth = doc.page.width - 100; // margins
+    const pageWidth = doc.page.width - 100;
 
     // ── Header bar ────────────────────────────────────────────────────────────
     doc.rect(50, 40, pageWidth, 60).fill(blue);
@@ -108,26 +129,74 @@ export async function generateAnalysisPdf(
 
     doc.moveDown(2.5);
 
+    // ── Damage photo ──────────────────────────────────────────────────────────
+    if (imageBuffer) {
+      const imgSectionY = doc.y;
+      doc.rect(50, imgSectionY, pageWidth, 28).fill(light);
+      doc
+        .fillColor(blue)
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .text("Damage Photo / صورة الضرر", 55, imgSectionY + 8, {
+          width: pageWidth - 10,
+          align: "left",
+        });
+
+      doc.moveDown(0.5);
+
+      const maxImgWidth = pageWidth;
+      const maxImgHeight = 220;
+
+      try {
+        doc.image(imageBuffer, 50, doc.y, {
+          fit: [maxImgWidth, maxImgHeight],
+          align: "center",
+          valign: "center",
+        });
+        doc.moveDown(0.5);
+        // Move cursor past the image
+        const imgY = doc.y;
+        if (imgY < imgSectionY + 28 + maxImgHeight + 10) {
+          doc.y = imgSectionY + 28 + maxImgHeight + 10;
+        }
+      } catch (imgErr: any) {
+        console.warn(`[analysisPdf] Could not embed image: ${imgErr?.message}`);
+        doc
+          .fillColor(gray)
+          .font("Helvetica")
+          .fontSize(10)
+          .text("[Photo could not be embedded]", 50, doc.y, { width: pageWidth, align: "center" });
+        doc.moveDown(1);
+      }
+    }
+
+    doc.moveDown(0.5);
+
     // ── Parts table ───────────────────────────────────────────────────────────
     const tableY = doc.y;
-    doc.rect(50, tableY, pageWidth, 28).fill(blue);
+
+    if (tableY > doc.page.height - 150) {
+      doc.addPage();
+    }
+
+    const tableActualY = doc.y;
+    doc.rect(50, tableActualY, pageWidth, 28).fill(blue);
 
     doc
       .fillColor("#FFFFFF")
       .font("Helvetica-Bold")
       .fontSize(12)
-      .text("Detected Parts / القطع المكتشفة", 55, tableY + 8, {
+      .text("Detected Parts / القطع المكتشفة", 55, tableActualY + 8, {
         width: pageWidth - 10,
         align: "left",
       });
 
-    // Table header row
     const col1 = 50;
     const col2 = 50 + pageWidth * 0.42;
     const col3 = 50 + pageWidth * 0.67;
     const col4 = 50 + pageWidth * 0.82;
 
-    let rowTop = tableY + 28 + 6;
+    let rowTop = tableActualY + 28 + 6;
 
     doc
       .fillColor(gray)
@@ -141,7 +210,6 @@ export async function generateAnalysisPdf(
     rowTop += 18;
     doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
 
-    // Table rows
     parts.forEach((part, i) => {
       if (rowTop > doc.page.height - 100) {
         doc.addPage();
@@ -167,14 +235,13 @@ export async function generateAnalysisPdf(
         .text(`${part.price.toLocaleString()} SAR`, col4, rowTop + 6, { width: pageWidth * 0.18 });
 
       rowTop += 22;
-
       doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.3).stroke();
     });
 
     // ── Total ─────────────────────────────────────────────────────────────────
     const total = parts.reduce((sum, p) => sum + p.price, 0);
 
-    doc.moveDown(1);
+    doc.y = rowTop + 8;
     doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y).strokeColor(blue).lineWidth(1).stroke();
     doc.moveDown(0.5);
 
