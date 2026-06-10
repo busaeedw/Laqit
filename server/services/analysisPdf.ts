@@ -213,6 +213,49 @@ export async function generateAnalysisPdf(
     const dark = "#111827";
     const pageWidth = doc.page.width - 100;
 
+    // ── Shared style configs ───────────────────────────────────────────────────
+
+    // Table column header labels
+    const tableHeaderStyle = {
+      fontSizeAr: 9,
+      fontSizeEn: 8,
+      fillColor: gray,
+    };
+
+    // Table data rows
+    const tableRowStyle = {
+      height: 24,
+      paddingTop: 8,
+      fontSize: 9,
+      fontSizeArName: 10, // Arabic part name in AR-only mode
+      fillColor: dark,
+      altBg: light,
+    };
+
+    // Thin divider lines between table rows
+    const rowDividerStyle = {
+      strokeColor: "#E5E7EB",
+      lineWidthHeader: 0.5, // separator after column headers
+      lineWidthRow: 0.3,    // separator after each data row
+    };
+
+    // Total row text
+    const totalStyle = {
+      fontSizeAr: 12,
+      fontSizeEn: 11,
+      fillColor: dark,
+    };
+
+    // Horizontal rule dividers using the brand blue
+    const dividerStyle = {
+      strokeColor: blue,
+      lineWidthSection: 1.5, // main section divider below title
+      lineWidthTotal: 1,     // divider above the totals row
+    };
+
+    // Footer text (font size, color, and spacing between EN and AR lines)
+    const footerStyle = { fontSize: 8, fillColor: gray, lineSpacing: 12 };
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     // Draw a section bar with separate Arabic (right) and/or English (left) label.
@@ -271,7 +314,8 @@ export async function generateAnalysisPdf(
 
     // ── Divider ───────────────────────────────────────────────────────────────
     doc.moveDown(isBilingual ? 0.5 : 1);
-    doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y).strokeColor(blue).lineWidth(1.5).stroke();
+    doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y)
+      .strokeColor(dividerStyle.strokeColor).lineWidth(dividerStyle.lineWidthSection).stroke();
     doc.moveDown(1);
 
     // ── Car info section ──────────────────────────────────────────────────────
@@ -366,32 +410,34 @@ export async function generateAnalysisPdf(
       const c3 = 50 + pageWidth * 0.63;
       const c4 = 50 + pageWidth * 0.78;
 
-      // Column header: Arabic label uses Amiri, English labels use Helvetica
-      doc.font("Arabic").fontSize(9).fillColor(gray)
+      // Column headers
+      doc.font("Arabic").fontSize(tableHeaderStyle.fontSizeAr).fillColor(tableHeaderStyle.fillColor)
         .text(L.colNameAr, c1, rowTop, { width: pageWidth * 0.34, align: "right" });
-      doc.font("Helvetica-Bold").fontSize(8).fillColor(gray)
+      doc.font("Helvetica-Bold").fontSize(tableHeaderStyle.fontSizeEn).fillColor(tableHeaderStyle.fillColor)
         .text(L.colNameEn, c2, rowTop, { width: pageWidth * 0.25 })
         .text(L.colConfidence, c3, rowTop, { width: pageWidth * 0.14 })
         .text(L.colPrice, c4, rowTop, { width: pageWidth * 0.22 });
 
       rowTop += 18;
-      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
+      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+        .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
 
       parts.forEach((part, i) => {
         if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; }
-        if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, 24).fill(light);
+        if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
-        doc.font("ArabicBold").fontSize(9).fillColor(dark)
-          .text(part.nameAr, c1, rowTop + 8, { width: pageWidth * 0.34, align: "right" });
-        doc.font("Helvetica-Bold").fontSize(9).fillColor(dark)
-          .text(part.name, c2, rowTop + 8, { width: pageWidth * 0.25 });
-        doc.font("Helvetica").fontSize(9).fillColor(confColor(part.confidence))
-          .text(`${part.confidence}%`, c3, rowTop + 8, { width: pageWidth * 0.14 });
-        doc.font("Helvetica").fontSize(9).fillColor(dark)
-          .text(`${part.price.toLocaleString()} SAR`, c4, rowTop + 8, { width: pageWidth * 0.22 });
+        doc.font("ArabicBold").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
+          .text(part.nameAr, c1, rowTop + tableRowStyle.paddingTop, { width: pageWidth * 0.34, align: "right" });
+        doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
+          .text(part.name, c2, rowTop + tableRowStyle.paddingTop, { width: pageWidth * 0.25 });
+        doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
+          .text(`${part.confidence}%`, c3, rowTop + tableRowStyle.paddingTop, { width: pageWidth * 0.14 });
+        doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
+          .text(`${part.price.toLocaleString()} SAR`, c4, rowTop + tableRowStyle.paddingTop, { width: pageWidth * 0.22 });
 
-        rowTop += 24;
-        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.3).stroke();
+        rowTop += tableRowStyle.height;
+        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+          .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthRow).stroke();
       });
     } else if (isAr) {
       // 3 columns, right-to-left: price | confidence | name
@@ -402,27 +448,30 @@ export async function generateAnalysisPdf(
       const confW = pageWidth * 0.14;
       const priceW = pageWidth * 0.22;
 
-      doc.font("Arabic").fontSize(9).fillColor(gray)
+      // Column headers
+      doc.font("Arabic").fontSize(tableHeaderStyle.fontSizeAr).fillColor(tableHeaderStyle.fillColor)
         .text(L.colPrice, cPrice, rowTop, { width: priceW, align: "right" })
         .text(L.colConfidence, cConf, rowTop, { width: confW, align: "right" })
         .text(L.colNameAr, cName, rowTop, { width: nameW, align: "right" });
 
       rowTop += 18;
-      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
+      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+        .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
 
       parts.forEach((part, i) => {
         if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; }
-        if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, 24).fill(light);
+        if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
-        doc.font("ArabicBold").fontSize(10).fillColor(dark)
+        doc.font("ArabicBold").fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
           .text(part.nameAr, cName, rowTop + 6, { width: nameW, align: "right" });
-        doc.font("Helvetica-Bold").fontSize(9).fillColor(confColor(part.confidence))
-          .text(`${part.confidence}%`, cConf, rowTop + 8, { width: confW, align: "right" });
-        doc.font("Helvetica").fontSize(9).fillColor(dark)
-          .text(`${part.price.toLocaleString()}`, cPrice, rowTop + 8, { width: priceW, align: "right" });
+        doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
+          .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW, align: "right" });
+        doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
+          .text(`${part.price.toLocaleString()}`, cPrice, rowTop + tableRowStyle.paddingTop, { width: priceW, align: "right" });
 
-        rowTop += 24;
-        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.3).stroke();
+        rowTop += tableRowStyle.height;
+        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+          .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthRow).stroke();
       });
     } else {
       // 3 columns, LTR: name | confidence | price
@@ -433,27 +482,30 @@ export async function generateAnalysisPdf(
       const confW = pageWidth * 0.14;
       const priceW = pageWidth * 0.22;
 
-      doc.font("Helvetica-Bold").fontSize(8).fillColor(gray)
+      // Column headers
+      doc.font("Helvetica-Bold").fontSize(tableHeaderStyle.fontSizeEn).fillColor(tableHeaderStyle.fillColor)
         .text(L.colNameEn, cName, rowTop, { width: nameW })
         .text(L.colConfidence, cConf, rowTop, { width: confW })
         .text(L.colPrice, cPrice, rowTop, { width: priceW });
 
       rowTop += 18;
-      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
+      doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+        .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
 
       parts.forEach((part, i) => {
         if (rowTop > doc.page.height - 100) { doc.addPage(); rowTop = 60; }
-        if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, 24).fill(light);
+        if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
-        doc.font("Helvetica").fontSize(9).fillColor(dark)
-          .text(part.name, cName, rowTop + 8, { width: nameW });
-        doc.font("Helvetica-Bold").fontSize(9).fillColor(confColor(part.confidence))
-          .text(`${part.confidence}%`, cConf, rowTop + 8, { width: confW });
-        doc.font("Helvetica").fontSize(9).fillColor(dark)
-          .text(`${part.price.toLocaleString()} SAR`, cPrice, rowTop + 8, { width: priceW });
+        doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
+          .text(part.name, cName, rowTop + tableRowStyle.paddingTop, { width: nameW });
+        doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
+          .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW });
+        doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
+          .text(`${part.price.toLocaleString()} SAR`, cPrice, rowTop + tableRowStyle.paddingTop, { width: priceW });
 
-        rowTop += 24;
-        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop).strokeColor("#E5E7EB").lineWidth(0.3).stroke();
+        rowTop += tableRowStyle.height;
+        doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
+          .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthRow).stroke();
       });
     }
 
@@ -462,21 +514,21 @@ export async function generateAnalysisPdf(
     const totalStr = total.toLocaleString();
 
     doc.y = rowTop + 8;
-    doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y).strokeColor(blue).lineWidth(1).stroke();
+    doc.moveTo(50, doc.y).lineTo(50 + pageWidth, doc.y)
+      .strokeColor(dividerStyle.strokeColor).lineWidth(dividerStyle.lineWidthTotal).stroke();
     doc.moveDown(0.5);
 
     const totalY = doc.y;
     if (L.totalAr(totalStr)) {
-      doc.font("ArabicBold").fontSize(12).fillColor(dark)
+      doc.font("ArabicBold").fontSize(totalStyle.fontSizeAr).fillColor(totalStyle.fillColor)
         .text(L.totalAr(totalStr), 50, totalY, { width: pageWidth, align: "right" });
     }
     if (L.totalEn(totalStr)) {
-      doc.font("Helvetica-Bold").fontSize(11).fillColor(dark)
+      doc.font("Helvetica-Bold").fontSize(totalStyle.fontSizeEn).fillColor(totalStyle.fillColor)
         .text(L.totalEn(totalStr), 50, isBilingual ? totalY : totalY, { width: isBilingual ? pageWidth * 0.5 : pageWidth, align: "left" });
     }
 
     // ── Footer ────────────────────────────────────────────────────────────────
-    const footerStyle = { fontSize: 8, fillColor: gray, lineSpacing: 12 };
     const footerY = doc.page.height - 50;
     if (L.footerEn) {
       doc.font("Helvetica-Bold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
