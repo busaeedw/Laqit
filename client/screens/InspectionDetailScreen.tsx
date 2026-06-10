@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   View,
@@ -12,11 +12,15 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RoutePropType = RouteProp<RootStackParamList, "InspectionDetail">;
@@ -41,12 +45,72 @@ export default function InspectionDetailScreen() {
   const { inspectionId } = route.params;
   const { theme } = useTheme();
 
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery<{
     inspection: any;
     parts: any[];
     media: any[];
     quotes: any[];
   }>({ queryKey: [`/api/laqit-inspections/${inspectionId}`] });
+
+  const handleDownloadPdf = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDownloadError(null);
+    setDownloading(true);
+
+    try {
+      const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "GET",
+        headers: { ...authHeaders() },
+      });
+
+      if (!resp.ok) {
+        let errorMsg = "حدث خطأ أثناء إنشاء التقرير";
+        try {
+          const json = await resp.json();
+          errorMsg = json.error ?? errorMsg;
+        } catch {}
+        setDownloadError(errorMsg);
+        return;
+      }
+
+      const arrayBuffer = await resp.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce(
+          (data, byte) => data + String.fromCharCode(byte),
+          ""
+        )
+      );
+
+      const filename = `laqit-${Date.now()}.pdf`;
+      const fileUri =
+        (FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "") +
+        filename;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "application/pdf",
+          dialogTitle: "تنزيل أو مشاركة تقرير PDF",
+          UTI: "com.adobe.pdf",
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setDownloadError("المشاركة غير متاحة على هذا الجهاز");
+      }
+    } catch {
+      setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -127,7 +191,7 @@ export default function InspectionDetailScreen() {
       </View>
 
       {/* Parts */}
-      {parts.length > 0 && (
+      {parts.length > 0 ? (
         <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
           <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
             القطع المطلوبة ({parts.length})
@@ -143,7 +207,40 @@ export default function InspectionDetailScreen() {
             </View>
           ))}
         </View>
-      )}
+      ) : null}
+
+      {/* Download PDF button — only when parts exist */}
+      {parts.length > 0 ? (
+        <View style={styles.pdfSection}>
+          <Pressable
+            testID="button-download-pdf"
+            onPress={handleDownloadPdf}
+            disabled={downloading}
+            style={({ pressed }) => [
+              styles.pdfBtn,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+                opacity: pressed || downloading ? 0.7 : 1,
+              },
+            ]}
+          >
+            {downloading ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <Feather name="download" size={18} color={theme.primary} />
+            )}
+            <ThemedText style={[styles.pdfBtnText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+              {downloading ? "جارٍ إنشاء التقرير..." : "تنزيل PDF"}
+            </ThemedText>
+          </Pressable>
+          {downloadError != null ? (
+            <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
+              {downloadError}
+            </ThemedText>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Quotes CTA */}
       {quotes.length > 0 ? (
@@ -210,6 +307,21 @@ const styles = StyleSheet.create({
   partRow: { flexDirection: "row-reverse", alignItems: "center", gap: Spacing.sm },
   partNum: { fontSize: 13, width: 24, textAlign: "right" },
   partName: { flex: 1, fontSize: 14, textAlign: "right" },
+  pdfSection: {
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  pdfBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+  },
+  pdfBtnText: { fontSize: 15 },
+  errorText: { fontSize: 13, textAlign: "center" },
   quotesBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
