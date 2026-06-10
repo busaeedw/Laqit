@@ -383,9 +383,9 @@ export async function generateAnalysisPdf(
 
         doc.font("ArabicBold").fontSize(10).fillColor(dark)
           .text(part.nameAr, c1, rowTop + 6, { width: pageWidth * 0.34, align: "right" });
-        doc.font("Helvetica").fontSize(9).fillColor(dark)
+        doc.font("Helvetica-Bold").fontSize(9).fillColor(dark)
           .text(part.name, c2, rowTop + 8, { width: pageWidth * 0.25 });
-        doc.font("Helvetica-Bold").fontSize(9).fillColor(confColor(part.confidence))
+        doc.font("Helvetica").fontSize(9).fillColor(confColor(part.confidence))
           .text(`${part.confidence}%`, c3, rowTop + 8, { width: pageWidth * 0.14 });
         doc.font("Helvetica").fontSize(9).fillColor(dark)
           .text(`${part.price.toLocaleString()} SAR`, c4, rowTop + 8, { width: pageWidth * 0.22 });
