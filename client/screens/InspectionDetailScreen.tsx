@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -186,6 +186,8 @@ export default function InspectionDetailScreen() {
   const [previewSharing, setPreviewSharing] = useState(false);
   const [previewFileUri, setPreviewFileUri] = useState<string | null>(null);
 
+  const pdfCache = useRef<{ key: string; base64: string; fileUri: string } | null>(null);
+
   const { data, isLoading } = useQuery<{
     inspection: any;
     parts: any[];
@@ -249,6 +251,18 @@ export default function InspectionDetailScreen() {
 
   const handlePreviewPdf = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const cacheKey = `${inspectionId}|${pdfLocale}|${showPageNumbers}`;
+
+    if (pdfCache.current?.key === cacheKey) {
+      setPreviewError(null);
+      setPreviewBase64(pdfCache.current.base64);
+      setPreviewFileUri(pdfCache.current.fileUri);
+      setPreviewLoading(false);
+      setPreviewVisible(true);
+      return;
+    }
+
     setPreviewError(null);
     setPreviewBase64(null);
     setPreviewFileUri(null);
@@ -286,6 +300,7 @@ export default function InspectionDetailScreen() {
         encoding: FileSystem.EncodingType.Base64,
       });
 
+      pdfCache.current = { key: cacheKey, base64, fileUri };
       setPreviewFileUri(fileUri);
       setPreviewBase64(base64);
     } catch {
