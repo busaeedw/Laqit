@@ -24,6 +24,7 @@ import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
+import { usePdfPageNumbers } from "@/hooks/usePdfPageNumbers";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
@@ -277,7 +278,7 @@ export default function InspectionDetailScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const { pdfLocale, savePdfLocale } = usePdfLocale();
-  const [showPageNumbers, setShowPageNumbers] = useState(true);
+  const { showPageNumbers, saveShowPageNumbers } = usePdfPageNumbers();
 
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
@@ -389,7 +390,7 @@ export default function InspectionDetailScreen() {
       savePdfLocale(overrideLocale);
     }
     if (overridePageNumbers !== undefined && overridePageNumbers !== showPageNumbers) {
-      setShowPageNumbers(overridePageNumbers);
+      saveShowPageNumbers(overridePageNumbers);
     }
 
     const cacheKey = `${inspectionId}|${effectiveLocale}|${effectivePageNumbers}`;
@@ -653,7 +654,7 @@ export default function InspectionDetailScreen() {
             {/* Page numbers toggle */}
             <Pressable
               testID="button-toggle-page-numbers"
-              onPress={() => setShowPageNumbers((v) => !v)}
+              onPress={() => saveShowPageNumbers(!showPageNumbers)}
               style={[styles.pageNumToggle, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
             >
               <View style={[styles.pageNumCheckbox, { borderColor: theme.primary, backgroundColor: showPageNumbers ? theme.primary : "transparent" }]}>
