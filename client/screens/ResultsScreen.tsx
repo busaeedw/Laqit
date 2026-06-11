@@ -251,10 +251,22 @@ function PdfPreviewModal({
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [webViewLoading, setWebViewLoading] = useState(true);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (visible) setWebViewLoading(true);
   }, [visible, pdfBase64]);
+
+  React.useEffect(() => {
+    if (Platform.OS !== "web" || !pdfBase64) { setBlobUrl(null); return; }
+    const binary = atob(pdfBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    setBlobUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pdfBase64]);
 
   const pdfSource = pdfBase64
     ? { uri: `data:application/pdf;base64,${pdfBase64}` }
@@ -393,22 +405,38 @@ function PdfPreviewModal({
               </ThemedText>
             </View>
           ) : pdfSource != null ? (
-            <>
-              {webViewLoading ? (
-                <View style={[previewStyles.centerState, previewStyles.webViewOverlay]}>
-                  <ActivityIndicator size="large" color={theme.primary} />
-                </View>
-              ) : null}
-              <WebView
-                source={pdfSource}
-                style={previewStyles.webView}
-                onLoadStart={() => setWebViewLoading(true)}
-                onLoadEnd={() => setWebViewLoading(false)}
-                originWhitelist={["*"]}
-                allowFileAccess
-                testID="webview-pdf"
-              />
-            </>
+            <View style={{ flex: 1 }}>
+              {Platform.OS === "web" ? (
+                blobUrl
+                  ? React.createElement("iframe", {
+                      src: blobUrl,
+                      style: { width: "100%", height: "100%", border: "none", display: "block" },
+                      title: "PDF Preview",
+                    })
+                  : (
+                    <View style={previewStyles.centerState}>
+                      <ActivityIndicator size="large" color={theme.primary} />
+                    </View>
+                  )
+              ) : (
+                <>
+                  {webViewLoading ? (
+                    <View style={[previewStyles.centerState, previewStyles.webViewOverlay]}>
+                      <ActivityIndicator size="large" color={theme.primary} />
+                    </View>
+                  ) : null}
+                  <WebView
+                    source={pdfSource}
+                    style={previewStyles.webView}
+                    onLoadStart={() => setWebViewLoading(true)}
+                    onLoadEnd={() => setWebViewLoading(false)}
+                    originWhitelist={["*"]}
+                    allowFileAccess
+                    testID="webview-pdf"
+                  />
+                </>
+              )}
+            </View>
           ) : null}
         </View>
 
