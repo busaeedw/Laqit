@@ -43,7 +43,7 @@ const features: Feature[] = [
     id: "database",
     icon: "database",
     title: "قاعدة بيانات شاملة",
-    description: "ملايين القطع من جميع الماركات",
+    description: "ملايين القطع من جميع العلامات",
     color: "#10B981",
   },
   {
@@ -156,10 +156,10 @@ export default function HomeScreen() {
         >
           <View style={styles.ctaContent}>
             <ThemedText style={[styles.ctaTitle, { fontFamily: "Cairo_700Bold" }]}>
-              ماركات السيارات المتوفرة
+              علامات السيارات المتوفرة
             </ThemedText>
             <ThemedText style={[styles.ctaSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              تعرف على جميع الماركات المدعومة في المملكة
+              تعرف على جميع العلامات المدعومة في المملكة
             </ThemedText>
           </View>
           <View style={[styles.brandIcon, { backgroundColor: theme.primary + "15" }]}>

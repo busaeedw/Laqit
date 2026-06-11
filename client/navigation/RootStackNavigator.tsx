@@ -185,7 +185,7 @@ export default function RootStackNavigator() {
         name="CarBrands"
         component={withSuspense(CarBrandsScreen)}
         options={{
-          headerTitle: "ماركات السيارات",
+          headerTitle: "علامات السيارات",
         }}
       />
       <Stack.Screen

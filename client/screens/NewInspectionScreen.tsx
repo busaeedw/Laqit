@@ -182,7 +182,7 @@ export default function NewInspectionScreen() {
         allMakes = await loadMakes();
       }
       if (allMakes.length === 0) {
-        Alert.alert("خطأ", "تعذر تحميل قائمة الماركات، يرجى التحقق من الاتصال والمحاولة مجدداً");
+        Alert.alert("خطأ", "تعذر تحميل قائمة العلامات، يرجى التحقق من الاتصال والمحاولة مجدداً");
         return;
       }
 
@@ -551,7 +551,7 @@ export default function NewInspectionScreen() {
                 testID="button-load-makes"
               >
                 <ThemedText style={[styles.loadBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                  تحميل قائمة الماركات
+                  تحميل قائمة العلامات
                 </ThemedText>
               </Pressable>
             ) : (
