@@ -611,7 +611,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ carInfo, parts, imageUri }),
+        body: JSON.stringify({ carInfo, parts, imageUri, locale: pdfLocale, showPageNumbers }),
       });
 
       if (!resp.ok) {
