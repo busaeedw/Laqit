@@ -54,7 +54,7 @@ export default function NewInspectionScreen() {
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<NavProp>();
   const { theme } = useTheme();
-  const { user, isLoggedIn, isHydrated } = useUser();
+  const { user, isLoggedIn, isHydrated, clearSession } = useUser();
 
   const requireLogin = (): boolean => {
     if (isLoggedIn) return true;
@@ -101,6 +101,7 @@ export default function NewInspectionScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const apiUrl = getApiUrl();
 
@@ -250,6 +251,11 @@ export default function NewInspectionScreen() {
       }
     );
     const data = await resp.json();
+    if (resp.status === 401) {
+      const e: any = new Error(data.error ?? "الجلسة منتهية، يرجى تسجيل الدخول مجدداً");
+      e.isSessionExpired = true;
+      throw e;
+    }
     if (!resp.ok) throw new Error(data.error ?? "خطأ في إنشاء الفحص");
     return data.inspection;
   };
@@ -400,6 +406,10 @@ export default function NewInspectionScreen() {
     } catch (err: any) {
       const msg = err.message ?? "حدث خطأ أثناء الإرسال";
       setSubmitError(msg);
+      if (err.isSessionExpired) {
+        clearSession();
+        setSessionExpired(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -853,29 +863,41 @@ export default function NewInspectionScreen() {
               </ThemedText>
             ) : null}
             <View style={styles.submitRow}>
-              <Pressable
-                onPress={handleSubmit}
-                disabled={submitting}
-                style={[
-                  styles.nextBtn,
-                  {
-                    backgroundColor: submitting
-                      ? theme.textSecondary
-                      : theme.primary,
-                  },
-                ]}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                      إرسال الطلب
-                    </ThemedText>
-                    <Feather name="send" size={18} color="#fff" />
-                  </>
-                )}
-              </Pressable>
+              {sessionExpired ? (
+                <Pressable
+                  onPress={() => (navigation as any).navigate("Main", { screen: "AccountTab" })}
+                  style={[styles.nextBtn, { backgroundColor: theme.primary }]}
+                >
+                  <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                    تسجيل الدخول
+                  </ThemedText>
+                  <Feather name="log-in" size={18} color="#fff" />
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                  style={[
+                    styles.nextBtn,
+                    {
+                      backgroundColor: submitting
+                        ? theme.textSecondary
+                        : theme.primary,
+                    },
+                  ]}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                        إرسال الطلب
+                      </ThemedText>
+                      <Feather name="send" size={18} color="#fff" />
+                    </>
+                  )}
+                </Pressable>
+              )}
             </View>
           </View>
         )}
