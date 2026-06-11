@@ -370,6 +370,96 @@ export async function ensureMigrations() {
   }
 }
 
+const AGENTS_ADVISORY_LOCK_KEY = 742195;
+
+/**
+ * Seeds car make agents when the table is empty, independently of seedIfEmpty.
+ * Handles the case where the production DB already has cities/makes (so
+ * seedIfEmpty exits early) but agents were added after the initial deploy.
+ */
+export async function seedAgentsIfEmpty() {
+  try {
+    const existing = await db.select().from(carMakeAgents).limit(1);
+    if (existing.length > 0) return;
+
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock($1) AS locked",
+        [AGENTS_ADVISORY_LOCK_KEY],
+      );
+      if (!rows[0]?.locked) return;
+
+      const recheck = await db.select().from(carMakeAgents).limit(1);
+      if (recheck.length > 0) return;
+
+      const allMakes = await db.select().from(carMakes);
+      const makeMap: Record<string, string> = {};
+      allMakes.forEach((m) => (makeMap[m.makeName] = m.makeId));
+
+      const agentsData = [
+        { makeName: "Toyota",        agentNameEn: "Abdul Latif Jameel Motors",          agentNameAr: "عبد اللطيف جميل للسيارات",      website: "toyota.com.sa",           phone: "920000655",  headquartersCity: "Jeddah" },
+        { makeName: "Lexus",         agentNameEn: "Abdul Latif Jameel Motors",          agentNameAr: "عبد اللطيف جميل للسيارات",      website: "lexus-alj.com",           phone: "920000655",  headquartersCity: "Jeddah" },
+        { makeName: "JETOUR",        agentNameEn: "Abdul Latif Jameel Motors",          agentNameAr: "عبد اللطيف جميل للسيارات",      website: "jetour-ksa.com",          phone: "920000655",  headquartersCity: "Jeddah" },
+        { makeName: "Honda",         agentNameEn: "Abdullah Hashim Company",            agentNameAr: "شركة عبدالله هاشم",             website: "hondasaudi.com",          phone: "920002208",  headquartersCity: "Jeddah" },
+        { makeName: "Nissan",        agentNameEn: "E.A. Juffali & Brothers",            agentNameAr: "إ.أ. جفالي وإخوانه",            website: "nissan.com.sa",           phone: "920001666",  headquartersCity: "Riyadh" },
+        { makeName: "Infiniti",      agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",          phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "Mercedes-Benz", agentNameEn: "SAMACO Automotive",                  agentNameAr: "سامكو للسيارات",                website: "mercedes-benz-arabia.com", phone: "920000724", headquartersCity: "Riyadh" },
+        { makeName: "BMW",           agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "bmwksa.com",              phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Hyundai",       agentNameEn: "Olayan Financing Company",           agentNameAr: "شركة أوليان للتمويل",           website: "hyundai.com.sa",          phone: "920001234",  headquartersCity: "Riyadh" },
+        { makeName: "Genesis",       agentNameEn: "Almajdouie Motors",                  agentNameAr: "المجدوعي للسيارات",             website: "genesis.com/sa",          phone: "920001000",  headquartersCity: "Dammam" },
+        { makeName: "Kia",           agentNameEn: "Al Jabr Trading & NMC",              agentNameAr: "الجابر للتجارة",                website: "kia.com.sa",              phone: "920001522",  headquartersCity: "Riyadh" },
+        { makeName: "Renault",       agentNameEn: "Wallan Trading Company",             agentNameAr: "شركة وعلان للتجارة",            website: "renault.sa",              phone: "920000525",  headquartersCity: "Jeddah" },
+        { makeName: "Geely",         agentNameEn: "Wallan Trading Company",             agentNameAr: "شركة وعلان للتجارة",            website: "geely.com.sa",            phone: "920000525",  headquartersCity: "Jeddah" },
+        { makeName: "Ford",          agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",            phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Lincoln",       agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",            phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Chevrolet",     agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",            phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "GMC",           agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",            phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Cadillac",      agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",            phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Land Rover",    agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",            phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Volvo",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",            phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Chery",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "chery-saudi.com",         phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Exeed",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "exeed-saudi.com",         phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Haval",         agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "haval-saudi.com",         phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Subaru",        agentNameEn: "Mohamed Yousuf Naghi Motors",        agentNameAr: "محمد يوسف ناغي للسيارات",       website: "subaru-saudi.com",        phone: "920003040",  headquartersCity: "Jeddah" },
+        { makeName: "Audi",          agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",          phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "Volkswagen",    agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",          phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "Porsche",       agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",          phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "Jeep",          agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",          phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "Dodge",         agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",          phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "RAM",           agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",          phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "Mitsubishi",    agentNameEn: "Algosaibi Motors",                   agentNameAr: "شركة الغصيبي للسيارات",         website: "algosaibi-motors.com",    phone: "920002202",  headquartersCity: "Riyadh" },
+        { makeName: "MG",            agentNameEn: "SAMACO Automotive",                  agentNameAr: "سامكو للسيارات",                website: "samaco.com.sa",           phone: "920000724",  headquartersCity: "Riyadh" },
+        { makeName: "Mazda",         agentNameEn: "Al Jazirah Vehicles Agencies",       agentNameAr: "الجزيرة للسيارات",              website: "mazda.sa",                phone: "920002100",  headquartersCity: "Riyadh" },
+        { makeName: "Suzuki",        agentNameEn: "National Auto Company",              agentNameAr: "الشركة الوطنية للسيارات",       website: "suzuki.sa",               phone: "920001900",  headquartersCity: "Riyadh" },
+        { makeName: "BYD",           agentNameEn: "Al-Futtaim Electric Mobility",       agentNameAr: "الفطيم للتنقل الكهربائي",       website: "byd.sa",                  phone: "8003020006", headquartersCity: "Riyadh" },
+        { makeName: "Changan",       agentNameEn: "Almajdouie Motors",                  agentNameAr: "المجدوعي للسيارات",             website: "changanauto.com.sa",      phone: "920001000",  headquartersCity: "Dammam" },
+        { makeName: "GAC",           agentNameEn: "Aljomaih Automotive",                agentNameAr: "الجميح للسيارات",               website: "gac-motor.com.sa",        phone: "920001199",  headquartersCity: "Riyadh" },
+        { makeName: "Isuzu",         agentNameEn: "Xenel Industries / Isuzu Arabia",    agentNameAr: "زينيل / إيسوزو العربية",        website: "isuzuarabia.com",         phone: "920002255",  headquartersCity: "Riyadh" },
+      ];
+
+      let seeded = 0;
+      for (const a of agentsData) {
+        const makeId = makeMap[a.makeName];
+        if (!makeId) continue;
+        await db
+          .insert(carMakeAgents)
+          .values({ makeId, agentNameEn: a.agentNameEn, agentNameAr: a.agentNameAr, website: a.website, phone: a.phone, headquartersCity: a.headquartersCity })
+          .onConflictDoNothing();
+        seeded++;
+      }
+      console.log(`Car make agents: seeded ${seeded} entries`);
+    } finally {
+      await client
+        .query("SELECT pg_advisory_unlock($1)", [AGENTS_ADVISORY_LOCK_KEY])
+        .catch(() => {});
+      client.release();
+    }
+  } catch (err) {
+    console.error("seedAgentsIfEmpty error:", (err as Error)?.message);
+  }
+}
+
 export async function seedIfEmpty() {
   try {
     // Guard on `cities`, NOT `car_makes` — because syncCarCatalog() runs
