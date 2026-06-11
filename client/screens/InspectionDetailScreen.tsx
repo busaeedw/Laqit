@@ -294,7 +294,7 @@ export default function InspectionDetailScreen() {
   const [previewSharing, setPreviewSharing] = useState(false);
   const [previewFileUri, setPreviewFileUri] = useState<string | null>(null);
 
-  const pdfCache = useRef<{ key: string; base64: string; fileUri: string } | null>(null);
+  const pdfCache = useRef<{ key: string; base64: string; fileUri: string | null } | null>(null);
 
   // Clear the PDF cache every time the screen comes back into focus so that
   // edits made on another screen (and refetched in the background) always
@@ -377,24 +377,37 @@ export default function InspectionDetailScreen() {
       const base64 = arrayBufferToBase64(arrayBuffer);
 
       const filename = `laqit-${Date.now()}.pdf`;
-      const fileUri =
-        (FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "") +
-        filename;
 
-      await FileSystem.writeAsStringAsync(fileUri, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: "application/pdf",
-          dialogTitle: "تنزيل أو مشاركة تقرير PDF",
-          UTI: "com.adobe.pdf",
-        });
+      if (Platform.OS === "web") {
+        const byteChars = atob(base64);
+        const bytes = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        setDownloadError("المشاركة غير متاحة على هذا الجهاز");
+        const fileUri =
+          (FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "") +
+          filename;
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "تنزيل أو مشاركة تقرير PDF",
+            UTI: "com.adobe.pdf",
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          setDownloadError("المشاركة غير متاحة على هذا الجهاز");
+        }
       }
     } catch {
       setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
@@ -457,14 +470,15 @@ export default function InspectionDetailScreen() {
       const arrayBuffer = await resp.arrayBuffer();
       const base64 = arrayBufferToBase64(arrayBuffer);
 
-      const filename = `laqit-preview-${Date.now()}.pdf`;
-      const fileUri =
-        (FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "") +
-        filename;
-
-      await FileSystem.writeAsStringAsync(fileUri, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      let fileUri: string | null = null;
+      if (Platform.OS !== "web") {
+        const filename = `laqit-preview-${Date.now()}.pdf`;
+        const dir = FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "";
+        fileUri = dir + filename;
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
 
       pdfCache.current = { key: cacheKey, base64, fileUri };
       setPreviewFileUri(fileUri);
