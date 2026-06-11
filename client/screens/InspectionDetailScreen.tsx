@@ -195,6 +195,21 @@ export default function InspectionDetailScreen() {
     quotes: any[];
   }>({ queryKey: [`/api/laqit-inspections/${inspectionId}`] });
 
+  // Invalidate the PDF cache whenever the inspection data changes (e.g. parts
+  // edited, status updated). Version is derived from updatedAt + parts count +
+  // part IDs so any server-side change triggers a fresh PDF fetch next time.
+  const prevDataVersionRef = useRef<string | null>(null);
+  const dataVersion = data
+    ? `${data.inspection?.updatedAt ?? ""}|${data.parts?.length ?? 0}|${(data.parts ?? []).map((p: any) => p.inspectionPartId ?? p.id ?? "").join(",")}`
+    : null;
+  useEffect(() => {
+    if (dataVersion == null) return;
+    if (prevDataVersionRef.current !== null && prevDataVersionRef.current !== dataVersion) {
+      pdfCache.current = null;
+    }
+    prevDataVersionRef.current = dataVersion;
+  }, [dataVersion]);
+
   const handleDownloadPdf = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDownloadError(null);
