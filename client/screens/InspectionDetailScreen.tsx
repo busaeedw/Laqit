@@ -302,6 +302,10 @@ export default function InspectionDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       pdfCache.current = null;
+      setPreviewBase64(null);
+      setPreviewFileUri(null);
+      setPreviewError(null);
+      setPreviewVisible(false);
     }, [])
   );
 
