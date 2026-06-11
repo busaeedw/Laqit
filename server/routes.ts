@@ -399,6 +399,47 @@ Rules:
     }
   });
 
+  const STATIC_AGENTS: Record<string, { agentNameEn: string; agentNameAr: string; website: string; phone: string; headquartersCity: string }> = {
+    "Toyota":        { agentNameEn: "Abdul Latif Jameel Motors",        agentNameAr: "عبد اللطيف جميل للسيارات",      website: "toyota.com.sa",            phone: "920000655",  headquartersCity: "Jeddah" },
+    "Lexus":         { agentNameEn: "Abdul Latif Jameel Motors",        agentNameAr: "عبد اللطيف جميل للسيارات",      website: "lexus-alj.com",            phone: "920000655",  headquartersCity: "Jeddah" },
+    "JETOUR":        { agentNameEn: "Abdul Latif Jameel Motors",        agentNameAr: "عبد اللطيف جميل للسيارات",      website: "jetour-ksa.com",           phone: "920000655",  headquartersCity: "Jeddah" },
+    "Honda":         { agentNameEn: "Abdullah Hashim Company",          agentNameAr: "شركة عبدالله هاشم",             website: "hondasaudi.com",           phone: "920002208",  headquartersCity: "Jeddah" },
+    "Nissan":        { agentNameEn: "E.A. Juffali & Brothers",          agentNameAr: "إ.أ. جفالي وإخوانه",            website: "nissan.com.sa",            phone: "920001666",  headquartersCity: "Riyadh" },
+    "Infiniti":      { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",           phone: "920002100",  headquartersCity: "Riyadh" },
+    "Mercedes-Benz": { agentNameEn: "SAMACO Automotive",                agentNameAr: "سامكو للسيارات",                website: "mercedes-benz-arabia.com", phone: "920000724",  headquartersCity: "Riyadh" },
+    "BMW":           { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "bmwksa.com",               phone: "920003040",  headquartersCity: "Jeddah" },
+    "Hyundai":       { agentNameEn: "Olayan Financing Company",         agentNameAr: "شركة أوليان للتمويل",           website: "hyundai.com.sa",           phone: "920001234",  headquartersCity: "Riyadh" },
+    "Genesis":       { agentNameEn: "Almajdouie Motors",                agentNameAr: "المجدوعي للسيارات",             website: "genesis.com/sa",           phone: "920001000",  headquartersCity: "Dammam" },
+    "Kia":           { agentNameEn: "Al Jabr Trading & NMC",            agentNameAr: "الجابر للتجارة",                website: "kia.com.sa",               phone: "920001522",  headquartersCity: "Riyadh" },
+    "Renault":       { agentNameEn: "Wallan Trading Company",           agentNameAr: "شركة وعلان للتجارة",            website: "renault.sa",               phone: "920000525",  headquartersCity: "Jeddah" },
+    "Geely":         { agentNameEn: "Wallan Trading Company",           agentNameAr: "شركة وعلان للتجارة",            website: "geely.com.sa",             phone: "920000525",  headquartersCity: "Jeddah" },
+    "Ford":          { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    "Lincoln":       { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    "Chevrolet":     { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    "GMC":           { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    "Cadillac":      { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    "Land Rover":    { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    "Volvo":         { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "my-naghi.com",             phone: "920003040",  headquartersCity: "Jeddah" },
+    "Chery":         { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "chery-saudi.com",          phone: "920003040",  headquartersCity: "Jeddah" },
+    "Exeed":         { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "exeed-saudi.com",          phone: "920003040",  headquartersCity: "Jeddah" },
+    "Haval":         { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "haval-saudi.com",          phone: "920003040",  headquartersCity: "Jeddah" },
+    "Subaru":        { agentNameEn: "Mohamed Yousuf Naghi Motors",      agentNameAr: "محمد يوسف ناغي للسيارات",       website: "subaru-saudi.com",         phone: "920003040",  headquartersCity: "Jeddah" },
+    "Audi":          { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",           phone: "920002100",  headquartersCity: "Riyadh" },
+    "Volkswagen":    { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",           phone: "920002100",  headquartersCity: "Riyadh" },
+    "Porsche":       { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",           phone: "920002100",  headquartersCity: "Riyadh" },
+    "Jeep":          { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",           phone: "920002100",  headquartersCity: "Riyadh" },
+    "Dodge":         { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",           phone: "920002100",  headquartersCity: "Riyadh" },
+    "RAM":           { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "al-jazirah.com",           phone: "920002100",  headquartersCity: "Riyadh" },
+    "Mitsubishi":    { agentNameEn: "Algosaibi Motors",                 agentNameAr: "شركة الغصيبي للسيارات",         website: "algosaibi-motors.com",     phone: "920002202",  headquartersCity: "Riyadh" },
+    "MG":            { agentNameEn: "SAMACO Automotive",                agentNameAr: "سامكو للسيارات",                website: "samaco.com.sa",            phone: "920000724",  headquartersCity: "Riyadh" },
+    "Mazda":         { agentNameEn: "Al Jazirah Vehicles Agencies",     agentNameAr: "الجزيرة للسيارات",              website: "mazda.sa",                 phone: "920002100",  headquartersCity: "Riyadh" },
+    "Suzuki":        { agentNameEn: "National Auto Company",            agentNameAr: "الشركة الوطنية للسيارات",       website: "suzuki.sa",                phone: "920001900",  headquartersCity: "Riyadh" },
+    "BYD":           { agentNameEn: "Al-Futtaim Electric Mobility",     agentNameAr: "الفطيم للتنقل الكهربائي",       website: "byd.sa",                   phone: "8003020006", headquartersCity: "Riyadh" },
+    "Changan":       { agentNameEn: "Almajdouie Motors",                agentNameAr: "المجدوعي للسيارات",             website: "changanauto.com.sa",       phone: "920001000",  headquartersCity: "Dammam" },
+    "GAC":           { agentNameEn: "Aljomaih Automotive",              agentNameAr: "الجميح للسيارات",               website: "gac-motor.com.sa",         phone: "920001199",  headquartersCity: "Riyadh" },
+    "Isuzu":         { agentNameEn: "Xenel Industries / Isuzu Arabia",  agentNameAr: "زينيل / إيسوزو العربية",        website: "isuzuarabia.com",          phone: "920002255",  headquartersCity: "Riyadh" },
+  };
+
   app.get("/api/car-makes", async (_req, res) => {
     try {
       const rows = await db
@@ -417,21 +458,19 @@ Rules:
         .leftJoin(carMakeAgents, eq(carMakeAgents.makeId, carMakes.makeId))
         .orderBy(carMakes.makeName);
 
-      const makes = rows.map((r) => ({
-        makeId: r.makeId,
-        makeName: r.makeName,
-        nameAr: r.nameAr,
-        createdAt: r.createdAt,
-        agent: r.agentNameEn
-          ? {
-              agentNameEn: r.agentNameEn,
-              agentNameAr: r.agentNameAr,
-              website: r.website,
-              phone: r.phone,
-              headquartersCity: r.headquartersCity,
-            }
-          : null,
-      }));
+      const makes = rows.map((r) => {
+        const dbAgent = r.agentNameEn
+          ? { agentNameEn: r.agentNameEn, agentNameAr: r.agentNameAr, website: r.website, phone: r.phone, headquartersCity: r.headquartersCity }
+          : null;
+        const staticAgent = STATIC_AGENTS[r.makeName] ?? null;
+        return {
+          makeId: r.makeId,
+          makeName: r.makeName,
+          nameAr: r.nameAr,
+          createdAt: r.createdAt,
+          agent: dbAgent ?? staticAgent,
+        };
+      });
 
       res.json({ makes });
     } catch (err: any) {
