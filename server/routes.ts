@@ -365,7 +365,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { carInfo, parts, imageUri, showPageNumbers } = req.body;
+      const { carInfo, parts, imageUri, locale, showPageNumbers } = req.body;
 
       if (!carInfo || !Array.isArray(parts)) {
         return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
@@ -373,7 +373,8 @@ Rules:
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
       const safeShowPageNumbers = showPageNumbers !== false;
-      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, "ar", safeShowPageNumbers);
+      const safeLocale = ["ar", "en", "bilingual"].includes(locale) ? locale : "ar";
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale, safeShowPageNumbers);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
 
       res.setHeader("Content-Type", "application/pdf");

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -10,6 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Animated as RNAnimated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -26,6 +27,7 @@ import { WebView } from "react-native-webview";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
+import { usePdfPageNumbers } from "@/hooks/usePdfPageNumbers";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
@@ -223,9 +225,29 @@ interface PdfPreviewModalProps {
   onClose: () => void;
   onShare: () => void;
   sharing: boolean;
+  pdfLocale: PdfLocale;
+  showPageNumbers: boolean;
+  onReload: (locale: PdfLocale, pageNumbers: boolean) => void;
 }
 
-function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare, sharing }: PdfPreviewModalProps) {
+const PREVIEW_LOCALE_OPTIONS: { value: PdfLocale; label: string }[] = [
+  { value: "ar", label: "عربي" },
+  { value: "bilingual", label: "ثنائي" },
+  { value: "en", label: "English" },
+];
+
+function PdfPreviewModal({
+  visible,
+  pdfBase64,
+  loading,
+  error,
+  onClose,
+  onShare,
+  sharing,
+  pdfLocale,
+  showPageNumbers,
+  onReload,
+}: PdfPreviewModalProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [webViewLoading, setWebViewLoading] = useState(true);
@@ -269,7 +291,88 @@ function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare,
             معاينة PDF
           </ThemedText>
 
-          <View style={previewStyles.topBarSpacer} />
+          <Pressable
+            onPress={() => onReload(pdfLocale, showPageNumbers)}
+            disabled={loading}
+            style={({ pressed }) => [previewStyles.topBarButton, { opacity: pressed || loading ? 0.5 : 1 }]}
+            testID="button-reload-preview"
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <Feather name="refresh-cw" size={20} color={theme.primary} />
+            )}
+          </Pressable>
+        </View>
+
+        {/* Settings strip: language picker + page-numbers toggle */}
+        <View
+          style={[
+            previewStyles.settingsStrip,
+            { backgroundColor: theme.backgroundDefault, borderBottomColor: theme.border },
+          ]}
+        >
+          <View style={[previewStyles.inlineLocalePicker, { borderColor: theme.border }]}>
+            {PREVIEW_LOCALE_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.value}
+                testID={`button-preview-locale-${opt.value}`}
+                onPress={() => {
+                  if (opt.value !== pdfLocale) {
+                    onReload(opt.value, showPageNumbers);
+                  }
+                }}
+                style={[
+                  previewStyles.inlineLocaleOption,
+                  pdfLocale === opt.value && { backgroundColor: theme.primary },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    previewStyles.inlineLocaleText,
+                    {
+                      fontFamily: "Cairo_700Bold",
+                      color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  {opt.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable
+            testID="button-preview-toggle-page-numbers"
+            onPress={() => onReload(pdfLocale, !showPageNumbers)}
+            style={[
+              previewStyles.inlinePageNumToggle,
+              {
+                borderColor: showPageNumbers ? theme.primary : theme.border,
+                backgroundColor: showPageNumbers ? theme.primary + "15" : "transparent",
+              },
+            ]}
+          >
+            <View
+              style={[
+                previewStyles.inlineCheckbox,
+                {
+                  borderColor: theme.primary,
+                  backgroundColor: showPageNumbers ? theme.primary : "transparent",
+                },
+              ]}
+            >
+              {showPageNumbers ? <Feather name="check" size={10} color="#fff" /> : null}
+            </View>
+            <ThemedText
+              style={[
+                previewStyles.inlinePageNumLabel,
+                { color: showPageNumbers ? theme.primary : theme.textSecondary, fontFamily: "Cairo_400Regular" },
+              ]}
+            >
+              أرقام الصفحات
+            </ThemedText>
+          </Pressable>
         </View>
 
         <View style={previewStyles.webViewContainer}>
@@ -358,6 +461,9 @@ export default function ResultsScreen() {
   const { user } = useUser();
 
   const { imageUri, carInfo, parts } = route.params;
+  const { pdfLocale, savePdfLocale } = usePdfLocale();
+  const { showPageNumbers, saveShowPageNumbers } = usePdfPageNumbers();
+
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [sending, setSending] = useState(false);
@@ -373,6 +479,22 @@ export default function ResultsScreen() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewSharing, setPreviewSharing] = useState(false);
   const [previewFileUri, setPreviewFileUri] = useState<string | null>(null);
+
+  const settingsChangedInModal = useRef(false);
+  const highlightAnim = useRef(new RNAnimated.Value(0)).current;
+
+  const flashControls = useCallback(() => {
+    highlightAnim.setValue(0);
+    RNAnimated.sequence([
+      RNAnimated.timing(highlightAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      RNAnimated.timing(highlightAnim, { toValue: 0, duration: 700, useNativeDriver: false }),
+    ]).start();
+  }, [highlightAnim]);
+
+  const highlightBg = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["transparent", theme.primary + "22"],
+  });
 
   const handleAddToCart = (part: DetectedPart) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -400,8 +522,21 @@ export default function ResultsScreen() {
     setEmailModalVisible(true);
   };
 
-  const handlePreviewPdf = async () => {
+  const handlePreviewPdf = async (overrideLocale?: PdfLocale, overridePageNumbers?: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const effectiveLocale = overrideLocale ?? pdfLocale;
+    const effectivePageNumbers = overridePageNumbers ?? showPageNumbers;
+
+    if (overrideLocale !== undefined && overrideLocale !== pdfLocale) {
+      savePdfLocale(overrideLocale);
+      settingsChangedInModal.current = true;
+    }
+    if (overridePageNumbers !== undefined && overridePageNumbers !== showPageNumbers) {
+      saveShowPageNumbers(overridePageNumbers);
+      settingsChangedInModal.current = true;
+    }
+
     setPreviewError(null);
     setPreviewBase64(null);
     setPreviewFileUri(null);
@@ -413,7 +548,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ carInfo, parts, imageUri }),
+        body: JSON.stringify({ carInfo, parts, imageUri, locale: effectiveLocale, showPageNumbers: effectivePageNumbers }),
       });
 
       if (!resp.ok) {
@@ -642,6 +777,9 @@ export default function ResultsScreen() {
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(500).delay(180)}>
+        <RNAnimated.View
+          style={[styles.pdfHighlightWrapper, { backgroundColor: highlightBg }]}
+        >
         <Pressable
           onPress={handlePreviewPdf}
           style={({ pressed }) => [
@@ -738,6 +876,7 @@ export default function ResultsScreen() {
             </ThemedText>
           </Animated.View>
         ) : null}
+        </RNAnimated.View>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(500).delay(200)}>
@@ -938,9 +1077,18 @@ export default function ResultsScreen() {
         pdfBase64={previewBase64}
         loading={previewLoading}
         error={previewError}
-        onClose={() => setPreviewVisible(false)}
+        onClose={() => {
+          setPreviewVisible(false);
+          if (settingsChangedInModal.current) {
+            settingsChangedInModal.current = false;
+            flashControls();
+          }
+        }}
         onShare={handleShareFromPreview}
         sharing={previewSharing}
+        pdfLocale={pdfLocale}
+        showPageNumbers={showPageNumbers}
+        onReload={handlePreviewPdf}
       />
     </View>
   );
@@ -1402,6 +1550,12 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
   },
+  pdfHighlightWrapper: {
+    borderRadius: BorderRadius.md,
+    padding: 4,
+    marginHorizontal: -4,
+    gap: Spacing.sm,
+  },
   pdfPreviewButton: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -1454,6 +1608,46 @@ const previewStyles = StyleSheet.create({
   topBarSpacer: {
     width: 36,
   },
+  settingsStrip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    gap: Spacing.sm,
+  },
+  inlineLocalePicker: {
+    flexDirection: "row-reverse",
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    overflow: "hidden",
+    flex: 1,
+  },
+  inlineLocaleOption: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlineLocaleText: { fontSize: 12 },
+  inlinePageNumToggle: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  inlineCheckbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlinePageNumLabel: { fontSize: 12 },
   webViewContainer: {
     flex: 1,
   },
