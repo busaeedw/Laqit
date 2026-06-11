@@ -6,6 +6,36 @@ uri = "file://attached_assets/generated_images/laqit_bg.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "jPEn1giLCKWFYY-BUd1NJ"
+uri = "file://attached_assets/logo_concept_1.png"
+type = "image"
+title = "laqit-logo-1-hexagon-wrench"
+
+[[generated]]
+id = "Tf4sLXuSapsZ6LwDbKHsy"
+uri = "file://attached_assets/logo_concept_2.png"
+type = "image"
+title = "laqit-logo-2-lens-car"
+
+[[generated]]
+id = "KoX_YjJPp1ePVpNQUa1IB"
+uri = "file://attached_assets/logo_concept_3.png"
+type = "image"
+title = "laqit-logo-3-arrow-hood"
+
+[[generated]]
+id = "Jg_c-dOM6aO7JIIO7gwxg"
+uri = "file://attached_assets/logo_concept_4.png"
+type = "image"
+title = "laqit-logo-4-pin-gear"
+
+[[generated]]
+id = "gsi6Q0xRWuIxw7xhSoiIk"
+uri = "file://attached_assets/logo_concept_5.png"
+type = "image"
+title = "laqit-logo-5-shield-spark"
+
 [[outputs]]
 id = "raUHONJAqy75JwSJx9k3H"
 uri = "file://attached_assets/generated_audio/laqit_vo.mp3"
@@ -23,3 +53,33 @@ id = "Go-J9nJ2kSXD38mKQeFFY"
 uri = "file://attached_assets/generated_videos/laqit_explainer.mp4"
 type = "video"
 title = "لاقط — فيديو تعريفي (30 ثانية)"
+
+[[outputs]]
+id = "-X0HsS6XMOeLGGtv7zOFG"
+uri = "file://attached_assets/logo_concept_1.png"
+type = "image"
+title = "1 — Hexagon & Wrench"
+
+[[outputs]]
+id = "--Zo1LFmJmtKY5LmZN3UR"
+uri = "file://attached_assets/logo_concept_2.png"
+type = "image"
+title = "2 — Lens & Car"
+
+[[outputs]]
+id = "zj_b17lF-aC93E-Wh0es3"
+uri = "file://attached_assets/logo_concept_3.png"
+type = "image"
+title = "3 — Arrow Hood"
+
+[[outputs]]
+id = "lB0Kb1lZDJtejbwJyquBW"
+uri = "file://attached_assets/logo_concept_4.png"
+type = "image"
+title = "4 — Pin & Gear"
+
+[[outputs]]
+id = "bobNZsaeyfqv5LF8AGZHK"
+uri = "file://attached_assets/logo_concept_5.png"
+type = "image"
+title = "5 — Shield Spark"
