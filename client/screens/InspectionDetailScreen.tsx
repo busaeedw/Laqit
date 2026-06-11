@@ -23,7 +23,7 @@ import { arrayBufferToBase64 } from "../lib/pdfUtils";
 import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { usePdfLocale } from "@/hooks/usePdfLocale";
+import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
@@ -51,9 +51,23 @@ interface PdfPreviewModalProps {
   onClose: () => void;
   onShare: () => void;
   sharing: boolean;
+  pdfLocale: PdfLocale;
+  showPageNumbers: boolean;
+  onReload: (locale: PdfLocale, pageNumbers: boolean) => void;
 }
 
-function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare, sharing }: PdfPreviewModalProps) {
+function PdfPreviewModal({
+  visible,
+  pdfBase64,
+  loading,
+  error,
+  onClose,
+  onShare,
+  sharing,
+  pdfLocale,
+  showPageNumbers,
+  onReload,
+}: PdfPreviewModalProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [webViewLoading, setWebViewLoading] = useState(true);
@@ -66,6 +80,12 @@ function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare,
     ? { uri: `data:application/pdf;base64,${pdfBase64}` }
     : null;
 
+  const localeOptions = [
+    { value: "ar" as PdfLocale, label: "عربي" },
+    { value: "bilingual" as PdfLocale, label: "ثنائي" },
+    { value: "en" as PdfLocale, label: "English" },
+  ];
+
   return (
     <Modal
       visible={visible}
@@ -75,6 +95,7 @@ function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare,
       testID="modal-pdf-preview"
     >
       <View style={[previewStyles.container, { backgroundColor: theme.backgroundRoot }]}>
+        {/* Top bar */}
         <View
           style={[
             previewStyles.topBar,
@@ -91,9 +112,93 @@ function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare,
           <ThemedText style={[previewStyles.topBarTitle, { fontFamily: "Cairo_700Bold" }]}>
             معاينة PDF
           </ThemedText>
-          <View style={previewStyles.topBarSpacer} />
+          <Pressable
+            style={({ pressed }) => [previewStyles.topBarButton, { opacity: pressed || loading ? 0.5 : 1 }]}
+            onPress={() => onReload(pdfLocale, showPageNumbers)}
+            disabled={loading}
+            testID="button-reload-preview"
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <Feather name="refresh-cw" size={20} color={theme.primary} />
+            )}
+          </Pressable>
         </View>
 
+        {/* Settings strip: language picker + page-numbers toggle */}
+        <View
+          style={[
+            previewStyles.settingsStrip,
+            { backgroundColor: theme.backgroundDefault, borderBottomColor: theme.border },
+          ]}
+        >
+          {/* Language picker */}
+          <View style={[previewStyles.inlineLocalePicker, { borderColor: theme.border }]}>
+            {localeOptions.map((opt) => (
+              <Pressable
+                key={opt.value}
+                testID={`button-preview-locale-${opt.value}`}
+                onPress={() => {
+                  if (opt.value !== pdfLocale) {
+                    onReload(opt.value, showPageNumbers);
+                  }
+                }}
+                style={[
+                  previewStyles.inlineLocaleOption,
+                  pdfLocale === opt.value && { backgroundColor: theme.primary },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    previewStyles.inlineLocaleText,
+                    {
+                      fontFamily: "Cairo_700Bold",
+                      color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  {opt.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Page numbers toggle */}
+          <Pressable
+            testID="button-preview-toggle-page-numbers"
+            onPress={() => onReload(pdfLocale, !showPageNumbers)}
+            style={[
+              previewStyles.inlinePageNumToggle,
+              {
+                borderColor: showPageNumbers ? theme.primary : theme.border,
+                backgroundColor: showPageNumbers ? theme.primary + "15" : "transparent",
+              },
+            ]}
+          >
+            <View
+              style={[
+                previewStyles.inlineCheckbox,
+                {
+                  borderColor: theme.primary,
+                  backgroundColor: showPageNumbers ? theme.primary : "transparent",
+                },
+              ]}
+            >
+              {showPageNumbers ? <Feather name="check" size={10} color="#fff" /> : null}
+            </View>
+            <ThemedText
+              style={[
+                previewStyles.inlinePageNumLabel,
+                { color: showPageNumbers ? theme.primary : theme.textSecondary, fontFamily: "Cairo_400Regular" },
+              ]}
+            >
+              أرقام الصفحات
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        {/* PDF / loading / error area */}
         <View style={previewStyles.webViewContainer}>
           {loading ? (
             <View style={previewStyles.centerState}>
@@ -130,6 +235,7 @@ function PdfPreviewModal({ visible, pdfBase64, loading, error, onClose, onShare,
           ) : null}
         </View>
 
+        {/* Bottom share bar */}
         <View
           style={[
             previewStyles.bottomBar,
@@ -264,10 +370,20 @@ export default function InspectionDetailScreen() {
     }
   };
 
-  const handlePreviewPdf = async () => {
+  const handlePreviewPdf = async (overrideLocale?: PdfLocale, overridePageNumbers?: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const cacheKey = `${inspectionId}|${pdfLocale}|${showPageNumbers}`;
+    const effectiveLocale = overrideLocale ?? pdfLocale;
+    const effectivePageNumbers = overridePageNumbers ?? showPageNumbers;
+
+    if (overrideLocale !== undefined && overrideLocale !== pdfLocale) {
+      savePdfLocale(overrideLocale);
+    }
+    if (overridePageNumbers !== undefined && overridePageNumbers !== showPageNumbers) {
+      setShowPageNumbers(overridePageNumbers);
+    }
+
+    const cacheKey = `${inspectionId}|${effectiveLocale}|${effectivePageNumbers}`;
 
     if (pdfCache.current?.key === cacheKey) {
       setPreviewError(null);
@@ -286,8 +402,8 @@ export default function InspectionDetailScreen() {
 
     try {
       const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
-      url.searchParams.set("locale", pdfLocale);
-      url.searchParams.set("showPageNumbers", showPageNumbers ? "true" : "false");
+      url.searchParams.set("locale", effectiveLocale);
+      url.searchParams.set("showPageNumbers", effectivePageNumbers ? "true" : "false");
       const resp = await fetch(url.toString(), {
         method: "GET",
         headers: { ...authHeaders() },
@@ -643,6 +759,9 @@ export default function InspectionDetailScreen() {
         onClose={() => setPreviewVisible(false)}
         onShare={handleShareFromPreview}
         sharing={previewSharing}
+        pdfLocale={pdfLocale}
+        showPageNumbers={showPageNumbers}
+        onReload={handlePreviewPdf}
       />
 
       {/* Email modal */}
@@ -760,6 +879,46 @@ const previewStyles = StyleSheet.create({
   },
   topBarTitle: { fontSize: 17 },
   topBarSpacer: { width: 36 },
+  settingsStrip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    gap: Spacing.sm,
+  },
+  inlineLocalePicker: {
+    flexDirection: "row-reverse",
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    overflow: "hidden",
+    flex: 1,
+  },
+  inlineLocaleOption: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlineLocaleText: { fontSize: 12 },
+  inlinePageNumToggle: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  inlineCheckbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlinePageNumLabel: { fontSize: 12 },
   webViewContainer: { flex: 1 },
   centerState: {
     flex: 1,
