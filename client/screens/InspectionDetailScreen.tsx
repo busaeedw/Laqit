@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -293,6 +293,15 @@ export default function InspectionDetailScreen() {
   const [previewFileUri, setPreviewFileUri] = useState<string | null>(null);
 
   const pdfCache = useRef<{ key: string; base64: string; fileUri: string } | null>(null);
+
+  // Clear the PDF cache every time the screen comes back into focus so that
+  // edits made on another screen (and refetched in the background) always
+  // produce a fresh PDF on the next preview/download request.
+  useFocusEffect(
+    useCallback(() => {
+      pdfCache.current = null;
+    }, [])
+  );
 
   const { data, isLoading } = useQuery<{
     inspection: any;
