@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     fontFamily: "Cairo_700Bold",
   },
   logo: {
-    width: 22,
-    height: 22,
+    width: 44,
+    height: 44,
   },
 });
