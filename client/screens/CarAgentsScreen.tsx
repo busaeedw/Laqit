@@ -101,11 +101,11 @@ function AgentCard({ make, index }: { make: CarMake; index: number }) {
         <View style={styles.cardHeader}>
           <View style={styles.cardTitles}>
             <ThemedText style={[styles.agentName, { fontFamily: "Cairo_700Bold" }]}>
-              {agent.agentNameAr ?? agent.agentNameEn}
+              {make.nameAr ?? make.makeName}
             </ThemedText>
-            {agent.agentNameAr ? (
+            {make.nameAr ? (
               <ThemedText style={[styles.agentNameEn, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {agent.agentNameEn}
+                {make.makeName}
               </ThemedText>
             ) : null}
           </View>
@@ -119,10 +119,10 @@ function AgentCard({ make, index }: { make: CarMake; index: number }) {
         <View style={styles.divider} />
 
         <View style={styles.infoRow}>
-          <Feather name="tag" size={14} color={theme.textSecondary} style={styles.infoIcon} />
+          <Feather name="briefcase" size={14} color={theme.textSecondary} style={styles.infoIcon} />
           <ThemedText style={[styles.infoText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-            {make.nameAr ?? make.makeName}
-            {make.nameAr ? `  ·  ${make.makeName}` : ""}
+            {agent.agentNameAr ?? agent.agentNameEn}
+            {agent.agentNameAr ? `  ·  ${agent.agentNameEn}` : ""}
           </ThemedText>
         </View>
 
