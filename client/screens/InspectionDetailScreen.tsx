@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
+  Animated,
   StyleSheet,
   View,
   ScrollView,
@@ -304,6 +305,24 @@ export default function InspectionDetailScreen() {
     }, [])
   );
 
+  // Brief highlight animation on the outside settings controls when the user
+  // closes the preview modal after changing locale/page-numbers inside it.
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+  const settingsChangedInModal = useRef(false);
+
+  const flashControls = useCallback(() => {
+    highlightAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(highlightAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+      Animated.timing(highlightAnim, { toValue: 0, duration: 700, useNativeDriver: false }),
+    ]).start();
+  }, [highlightAnim]);
+
+  const highlightBg = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["transparent", theme.primary + "22"],
+  });
+
   const { data, isLoading } = useQuery<{
     inspection: any;
     parts: any[];
@@ -388,9 +407,11 @@ export default function InspectionDetailScreen() {
 
     if (overrideLocale !== undefined && overrideLocale !== pdfLocale) {
       savePdfLocale(overrideLocale);
+      settingsChangedInModal.current = true;
     }
     if (overridePageNumbers !== undefined && overridePageNumbers !== showPageNumbers) {
       saveShowPageNumbers(overridePageNumbers);
+      settingsChangedInModal.current = true;
     }
 
     const cacheKey = `${inspectionId}|${effectiveLocale}|${effectivePageNumbers}`;
@@ -618,52 +639,57 @@ export default function InspectionDetailScreen() {
         {/* PDF actions — only when parts exist */}
         {parts.length > 0 ? (
           <View style={styles.pdfSection}>
-            {/* Language selector */}
-            <View style={[styles.localePicker, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
-              {(
-                [
-                  { value: "ar", label: "عربي" },
-                  { value: "bilingual", label: "ثنائي" },
-                  { value: "en", label: "English" },
-                ] as const
-              ).map((opt) => (
-                <Pressable
-                  key={opt.value}
-                  testID={`button-pdf-locale-${opt.value}`}
-                  onPress={() => savePdfLocale(opt.value)}
-                  style={[
-                    styles.localeOption,
-                    pdfLocale === opt.value && { backgroundColor: theme.primary },
-                  ]}
-                >
-                  <ThemedText
+            {/* Language selector + page-numbers toggle — wrapped in an Animated.View
+                so a brief highlight flash draws attention when settings are changed
+                from inside the preview modal and the modal is then closed. */}
+            <Animated.View style={[styles.settingsHighlightWrapper, { backgroundColor: highlightBg }]}>
+              {/* Language selector */}
+              <View style={[styles.localePicker, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
+                {(
+                  [
+                    { value: "ar", label: "عربي" },
+                    { value: "bilingual", label: "ثنائي" },
+                    { value: "en", label: "English" },
+                  ] as const
+                ).map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    testID={`button-pdf-locale-${opt.value}`}
+                    onPress={() => savePdfLocale(opt.value)}
                     style={[
-                      styles.localeOptionText,
-                      {
-                        fontFamily: "Cairo_700Bold",
-                        color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
-                      },
+                      styles.localeOption,
+                      pdfLocale === opt.value && { backgroundColor: theme.primary },
                     ]}
                   >
-                    {opt.label}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Page numbers toggle */}
-            <Pressable
-              testID="button-toggle-page-numbers"
-              onPress={() => saveShowPageNumbers(!showPageNumbers)}
-              style={[styles.pageNumToggle, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
-            >
-              <View style={[styles.pageNumCheckbox, { borderColor: theme.primary, backgroundColor: showPageNumbers ? theme.primary : "transparent" }]}>
-                {showPageNumbers ? <Feather name="check" size={12} color="#fff" /> : null}
+                    <ThemedText
+                      style={[
+                        styles.localeOptionText,
+                        {
+                          fontFamily: "Cairo_700Bold",
+                          color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
+                        },
+                      ]}
+                    >
+                      {opt.label}
+                    </ThemedText>
+                  </Pressable>
+                ))}
               </View>
-              <ThemedText style={[styles.pageNumLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                إظهار أرقام الصفحات في PDF
-              </ThemedText>
-            </Pressable>
+
+              {/* Page numbers toggle */}
+              <Pressable
+                testID="button-toggle-page-numbers"
+                onPress={() => saveShowPageNumbers(!showPageNumbers)}
+                style={[styles.pageNumToggle, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
+              >
+                <View style={[styles.pageNumCheckbox, { borderColor: theme.primary, backgroundColor: showPageNumbers ? theme.primary : "transparent" }]}>
+                  {showPageNumbers ? <Feather name="check" size={12} color="#fff" /> : null}
+                </View>
+                <ThemedText style={[styles.pageNumLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                  إظهار أرقام الصفحات في PDF
+                </ThemedText>
+              </Pressable>
+            </Animated.View>
 
             {/* Preview button — full width */}
             <Pressable
@@ -766,7 +792,13 @@ export default function InspectionDetailScreen() {
         pdfBase64={previewBase64}
         loading={previewLoading}
         error={previewError}
-        onClose={() => setPreviewVisible(false)}
+        onClose={() => {
+          setPreviewVisible(false);
+          if (settingsChangedInModal.current) {
+            settingsChangedInModal.current = false;
+            flashControls();
+          }
+        }}
         onShare={handleShareFromPreview}
         sharing={previewSharing}
         pdfLocale={pdfLocale}
@@ -1011,6 +1043,12 @@ const styles = StyleSheet.create({
   pdfSection: {
     marginBottom: Spacing.lg,
     gap: Spacing.sm,
+  },
+  settingsHighlightWrapper: {
+    gap: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    padding: 4,
+    marginHorizontal: -4,
   },
   localePicker: {
     flexDirection: "row-reverse",
