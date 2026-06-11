@@ -199,6 +199,7 @@ export default function CarAgentsScreen() {
 
   const { data, isLoading, isError } = useQuery<ApiResponse>({
     queryKey: ["/api/car-makes"],
+    staleTime: 0,
   });
 
   const agents = useMemo(
