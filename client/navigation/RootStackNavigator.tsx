@@ -16,6 +16,7 @@ const InspectionDetailScreen = lazy(() => import("@/screens/InspectionDetailScre
 const QuotesListScreen = lazy(() => import("@/screens/QuotesListScreen"));
 const CarBrandsScreen = lazy(() => import("@/screens/CarBrandsScreen"));
 const CarBrandDetailScreen = lazy(() => import("@/screens/CarBrandDetailScreen"));
+const CarAgentsScreen = lazy(() => import("@/screens/CarAgentsScreen"));
 
 function ScreenFallback() {
   return (
@@ -89,6 +90,7 @@ export type RootStackParamList = {
   QuotesList: { inspectionId: string };
   CarBrands: undefined;
   CarBrandDetail: { make: CarMakeParam };
+  CarAgents: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -192,6 +194,11 @@ export default function RootStackNavigator() {
         options={({ route }) => ({
           headerTitle: route.params.make.nameAr ?? route.params.make.makeName,
         })}
+      />
+      <Stack.Screen
+        name="CarAgents"
+        component={withSuspense(CarAgentsScreen)}
+        options={{ headerTitle: "وكلاء السيارات" }}
       />
     </Stack.Navigator>
   );

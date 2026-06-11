@@ -168,6 +168,34 @@ export default function HomeScreen() {
         </Pressable>
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.duration(600).delay(480)}>
+        <Pressable
+          testID="button-car-agents"
+          onPress={() => rootNavigation.navigate("CarAgents")}
+          style={({ pressed }) => [
+            styles.ctaCard,
+            {
+              backgroundColor: theme.backgroundDefault,
+              opacity: pressed ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.99 : 1 }],
+              marginBottom: Spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.ctaContent}>
+            <ThemedText style={[styles.ctaTitle, { fontFamily: "Cairo_700Bold" }]}>
+              وكلاء السيارات
+            </ThemedText>
+            <ThemedText style={[styles.ctaSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              أرقام وبيانات وكلاء السيارات المعتمدين في المملكة
+            </ThemedText>
+          </View>
+          <View style={[styles.brandIcon, { backgroundColor: theme.primary + "15" }]}>
+            <Feather name="users" size={22} color={theme.primary} />
+          </View>
+        </Pressable>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable
           testID="button-pricing-cta"
