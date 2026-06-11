@@ -100,6 +100,7 @@ export default function NewInspectionScreen() {
   const [inspectionNo, setInspectionNo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const apiUrl = getApiUrl();
 
@@ -372,9 +373,10 @@ export default function NewInspectionScreen() {
 
   const handleSubmit = async () => {
     if (!user?.customerId) {
-      Alert.alert("", "يجب تسجيل الدخول أولاً");
+      setSubmitError("يجب تسجيل الدخول أولاً لإرسال الطلب");
       return;
     }
+    setSubmitError(null);
     setSubmitting(true);
     try {
       const inspection = await createInspection();
@@ -396,7 +398,8 @@ export default function NewInspectionScreen() {
       setSubmitted(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
-      Alert.alert("خطأ", err.message ?? "حدث خطأ أثناء الإرسال");
+      const msg = err.message ?? "حدث خطأ أثناء الإرسال";
+      setSubmitError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -843,38 +846,38 @@ export default function NewInspectionScreen() {
             <Feather name="arrow-left" size={18} color="#fff" />
           </Pressable>
         ) : (
-          <>
-            {!user?.customerId && (
-              <ThemedText style={[styles.loginNudge, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                يجب تسجيل الدخول أولاً لإرسال الطلب
+          <View style={styles.submitCol}>
+            {submitError ? (
+              <ThemedText style={[styles.submitErrorText, { color: "#DC2626", fontFamily: "Cairo_400Regular" }]}>
+                {submitError}
               </ThemedText>
-            )}
-            <Pressable
-              onPress={user?.customerId ? handleSubmit : undefined}
-              disabled={submitting || !user?.customerId}
-              style={[
-                styles.nextBtn,
-                {
-                  backgroundColor: submitting
-                    ? theme.textSecondary
-                    : !user?.customerId
-                    ? theme.success + "50"
-                    : theme.success,
-                },
-              ]}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold", opacity: user?.customerId ? 1 : 0.5 }]}>
-                    إرسال الطلب
-                  </ThemedText>
-                  <Feather name="send" size={18} color="#fff" style={{ opacity: user?.customerId ? 1 : 0.5 }} />
-                </>
-              )}
-            </Pressable>
-          </>
+            ) : null}
+            <View style={styles.submitRow}>
+              <Pressable
+                onPress={handleSubmit}
+                disabled={submitting}
+                style={[
+                  styles.nextBtn,
+                  {
+                    backgroundColor: submitting
+                      ? theme.textSecondary
+                      : theme.primary,
+                  },
+                ]}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                      إرسال الطلب
+                    </ThemedText>
+                    <Feather name="send" size={18} color="#fff" />
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
         )}
       </View>
     </View>
@@ -1037,6 +1040,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginBottom: 6,
+  },
+  submitCol: {
+    flex: 2,
+    gap: 6,
+  },
+  submitRow: {
+    flexDirection: "row",
+  },
+  submitErrorText: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
   },
   successContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.xl },
   successCard: { alignItems: "center", gap: Spacing.lg, maxWidth: 360 },
