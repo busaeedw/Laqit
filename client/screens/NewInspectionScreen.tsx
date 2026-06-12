@@ -103,6 +103,14 @@ export default function NewInspectionScreen() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
 
+  // Auto-clear session-expired gate as soon as the user logs back in
+  useEffect(() => {
+    if (user && sessionExpired) {
+      setSessionExpired(false);
+      setSubmitError(null);
+    }
+  }, [user]);
+
   const apiUrl = getApiUrl();
 
   const loadMakes = useCallback(async (): Promise<ApiMake[]> => {
