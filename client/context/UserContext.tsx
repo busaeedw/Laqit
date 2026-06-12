@@ -31,6 +31,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
+  // Keep the module-level _authToken always in sync with React state
+  useEffect(() => {
+    setAuthToken(token);
+  }, [token]);
+
   useEffect(() => {
     (async () => {
       try {

@@ -67,7 +67,7 @@ export default function NewInspectionScreen() {
         {
           text: "تسجيل الدخول",
           onPress: () =>
-            (navigation as any).navigate("Main", { screen: "AccountTab" }),
+            (navigation as any).push("Main", { screen: "AccountTab" }),
         },
       ]
     );
@@ -873,7 +873,7 @@ export default function NewInspectionScreen() {
             <View style={styles.submitRow}>
               {sessionExpired ? (
                 <Pressable
-                  onPress={() => (navigation as any).navigate("Main", { screen: "AccountTab" })}
+                  onPress={() => (navigation as any).push("Main", { screen: "AccountTab" })}
                   style={[styles.nextBtn, { backgroundColor: theme.primary }]}
                 >
                   <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
