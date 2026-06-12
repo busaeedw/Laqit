@@ -40,8 +40,22 @@ export function setAuthToken(token: string | null): void {
 }
 
 export function authHeaders(): Record<string, string> {
-  if (_authToken) {
-    return { Authorization: `Bearer ${_authToken}` };
+  let t = _authToken;
+  // On web, if the module was re-initialised (HMR / Metro reconnect / page
+  // reload), _authToken resets to null while the persisted token may still
+  // be in localStorage.  Read it synchronously as a fallback and re-hydrate
+  // the in-memory variable so subsequent calls are fast.
+  if (!t && typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("laqit_token");
+      if (stored) {
+        _authToken = stored;
+        t = stored;
+      }
+    } catch {}
+  }
+  if (t) {
+    return { Authorization: `Bearer ${t}` };
   }
   return {};
 }

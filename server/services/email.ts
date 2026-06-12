@@ -30,7 +30,11 @@ export async function sendAnalysisPdfEmail(
       port,
       secure: port === 465,
       auth: { user, pass },
+      tls: { rejectUnauthorized: false },
     });
+
+    // Verify SMTP connection before attempting to send
+    await transporter.verify();
 
     const info = await transporter.sendMail({
       from,
