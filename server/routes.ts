@@ -32,7 +32,7 @@ import { sendWhatsAppMessage } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
 import { createPaymentIntent } from "./services/payment";
-import { generateAnalysisPdf, PdfLocale } from "./services/analysisPdf";
+import { generateAnalysisPdf, PdfLocale, CarInfo, PartEntry } from "./services/analysisPdf";
 import { sendAnalysisPdfEmail } from "./services/email";
 
 const openai = new OpenAI({
@@ -1267,6 +1267,66 @@ Rules:
         .where(eq(inspectionParts.inspectionId, inspectionId));
 
       const partsText = parts.map((p) => `- ${p.partName} (${p.quantity})`).join("\n");
+
+      // Fire-and-forget: generate analysis PDF and email it (non-blocking so WhatsApp RFQ proceeds immediately)
+      void (async () => {
+        try {
+          const [modelRow] = await db
+            .select({ modelName: carModels.modelName, makeId: carModels.makeId })
+            .from(carModels)
+            .where(eq(carModels.carModelId, inspection.carModelId))
+            .limit(1);
+
+          const [makeRow] = modelRow
+            ? await db
+                .select({ makeName: carMakes.makeName, nameAr: carMakes.nameAr })
+                .from(carMakes)
+                .where(eq(carMakes.makeId, modelRow.makeId))
+                .limit(1)
+            : [undefined];
+
+          const [damageMedia] = await db
+            .select({ fileUrl: inspectionMedia.fileUrl })
+            .from(inspectionMedia)
+            .where(
+              and(
+                eq(inspectionMedia.inspectionId, inspectionId),
+                eq(inspectionMedia.mediaType, "damage_photo")
+              )
+            )
+            .limit(1);
+
+          const carInfo: CarInfo = {
+            make: makeRow?.makeName ?? "Unknown",
+            makeAr: makeRow?.nameAr ?? makeRow?.makeName ?? "غير محدد",
+            model: modelRow?.modelName ?? "Unknown",
+            modelAr: modelRow?.modelName ?? "غير محدد",
+            year: String(inspection.carYear ?? ""),
+          };
+
+          const partEntries: PartEntry[] = parts.map((p) => ({
+            id: p.inspectionPartId,
+            name: p.partName,
+            nameAr: p.partName,
+            confidence: 85,
+            price: 0,
+          }));
+
+          const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, damageMedia?.fileUrl ?? undefined, "ar");
+
+          const emailTo = process.env.ANALYSIS_EMAIL_TO ?? "wbusaeed@gmail.com";
+          const filename = `laqit-rfq-${inspection.inspectionNo}.pdf`;
+          const emailResult = await sendAnalysisPdfEmail(emailTo, pdfBuffer, filename);
+
+          if (emailResult.success) {
+            console.log(`[Submit] PDF emailed to ${emailTo} — ${filename}`);
+          } else {
+            console.warn(`[Submit] PDF email failed: ${emailResult.error}`);
+          }
+        } catch (pdfErr: any) {
+          console.error("[Submit] PDF/email error (non-fatal):", pdfErr?.message);
+        }
+      })();
 
       let vendorsNotified = 0;
 
