@@ -239,10 +239,10 @@ function PdfPreviewModal({
         >
           <Pressable
             onPress={onShare}
-            disabled={sharing || pdfBase64 == null}
+            disabled={sharing || pdfBase64 == null || (Platform.OS !== "web" && previewFileUri == null)}
             style={({ pressed }) => [
               previewStyles.shareButton,
-              { backgroundColor: theme.primary, opacity: pressed || sharing || pdfBase64 == null ? 0.7 : 1 },
+              { backgroundColor: theme.primary, opacity: pressed || sharing || pdfBase64 == null || (Platform.OS !== "web" && previewFileUri == null) ? 0.7 : 1 },
             ]}
             testID="button-share-from-preview"
           >
@@ -520,18 +520,29 @@ export default function InspectionDetailScreen() {
   };
 
   const handleShareFromPreview = async () => {
-    if (previewFileUri == null) return;
+    if (previewFileUri == null && previewBase64 == null) return;
     setPreviewSharing(true);
     try {
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(previewFileUri, {
-          mimeType: "application/pdf",
-          dialogTitle: "مشاركة أو حفظ تقرير PDF",
-          UTI: "com.adobe.pdf",
-        });
-      } else {
-        setPreviewError("المشاركة غير متاحة على هذا الجهاز");
+      if (Platform.OS === "web" && previewBase64) {
+        const link = document.createElement("a");
+        link.href = "data:application/pdf;base64," + previewBase64;
+        link.download = "laqit-report.pdf";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+      if (previewFileUri) {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(previewFileUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "مشاركة أو حفظ تقرير PDF",
+            UTI: "com.adobe.pdf",
+          });
+        } else {
+          setPreviewError("المشاركة غير متاحة على هذا الجهاز");
+        }
       }
     } catch {
       setPreviewError("تعذر فتح خيارات المشاركة");
