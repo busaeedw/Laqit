@@ -530,27 +530,7 @@ export async function generateAnalysisPdf(
     // pageNumY must stay within the page margin (< page.height - bottomMargin)
     // to avoid PDFKit's overflow guard triggering doc.addPage() in switchToPage loops.
     // We also reset doc.y to a safe value before each text draw for the same reason.
-    let totalPages = doc.bufferedPageRange().count;
-
-    // Remove any empty trailing pages (e.g. a second page created by footer
-    // placement or overflow-guard false-positives but with no content drawn).
-    // We walk backwards from the last page and discard pages that have
-    // nothing drawn on them.
-    if (totalPages > 1) {
-      const pages = (doc as any)._pages || [];
-      while (totalPages > 1) {
-        const lastPage = pages[totalPages - 1];
-        const lastContent = lastPage?.content || [];
-        const hasRealContent = lastContent.length > 0;
-        if (!hasRealContent) {
-          pages.splice(totalPages - 1, 1);
-          totalPages--;
-        } else {
-          break;
-        }
-      }
-    }
-
+    const totalPages = doc.bufferedPageRange().count;
     if (totalPages > 1) {
       const pageNumY = doc.page.height - doc.page.margins.bottom - pageNumberStyle.bottomOffset;
       for (let p = 0; p < totalPages; p++) {
