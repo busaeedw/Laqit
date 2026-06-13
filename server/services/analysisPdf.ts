@@ -481,8 +481,8 @@ export async function generateAnalysisPdf(
         }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
-        doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
-          .text(part.name, cName, rowTop + tableRowStyle.paddingTop, { width: nameW });
+        doc.font("Arabic").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
+          .text(reverseArabicWords(part.name), cName, rowTop + tableRowStyle.paddingTop, { width: nameW, align: "right" });
         doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
           .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW });
         doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
