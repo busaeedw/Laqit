@@ -1,6 +1,14 @@
 import PDFDocument from "pdfkit";
 import * as path from "path";
 
+// PDFKit renders Arabic text without bidirectional support, so multi-word
+// strings appear with words in reverse order. We pre-reverse the word order
+// so the visual output reads correctly.
+function reverseArabicWords(text: string): string {
+  if (!text || text.trim().length === 0) return text;
+  return text.split(/\s+/).reverse().join(" ");
+}
+
 const AMIRI_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Regular.ttf");
 const AMIRI_BOLD_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Bold.ttf");
 
@@ -279,7 +287,7 @@ export async function generateAnalysisPdf(
       if (arText) {
         doc.font("ArabicBold").fontSize(bgColor === blue ? 13 : 12)
           .fillColor(bgColor === blue ? white : blue)
-          .text(arText, 50, textY, { width: pageWidth - 10, align: "right" });
+          .text(reverseArabicWords(arText), 50, textY, { width: pageWidth - 10, align: "right" });
       }
     };
 
@@ -292,7 +300,7 @@ export async function generateAnalysisPdf(
     }
     if (L.appNameAr) {
       doc.font("ArabicBold").fontSize(18).fillColor(white)
-        .text(L.appNameAr, 50, 55, { width: pageWidth, align: "center" });
+        .text(reverseArabicWords(L.appNameAr), 50, 55, { width: pageWidth, align: "center" });
     }
 
     doc.moveDown(3);
@@ -308,7 +316,7 @@ export async function generateAnalysisPdf(
     let titleBottom = 120;
     if (L.reportTitleAr) {
       doc.font("ArabicBold").fontSize(isAr ? 15 : 13).fillColor(dark)
-        .text(L.reportTitleAr, 50, 120, { width: pageWidth, align: "center" });
+        .text(reverseArabicWords(L.reportTitleAr), 50, 120, { width: pageWidth, align: "center" });
       titleBottom = isAr ? 125 : 120;
     }
     if (L.reportTitleEn) {
@@ -319,7 +327,7 @@ export async function generateAnalysisPdf(
     }
 
     doc.font(isAr ? "Arabic" : "Helvetica").fontSize(9).fillColor(gray)
-      .text(`${L.dateLabel}: ${dateStr}`, 50, titleBottom + 18, { width: pageWidth, align: "center" });
+      .text(`${reverseArabicWords(L.dateLabel)}: ${dateStr}`, 50, titleBottom + 18, { width: pageWidth, align: "center" });
 
     // ── Divider ───────────────────────────────────────────────────────────────
     doc.moveDown(1);
@@ -338,14 +346,14 @@ export async function generateAnalysisPdf(
 
     if (isAr) {
       doc.font("Arabic").fontSize(9).fillColor(gray)
-        .text(L.makeLabel, 50, labelY, { width: colW, align: "right" })
-        .text(L.modelLabel, 50 + colW, labelY, { width: colW, align: "right" })
-        .text(L.yearLabel, 50 + colW * 2, labelY, { width: colW, align: "right" });
+        .text(reverseArabicWords(L.makeLabel), 50, labelY, { width: colW, align: "right" })
+        .text(reverseArabicWords(L.modelLabel), 50 + colW, labelY, { width: colW, align: "right" })
+        .text(reverseArabicWords(L.yearLabel), 50 + colW * 2, labelY, { width: colW, align: "right" });
 
       doc.font("Arabic").fontSize(13).fillColor(dark)
-        .text(carInfo.makeAr, 50, valueY, { width: colW, align: "right" });
+        .text(reverseArabicWords(carInfo.makeAr), 50, valueY, { width: colW, align: "right" });
       doc.font("Arabic").fontSize(13).fillColor(dark)
-        .text(carInfo.modelAr, 50 + colW, valueY, { width: colW, align: "right" });
+        .text(reverseArabicWords(carInfo.modelAr), 50 + colW, valueY, { width: colW, align: "right" });
       doc.font("Helvetica-Bold").fontSize(13).fillColor(dark)
         .text(carInfo.year, 50 + colW * 2, valueY, { width: colW, align: "right" });
     } else {
@@ -413,9 +421,9 @@ export async function generateAnalysisPdf(
 
       const drawArHeaders = () => {
         doc.font("Arabic").fontSize(tableHeaderStyle.fontSizeAr).fillColor(tableHeaderStyle.fillColor)
-          .text(L.colPrice, cPrice, rowTop, { width: priceW, align: "right" })
+          .text(reverseArabicWords(L.colPrice), cPrice, rowTop, { width: priceW, align: "right" })
           .text(L.colConfidence, cConf, rowTop, { width: confW, align: "right" })
-          .text(L.colNameAr, cName, rowTop, { width: nameW, align: "right" });
+          .text(reverseArabicWords(L.colNameAr), cName, rowTop, { width: nameW, align: "right" });
         rowTop += 18;
         doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
           .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
@@ -433,7 +441,7 @@ export async function generateAnalysisPdf(
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
         doc.font("ArabicBold").fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
-          .text(part.nameAr, cName, rowTop + tableRowStyle.paddingTop, { width: nameW, align: "right" });
+          .text(reverseArabicWords(part.nameAr), cName, rowTop + tableRowStyle.paddingTop, { width: nameW, align: "right" });
         doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
           .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW, align: "right" });
         doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
@@ -498,7 +506,7 @@ export async function generateAnalysisPdf(
     const totalY = doc.y;
     if (L.totalAr(totalStr)) {
       doc.font("ArabicBold").fontSize(totalStyle.fontSizeAr).fillColor(totalStyle.fillColor)
-        .text(L.totalAr(totalStr), 50, totalY, { width: pageWidth, align: "right" });
+        .text(reverseArabicWords(L.totalAr(totalStr)), 50, totalY, { width: pageWidth, align: "right" });
     }
     if (L.totalEn(totalStr)) {
       doc.font("Helvetica-Bold").fontSize(totalStyle.fontSizeEn).fillColor(totalStyle.fillColor)
@@ -514,7 +522,7 @@ export async function generateAnalysisPdf(
     if (L.footerAr) {
       const arFooterY = L.footerEn ? footerY + footerStyle.lineSpacing : footerY;
       doc.font("ArabicBold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
-        .text(L.footerAr, 50, arFooterY, { width: pageWidth, align: "center" });
+        .text(reverseArabicWords(L.footerAr), 50, arFooterY, { width: pageWidth, align: "center" });
     }
 
     // ── Page numbers (every page) ──────────────────────────────────────────────
