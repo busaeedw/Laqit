@@ -28,7 +28,7 @@ import {
   inspectionStatusEnum,
 } from "../shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { sendWhatsAppMessage } from "./services/whatsapp";
+import { sendWhatsAppMessage, sendWhatsAppDocument } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
 import { createPaymentIntent } from "./services/payment";
@@ -46,6 +46,83 @@ function clientIp(req: Request): string {
   // hop so the returned value reflects the real client, not an attacker-
   // injected leading X-Forwarded-For entry.
   return req.ip ?? req.socket?.remoteAddress ?? "unknown";
+}
+
+// Mask a mobile number for confirmation messages so the full number is never
+// echoed back to the client (e.g. "+9665••••307").
+function maskMobile(e164: string): string {
+  const digits = e164.replace(/\D/g, "");
+  if (digits.length <= 6) return "•".repeat(digits.length);
+  const head = digits.slice(0, 4);
+  const tail = digits.slice(-3);
+  return `+${head}${"•".repeat(Math.max(digits.length - 7, 3))}${tail}`;
+}
+
+// Build a PDF report for an already-loaded inspection (ownership must be verified
+// by the caller before invoking this). Returns the rendered buffer or a typed
+// failure with the appropriate HTTP status.
+async function buildInspectionPdfBuffer(
+  inspection: typeof laqitInspections.$inferSelect,
+  locale: unknown,
+  showPageNumbers: unknown
+): Promise<{ ok: true; pdfBuffer: Buffer } | { ok: false; status: number; error: string }> {
+  const parts = await db
+    .select()
+    .from(inspectionParts)
+    .where(eq(inspectionParts.inspectionId, inspection.inspectionId));
+  if (parts.length === 0) {
+    return { ok: false, status: 400, error: "لا توجد قطع مرتبطة بهذا الفحص" };
+  }
+
+  const [carModel] = await db
+    .select()
+    .from(carModels)
+    .where(eq(carModels.carModelId, inspection.carModelId))
+    .limit(1);
+
+  const makeName = carModel
+    ? await db
+        .select({ makeName: carMakes.makeName, nameAr: carMakes.nameAr })
+        .from(carMakes)
+        .where(eq(carMakes.makeId, carModel.makeId))
+        .limit(1)
+        .then((rows) => rows[0] ?? null)
+    : null;
+
+  const mediaRows = await db
+    .select()
+    .from(inspectionMedia)
+    .where(eq(inspectionMedia.inspectionId, inspection.inspectionId));
+  const damagePhoto = mediaRows.find((m) => m.mediaType === "damage_photo") ?? mediaRows[0] ?? null;
+  const safeImageUri =
+    damagePhoto?.fileUrl &&
+    typeof damagePhoto.fileUrl === "string" &&
+    damagePhoto.fileUrl.startsWith("https://")
+      ? damagePhoto.fileUrl
+      : undefined;
+
+  const carInfo = {
+    make: makeName?.makeName ?? "",
+    makeAr: makeName?.nameAr ?? makeName?.makeName ?? "",
+    model: carModel?.modelName ?? "",
+    modelAr: carModel?.modelName ?? "",
+    year: inspection.carYear ? String(inspection.carYear) : "",
+  };
+
+  const partEntries = parts.map((p) => ({
+    id: p.inspectionPartId,
+    name: p.partName,
+    nameAr: p.partName,
+    confidence: 1,
+    price: 0,
+  }));
+
+  const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+  const safeLocale: PdfLocale = VALID_LOCALES.includes(locale as PdfLocale) ? (locale as PdfLocale) : "ar";
+  const safeShowPageNumbers = showPageNumbers !== false;
+
+  const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale, safeShowPageNumbers);
+  return { ok: true, pdfBuffer };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -384,6 +461,52 @@ Rules:
     } catch (err: any) {
       console.error("download-pdf error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء إنشاء التقرير" });
+    }
+  });
+
+  // ─── Analysis PDF via WhatsApp (sends to the logged-in customer's mobile) ──
+  // The recipient is derived server-side from the authenticated customer so the
+  // outbound WhatsApp capability cannot be abused to message arbitrary numbers.
+
+  app.post("/api/analysis/whatsapp-pdf", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const ip = clientIp(req);
+      if (!emailIpLimiter.check(ip)) {
+        const retryAfter = emailIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
+      const { carInfo, parts, imageUri, locale, showPageNumbers } = req.body;
+      if (!carInfo || !Array.isArray(parts)) {
+        return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
+      }
+
+      const callerCustomerId: string = res.locals.customerId;
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      if (!customer?.mobileE164) {
+        return res.status(400).json({ error: "لا يوجد رقم جوال مرتبط بحسابك" });
+      }
+
+      const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
+      const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+      const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
+      const safeShowPageNumbers = showPageNumbers !== false;
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale, safeShowPageNumbers);
+      const filename = `laqit-analysis-${Date.now()}.pdf`;
+      const caption = "لاقط: تقرير تحليل الأضرار";
+
+      const result = await sendWhatsAppDocument(customer.mobileE164, pdfBuffer, filename, caption);
+      if (!result.success) {
+        return res.status(502).json({ error: "تعذّر إرسال التقرير عبر واتساب، يرجى المحاولة لاحقاً" });
+      }
+      res.json({ ok: true, sentTo: maskMobile(customer.mobileE164) });
+    } catch (err: any) {
+      console.error("analysis whatsapp-pdf error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إنشاء أو إرسال التقرير" });
     }
   });
 
@@ -1107,6 +1230,65 @@ Rules:
       res.json({ ok: true });
     } catch (err: any) {
       console.error("POST inspection send-pdf error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إنشاء أو إرسال التقرير" });
+    }
+  });
+
+  // Send an inspection's PDF report to the logged-in customer's own WhatsApp.
+  // Recipient is derived server-side from the authenticated + owning customer.
+  app.post("/api/laqit-inspections/:id/whatsapp-pdf", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const ip = clientIp(req);
+      if (!emailIpLimiter.check(ip)) {
+        const retryAfter = emailIpLimiter.retryAfterSeconds(ip);
+        return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
+      }
+
+      const { locale, showPageNumbers } = req.body;
+      const callerCustomerId: string = res.locals.customerId;
+
+      const [inspection] = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, req.params.id))
+        .limit(1);
+      if (!inspection) {
+        return res.status(404).json({ error: "الفحص غير موجود" });
+      }
+      if (inspection.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
+
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      if (!customer?.mobileE164) {
+        return res.status(400).json({ error: "لا يوجد رقم جوال مرتبط بحسابك" });
+      }
+
+      const built = await buildInspectionPdfBuffer(inspection, locale, showPageNumbers);
+      if (!built.ok) {
+        return res.status(built.status).json({ error: built.error });
+      }
+
+      const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
+      const caption = `لاقط: تقرير فحص رقم ${inspection.inspectionNo}`;
+
+      const result = await sendWhatsAppDocument(
+        customer.mobileE164,
+        built.pdfBuffer,
+        filename,
+        caption,
+        inspection.inspectionId
+      );
+      if (!result.success) {
+        return res.status(502).json({ error: "تعذّر إرسال التقرير عبر واتساب، يرجى المحاولة لاحقاً" });
+      }
+      res.json({ ok: true, sentTo: maskMobile(customer.mobileE164) });
+    } catch (err: any) {
+      console.error("POST inspection whatsapp-pdf error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء إنشاء أو إرسال التقرير" });
     }
   });

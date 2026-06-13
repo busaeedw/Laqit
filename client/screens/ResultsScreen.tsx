@@ -32,7 +32,7 @@ import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList, DetectedPart } from "@/navigation/RootStackNavigator";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, authHeaders } from "@/lib/query-client";
 
 type ResultsScreenRouteProp = RouteProp<RootStackParamList, "Results">;
 
@@ -501,6 +501,7 @@ export default function ResultsScreen() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showDownloadSuccess, setShowDownloadSuccess] = useState(false);
   const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
+  const [whatsAppSentTo, setWhatsAppSentTo] = useState<string | null>(null);
 
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -637,7 +638,6 @@ export default function ResultsScreen() {
   const exportPdf = async (
     dialogTitle: string,
     setLoading: (v: boolean) => void,
-    tryWebShare = false,
   ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDownloadError(null);
@@ -671,22 +671,6 @@ export default function ResultsScreen() {
         const bytes = new Uint8Array(byteChars.length);
         for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
         const blob = new Blob([bytes], { type: "application/pdf" });
-
-        if (tryWebShare && typeof navigator !== "undefined" && (navigator as any).canShare) {
-          const webFile = new (window as any).File([blob], filename, { type: "application/pdf" });
-          if ((navigator as any).canShare({ files: [webFile] })) {
-            try {
-              await (navigator as any).share({ files: [webFile], title: dialogTitle });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              setShowDownloadSuccess(true);
-              return;
-            } catch (err: any) {
-              // User dismissed the share sheet — don't surprise them with a download.
-              if (err?.name === "AbortError") return;
-              // Other failures fall through to the download fallback below.
-            }
-          }
-        }
 
         const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -722,7 +706,40 @@ export default function ResultsScreen() {
   };
 
   const handleDownloadPdf = () => exportPdf("تنزيل تقرير PDF", setDownloading);
-  const handleSendWhatsApp = () => exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp, true);
+
+  // Asks the server to send the report PDF to the logged-in customer's own
+  // WhatsApp number (from the business number). The recipient is resolved
+  // server-side from the authenticated account — never sent from the client.
+  const handleSendWhatsApp = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDownloadError(null);
+    setWhatsAppSentTo(null);
+    if (!user?.customerId) {
+      setDownloadError("يرجى تسجيل الدخول لإرسال التقرير إلى واتساب الخاص بك");
+      return;
+    }
+    setSharingWhatsApp(true);
+    try {
+      const url = new URL("/api/analysis/whatsapp-pdf", getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ carInfo, parts, imageUri, locale: pdfLocale, showPageNumbers }),
+      });
+      const json = await resp.json().catch(() => ({} as any));
+      if (!resp.ok) {
+        setDownloadError(json.error ?? "تعذّر إرسال التقرير عبر واتساب");
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setWhatsAppSentTo(json.sentTo ?? "");
+      setTimeout(() => setWhatsAppSentTo(null), 6000);
+    } catch {
+      setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setSharingWhatsApp(false);
+    }
+  };
 
   const handleSendPdf = async (email: string, locale: PdfLocale) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1107,6 +1124,18 @@ export default function ResultsScreen() {
           <Feather name="check-circle" size={18} color={theme.success} />
           <ThemedText style={[styles.successText, { color: theme.success, fontFamily: "Cairo_600SemiBold" }]}>
             تم فتح التقرير للحفظ أو المشاركة
+          </ThemedText>
+        </Animated.View>
+      ) : null}
+      {whatsAppSentTo != null ? (
+        <Animated.View
+          entering={FadeInDown.duration(300)}
+          style={[styles.successBanner, { backgroundColor: "#25D36618", borderColor: "#25D36640", top: showSuccess ? 150 : 100 }]}
+          testID="banner-whatsapp-sent"
+        >
+          <FontAwesome name="whatsapp" size={18} color="#1B8A4C" />
+          <ThemedText style={[styles.successText, { color: "#1B8A4C", fontFamily: "Cairo_600SemiBold" }]}>
+            {whatsAppSentTo ? `تم إرسال التقرير إلى واتساب على ${whatsAppSentTo}` : "تم إرسال التقرير إلى واتساب"}
           </ThemedText>
         </Animated.View>
       ) : null}

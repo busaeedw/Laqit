@@ -307,6 +307,7 @@ export default function InspectionDetailScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
+  const [whatsAppSentTo, setWhatsAppSentTo] = useState<string | null>(null);
   const { pdfLocale, savePdfLocale } = usePdfLocale();
   const { showPageNumbers, saveShowPageNumbers } = usePdfPageNumbers();
 
@@ -381,7 +382,6 @@ export default function InspectionDetailScreen() {
   const exportPdf = async (
     dialogTitle: string,
     setLoading: (v: boolean) => void,
-    tryWebShare = false,
   ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDownloadError(null);
@@ -417,21 +417,6 @@ export default function InspectionDetailScreen() {
         for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
         const blob = new Blob([bytes], { type: "application/pdf" });
 
-        if (tryWebShare && typeof navigator !== "undefined" && (navigator as any).canShare) {
-          const webFile = new (window as any).File([blob], filename, { type: "application/pdf" });
-          if ((navigator as any).canShare({ files: [webFile] })) {
-            try {
-              await (navigator as any).share({ files: [webFile], title: dialogTitle });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              return;
-            } catch (err: any) {
-              // User dismissed the share sheet — don't surprise them with a download.
-              if (err?.name === "AbortError") return;
-              // Other failures fall through to the download fallback below.
-            }
-          }
-        }
-
         const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = objectUrl;
@@ -466,7 +451,36 @@ export default function InspectionDetailScreen() {
   };
 
   const handleDownloadPdf = () => exportPdf("تنزيل أو مشاركة تقرير PDF", setDownloading);
-  const handleSendWhatsApp = () => exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp, true);
+
+  // Asks the server to send this inspection's PDF report to the logged-in
+  // customer's own WhatsApp (from the business number). The recipient is
+  // resolved server-side from the authenticated owner — never client-supplied.
+  const handleSendWhatsApp = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDownloadError(null);
+    setWhatsAppSentTo(null);
+    setSharingWhatsApp(true);
+    try {
+      const url = new URL(`/api/laqit-inspections/${inspectionId}/whatsapp-pdf`, getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ locale: pdfLocale, showPageNumbers }),
+      });
+      const json = await resp.json().catch(() => ({} as any));
+      if (!resp.ok) {
+        setDownloadError(json.error ?? "تعذّر إرسال التقرير عبر واتساب");
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setWhatsAppSentTo(json.sentTo ?? "");
+      setTimeout(() => setWhatsAppSentTo(null), 6000);
+    } catch {
+      setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
+    } finally {
+      setSharingWhatsApp(false);
+    }
+  };
 
   const handlePreviewPdf = async (overrideLocale?: PdfLocale, overridePageNumbers?: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -852,6 +866,14 @@ export default function InspectionDetailScreen() {
             {downloadError != null ? (
               <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
                 {downloadError}
+              </ThemedText>
+            ) : null}
+            {whatsAppSentTo != null ? (
+              <ThemedText
+                testID="text-whatsapp-sent"
+                style={[styles.errorText, { color: "#1B8A4C", fontFamily: "Cairo_600SemiBold" }]}
+              >
+                {whatsAppSentTo ? `تم إرسال التقرير إلى واتساب على ${whatsAppSentTo}` : "تم إرسال التقرير إلى واتساب"}
               </ThemedText>
             ) : null}
           </View>

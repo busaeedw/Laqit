@@ -72,3 +72,124 @@ export async function sendWhatsAppMessage(
     return { success: false, error: err?.message };
   }
 }
+
+/**
+ * Send a PDF document to a WhatsApp recipient via Meta's Cloud API.
+ *
+ * Flow: upload the PDF bytes to the /media endpoint to obtain a media ID, then
+ * send a `document` message referencing that media ID. When credentials are not
+ * configured the call is stubbed (logged + recorded) so development works without
+ * a live WhatsApp Business number.
+ *
+ * NOTE (Meta policy): business-initiated free-form document messages are only
+ * delivered inside the 24-hour customer-service window (i.e. after the recipient
+ * has messaged the business number). Outside that window an approved message
+ * template with a document header is required, otherwise Meta rejects the send.
+ */
+export async function sendWhatsAppDocument(
+  toE164: string,
+  pdfBuffer: Buffer,
+  filename: string,
+  caption: string,
+  inspectionId?: string
+): Promise<WhatsAppSendResult> {
+  const apiKey = process.env.WHATSAPP_API_KEY;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!apiKey || !phoneNumberId) {
+    console.log(`[WhatsApp STUB] Would send PDF document to ${toE164}:`);
+    console.log(`  File: ${filename} (${pdfBuffer.length} bytes)`);
+    console.log(`  Caption: ${caption.substring(0, 100)}`);
+    const mockId = `mock_wa_doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await db.insert(whatsappMessages).values({
+      direction: "outbound",
+      vendorWhatsappE164: toE164,
+      inspectionId: inspectionId ?? null,
+      textBody: caption,
+      mediaUrl: filename,
+      providerMessageId: mockId,
+      sentAt: new Date(),
+    });
+    return { success: true, providerMessageId: mockId };
+  }
+
+  // Meta expects the recipient as a country-code-prefixed number without "+".
+  const to = toE164.replace(/\D/g, "");
+
+  try {
+    // 1. Upload the PDF bytes to obtain a reusable media ID.
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", "application/pdf");
+    // Cast: undici's runtime Blob accepts a Uint8Array/Buffer, but the DOM
+    // BlobPart lib type rejects the ArrayBufferLike-backed view at compile time.
+    const pdfBlobPart = new Uint8Array(
+      pdfBuffer.buffer,
+      pdfBuffer.byteOffset,
+      pdfBuffer.byteLength
+    ) as unknown as BlobPart;
+    form.append("file", new Blob([pdfBlobPart], { type: "application/pdf" }), filename);
+
+    const uploadResponse = await fetch(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/media`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+      }
+    );
+    const uploadResult = await uploadResponse.json() as any;
+    if (!uploadResponse.ok || !uploadResult?.id) {
+      const error = uploadResult?.error?.message ?? "media upload failed";
+      console.error("[WhatsApp] Media upload error:", error);
+      return { success: false, error };
+    }
+    const mediaId = uploadResult.id as string;
+
+    // 2. Send the document message referencing the uploaded media.
+    const body = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "document",
+      document: { id: mediaId, filename, caption },
+    };
+
+    const sendResponse = await fetch(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+    const sendResult = await sendResponse.json() as any;
+
+    if (!sendResponse.ok) {
+      const error = sendResult?.error?.message ?? "send failed";
+      console.error("[WhatsApp] Document send error:", error);
+      return { success: false, error };
+    }
+
+    // Only record the outbound message after a confirmed send, so failed
+    // provider attempts don't pollute the audit trail as successful sends.
+    const providerMessageId = sendResult?.messages?.[0]?.id ?? undefined;
+    await db.insert(whatsappMessages).values({
+      direction: "outbound",
+      vendorWhatsappE164: toE164,
+      inspectionId: inspectionId ?? null,
+      textBody: caption,
+      mediaUrl: filename,
+      providerMessageId: providerMessageId ?? null,
+      sentAt: new Date(),
+    });
+
+    return { success: true, providerMessageId };
+  } catch (err: any) {
+    console.error("[WhatsApp] Document send error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
