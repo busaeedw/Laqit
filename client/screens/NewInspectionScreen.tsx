@@ -856,12 +856,16 @@ export default function NewInspectionScreen() {
         {step < 4 ? (
           <Pressable
             onPress={goNext}
-            style={[styles.nextBtn, { backgroundColor: theme.primary }]}
+            disabled={partsLoading || submitting}
+            style={({ pressed }) => [
+              styles.nextBtn,
+              { backgroundColor: theme.primary, opacity: pressed || partsLoading || submitting ? 0.5 : 1 },
+            ]}
           >
             <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
-              التالي
+              {partsLoading ? "جارٍ التحليل..." : "التالي"}
             </ThemedText>
-            <Feather name="arrow-left" size={18} color="#fff" />
+            {!partsLoading && <Feather name="arrow-left" size={18} color="#fff" />}
           </Pressable>
         ) : (
           <View style={styles.submitCol}>

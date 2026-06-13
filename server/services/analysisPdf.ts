@@ -532,9 +532,10 @@ export async function generateAnalysisPdf(
     // We also reset doc.y to a safe value before each text draw for the same reason.
     const totalPages = doc.bufferedPageRange().count;
     if (totalPages > 1) {
-      const pageNumY = doc.page.height - doc.page.margins.bottom - pageNumberStyle.bottomOffset;
       for (let p = 0; p < totalPages; p++) {
         doc.switchToPage(p);
+        if (!doc.page) continue;
+        const pageNumY = doc.page.height - doc.page.margins.bottom - pageNumberStyle.bottomOffset;
         doc.y = doc.page.margins.top; // prevent overflow-guard false-positive
         const pageNum = p + 1;
         if (isAr) {
