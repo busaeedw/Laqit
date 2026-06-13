@@ -116,7 +116,7 @@ async function buildInspectionPdfBuffer(
     price: 0,
   }));
 
-  const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+  const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
   const safeLocale: PdfLocale = VALID_LOCALES.includes(locale as PdfLocale) ? (locale as PdfLocale) : "ar";
   const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
   return { ok: true, pdfBuffer };
@@ -411,7 +411,7 @@ Rules:
       }
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
-      const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+      const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
       const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
       const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
@@ -445,7 +445,7 @@ Rules:
       }
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
-      const safeLocale = ["ar", "en", "bilingual"].includes(locale) ? locale : "ar";
+      const safeLocale = ["ar", "en"].includes(locale) ? locale : "ar";
       const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
 
@@ -487,7 +487,7 @@ Rules:
       }
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
-      const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+      const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
       const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
       const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
@@ -1115,7 +1115,7 @@ Rules:
 
       const rawLocale = req.query.locale;
       const safeLocale: PdfLocale =
-        rawLocale === "en" || rawLocale === "bilingual" ? rawLocale : "ar";
+        rawLocale === "en" ? rawLocale : "ar";
       const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
@@ -1209,7 +1209,7 @@ Rules:
         price: 0,
       }));
 
-      const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
+      const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
       const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
 
       const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);

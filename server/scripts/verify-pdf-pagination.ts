@@ -27,7 +27,7 @@ function countPages(buf: Buffer): number {
 
 async function runTest(
   label: string,
-  locale: "ar" | "en" | "bilingual",
+  locale: "ar" | "en",
   partCount: number,
   minPages: number
 ) {
@@ -56,11 +56,10 @@ async function main() {
 
   let allPassed = true;
 
-  const cases: Array<{ label: string; locale: "ar" | "en" | "bilingual"; count: number; minPages: number; filename: string }> = [
-    { label: "Arabic-only   ", locale: "ar",        count: 50, minPages: 2, filename: "pagination-ar.pdf" },
-    { label: "English-only  ", locale: "en",        count: 50, minPages: 2, filename: "pagination-en.pdf" },
-    { label: "Bilingual     ", locale: "bilingual", count: 50, minPages: 2, filename: "pagination-bilingual.pdf" },
-    { label: "Single page   ", locale: "ar",        count: 5,  minPages: 1, filename: "single-page-ar.pdf" },
+  const cases: Array<{ label: string; locale: "ar" | "en"; count: number; minPages: number; filename: string }> = [
+    { label: "Arabic-only   ", locale: "ar", count: 50, minPages: 2, filename: "pagination-ar.pdf" },
+    { label: "English-only  ", locale: "en", count: 50, minPages: 2, filename: "pagination-en.pdf" },
+    { label: "Single page   ", locale: "ar", count: 5,  minPages: 1, filename: "single-page-ar.pdf" },
   ];
 
   for (const tc of cases) {

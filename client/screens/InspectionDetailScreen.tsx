@@ -94,7 +94,6 @@ function PdfPreviewModal({
 
   const localeOptions = [
     { value: "ar" as PdfLocale, label: "عربي" },
-    { value: "bilingual" as PdfLocale, label: "ثنائي" },
     { value: "en" as PdfLocale, label: "English" },
   ];
 
@@ -696,7 +695,6 @@ export default function InspectionDetailScreen() {
                 {(
                   [
                     { value: "ar", label: "عربي" },
-                    { value: "bilingual", label: "ثنائي" },
                     { value: "en", label: "English" },
                   ] as const
                 ).map((opt) => (

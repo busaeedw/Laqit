@@ -73,7 +73,6 @@ interface EmailModalProps {
 const LOCALE_OPTIONS: { key: PdfLocale; label: string }[] = [
   { key: "ar", label: "عربي" },
   { key: "en", label: "English" },
-  { key: "bilingual", label: "ثنائي" },
 ];
 
 function EmailModal({ visible, defaultEmail, onClose, onSend, sending, error }: EmailModalProps) {
@@ -231,7 +230,6 @@ interface PdfPreviewModalProps {
 
 const PREVIEW_LOCALE_OPTIONS: { value: PdfLocale; label: string }[] = [
   { value: "ar", label: "عربي" },
-  { value: "bilingual", label: "ثنائي" },
   { value: "en", label: "English" },
 ];
 

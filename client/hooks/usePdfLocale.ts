@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type PdfLocale = "ar" | "en" | "bilingual";
+export type PdfLocale = "ar" | "en";
 
 const STORAGE_KEY = "pdfLocale";
 
@@ -10,7 +10,7 @@ export function usePdfLocale() {
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
-      if (saved === "ar" || saved === "en" || saved === "bilingual") {
+      if (saved === "ar" || saved === "en") {
         setPdfLocale(saved);
       }
     });
