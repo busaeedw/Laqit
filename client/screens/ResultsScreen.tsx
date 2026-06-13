@@ -33,6 +33,7 @@ import { useUser } from "@/context/UserContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList, DetectedPart } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
+import { WHATSAPP_REPORT_MODE } from "@/lib/whatsappMode";
 
 type ResultsScreenRouteProp = RouteProp<RootStackParamList, "Results">;
 
@@ -711,6 +712,14 @@ export default function ResultsScreen() {
   // WhatsApp number (from the business number). The recipient is resolved
   // server-side from the authenticated account — never sent from the client.
   const handleSendWhatsApp = async () => {
+    if (WHATSAPP_REPORT_MODE === "trial") {
+      // Personal-account trial: open the device share sheet with the actual
+      // report PDF so the user's own WhatsApp can forward it to any contact.
+      // No login or Business API credentials required.
+      setWhatsAppSentTo(null);
+      await exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDownloadError(null);
     setWhatsAppSentTo(null);

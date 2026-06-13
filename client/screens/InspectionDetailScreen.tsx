@@ -29,6 +29,7 @@ import { usePdfPageNumbers } from "@/hooks/usePdfPageNumbers";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
+import { WHATSAPP_REPORT_MODE } from "@/lib/whatsappMode";
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RoutePropType = RouteProp<RootStackParamList, "InspectionDetail">;
@@ -456,6 +457,13 @@ export default function InspectionDetailScreen() {
   // customer's own WhatsApp (from the business number). The recipient is
   // resolved server-side from the authenticated owner — never client-supplied.
   const handleSendWhatsApp = async () => {
+    if (WHATSAPP_REPORT_MODE === "trial") {
+      // Personal-account trial: open the device share sheet with the actual
+      // report PDF so the user's own WhatsApp can forward it to any contact.
+      setWhatsAppSentTo(null);
+      await exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDownloadError(null);
     setWhatsAppSentTo(null);

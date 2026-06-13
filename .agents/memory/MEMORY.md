@@ -5,3 +5,4 @@
 - [Login OTP disabled](login-otp-disabled.md) — customer login bypasses OTP by user request (phone number alone yields token); broken auth, restore/gate before production.
 - [AI analyze/identify optional auth](analyze-flow-requires-auth.md) — damage-assessment AI endpoints allow anonymous; per-IP limit (40/hr) is the only guard for logged-out callers.
 - [Email delivery via AgentMail SMTP](email-delivery-agentmail.md) — reports sent via AgentMail SMTP (nodemailer); FROM must match inbox + key scope, else 550 sender-rejected; org-level key sends from any inbox.
+- [WhatsApp report send modes](whatsapp-send-modes.md) — personal WhatsApp can't auto-send/attach; trial uses OS share sheet, business uses Cloud API (flag-toggled).
