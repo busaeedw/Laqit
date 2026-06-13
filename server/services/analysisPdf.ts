@@ -139,7 +139,7 @@ interface LocaleLabels {
 const LABELS: Record<PdfLocale, LocaleLabels> = {
   ar: {
     appNameEn: "",
-    appNameAr: "لاقط",
+    appNameAr: "تطبيق لاقط قطع غيار السيارات",
     reportTitleEn: "",
     reportTitleAr: "تقرير تشخيص أضرار السيارة",
     dateLabel: "التاريخ",
@@ -288,11 +288,11 @@ export async function generateAnalysisPdf(
 
     if (L.appNameEn) {
       doc.font("Helvetica-Bold").fontSize(14).fillColor(white)
-        .text(L.appNameEn, 50, 55, { width: pageWidth / 2, align: "left" });
+        .text(L.appNameEn, 50, 55, { width: pageWidth, align: "center" });
     }
     if (L.appNameAr) {
       doc.font("ArabicBold").fontSize(18).fillColor(white)
-        .text(L.appNameAr, 50, 55, { width: pageWidth, align: "right" });
+        .text(L.appNameAr, 50, 55, { width: pageWidth, align: "center" });
     }
 
     doc.moveDown(3);

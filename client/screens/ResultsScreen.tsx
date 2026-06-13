@@ -433,7 +433,7 @@ function PdfPreviewModal({
               <>
                 <Feather name="share-2" size={18} color="#FFFFFF" />
                 <ThemedText style={[previewStyles.shareButtonText, { fontFamily: "Cairo_700Bold" }]}>
-                  مشاركة / حفظ
+                  مشاركة أو حفظ
                 </ThemedText>
               </>
             )}
