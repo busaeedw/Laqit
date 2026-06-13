@@ -1312,16 +1312,22 @@ Rules:
             price: 0,
           }));
 
-          const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, damageMedia?.fileUrl ?? undefined, "ar");
-
-          const emailTo = process.env.ANALYSIS_EMAIL_TO ?? "wbusaeed@gmail.com";
-          const filename = `laqit-rfq-${inspection.inspectionNo}.pdf`;
-          const emailResult = await sendAnalysisPdfEmail(emailTo, pdfBuffer, filename);
-
-          if (emailResult.success) {
-            console.log(`[Submit] PDF emailed to ${emailTo} — ${filename}`);
+          // Internal RFQ copy for the business owner. Fail closed: only send
+          // when an explicit recipient is configured — never fall back to a
+          // hard-coded address, to avoid leaking customer inspection data.
+          const emailTo = process.env.ANALYSIS_EMAIL_TO;
+          if (!emailTo) {
+            console.warn("[Submit] ANALYSIS_EMAIL_TO not configured — skipping internal RFQ email copy");
           } else {
-            console.warn(`[Submit] PDF email failed: ${emailResult.error}`);
+            const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, damageMedia?.fileUrl ?? undefined, "ar");
+            const filename = `laqit-rfq-${inspection.inspectionNo}.pdf`;
+            const emailResult = await sendAnalysisPdfEmail(emailTo, pdfBuffer, filename);
+
+            if (emailResult.success) {
+              console.log(`[Submit] PDF emailed to ${emailTo} — ${filename}`);
+            } else {
+              console.warn(`[Submit] PDF email failed: ${emailResult.error}`);
+            }
           }
         } catch (pdfErr: any) {
           console.error("[Submit] PDF/email error (non-fatal):", pdfErr?.message);
