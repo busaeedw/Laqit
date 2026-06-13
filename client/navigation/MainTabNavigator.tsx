@@ -10,6 +10,7 @@ import OrdersStackNavigator from "@/navigation/OrdersStackNavigator";
 import AccountStackNavigator from "@/navigation/AccountStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useCart } from "@/context/CartContext";
+import { useUser } from "@/context/UserContext";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 import { ThemedText } from "@/components/ThemedText";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -144,9 +145,12 @@ export default function MainTabNavigator() {
         component={AccountStackNavigator}
         options={{
           title: "الحساب",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => {
+            const { isLoggedIn } = useUser();
+            return (
+              <Feather name="user" size={size} color={isLoggedIn ? "#9CA3AF" : color} />
+            );
+          },
         }}
       />
     </Tab.Navigator>
