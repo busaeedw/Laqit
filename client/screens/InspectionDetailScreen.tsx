@@ -92,10 +92,7 @@ function PdfPreviewModal({
     ? { uri: `data:application/pdf;base64,${pdfBase64}` }
     : null;
 
-  const localeOptions = [
-    { value: "ar" as PdfLocale, label: "عربي" },
-    { value: "en" as PdfLocale, label: "English" },
-  ];
+
 
   return (
     <Modal
@@ -135,46 +132,6 @@ function PdfPreviewModal({
               <Feather name="refresh-cw" size={20} color={theme.primary} />
             )}
           </Pressable>
-        </View>
-
-        {/* Settings strip: language picker + page-numbers toggle */}
-        <View
-          style={[
-            previewStyles.settingsStrip,
-            { backgroundColor: theme.backgroundDefault, borderBottomColor: theme.border },
-          ]}
-        >
-          {/* Language picker */}
-          <View style={[previewStyles.inlineLocalePicker, { borderColor: theme.border }]}>
-            {localeOptions.map((opt) => (
-              <Pressable
-                key={opt.value}
-                testID={`button-preview-locale-${opt.value}`}
-                onPress={() => {
-                  if (opt.value !== pdfLocale) {
-                    onReload(opt.value);
-                  }
-                }}
-                style={[
-                  previewStyles.inlineLocaleOption,
-                  pdfLocale === opt.value && { backgroundColor: theme.primary },
-                ]}
-              >
-                <ThemedText
-                  style={[
-                    previewStyles.inlineLocaleText,
-                    {
-                      fontFamily: "Cairo_700Bold",
-                      color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
-                    },
-                  ]}
-                >
-                  {opt.label}
-                </ThemedText>
-              </Pressable>
-            ))}
-          </View>
-
         </View>
 
         {/* PDF / loading / error area */}
@@ -995,37 +952,6 @@ const previewStyles = StyleSheet.create({
   },
   topBarTitle: { fontSize: 17 },
   topBarSpacer: { width: 36 },
-  settingsStrip: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    gap: Spacing.sm,
-  },
-  inlineLocalePicker: {
-    flexDirection: "row-reverse",
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    overflow: "hidden",
-    flex: 1,
-  },
-  inlineLocaleOption: {
-    flex: 1,
-    paddingVertical: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  inlineLocaleText: { fontSize: 12 },
-  inlinePageNumToggle: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-  },
   inlineCheckbox: {
     width: 16,
     height: 16,
