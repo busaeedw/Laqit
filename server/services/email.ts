@@ -10,7 +10,7 @@ export interface EmailSendResult {
 }
 
 // The AgentMail inbox that reports are sent FROM.
-const AGENTMAIL_INBOX = process.env.AGENTMAIL_INBOX ?? "laqit@agentmail.to";
+const AGENTMAIL_INBOX = process.env.AGENTMAIL_INBOX ?? "wbusaeed@agentmail.to";
 
 const EMAIL_HTML = `
   <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
