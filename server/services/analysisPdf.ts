@@ -513,8 +513,9 @@ export async function generateAnalysisPdf(
         .text(L.totalEn(totalStr), 50, totalY, { width: pageWidth, align: "left" });
     }
 
-    // ── Disclaimer footer (last page only) ────────────────────────────────────
-    const footerY = doc.page.height - footerStyle.bottomOffset;
+    // ── Disclaimer footer (right after total, not fixed at bottom) ─────────
+    doc.moveDown(1);
+    const footerY = doc.y;
     if (L.footerEn) {
       doc.font("Helvetica-Bold").fontSize(footerStyle.fontSize).fillColor(footerStyle.fillColor)
         .text(L.footerEn, 50, footerY, { width: pageWidth, align: "center" });
@@ -529,7 +530,27 @@ export async function generateAnalysisPdf(
     // pageNumY must stay within the page margin (< page.height - bottomMargin)
     // to avoid PDFKit's overflow guard triggering doc.addPage() in switchToPage loops.
     // We also reset doc.y to a safe value before each text draw for the same reason.
-    const totalPages = doc.bufferedPageRange().count;
+    let totalPages = doc.bufferedPageRange().count;
+
+    // Remove any empty trailing pages (e.g. a second page created by footer
+    // placement or overflow-guard false-positives but with no content drawn).
+    // We walk backwards from the last page and discard pages that have
+    // nothing drawn on them.
+    if (totalPages > 1) {
+      const pages = (doc as any)._pages || [];
+      while (totalPages > 1) {
+        const lastPage = pages[totalPages - 1];
+        const lastContent = lastPage?.content || [];
+        const hasRealContent = lastContent.length > 0;
+        if (!hasRealContent) {
+          pages.splice(totalPages - 1, 1);
+          totalPages--;
+        } else {
+          break;
+        }
+      }
+    }
+
     if (totalPages > 1) {
       const pageNumY = doc.page.height - doc.page.margins.bottom - pageNumberStyle.bottomOffset;
       for (let p = 0; p < totalPages; p++) {
