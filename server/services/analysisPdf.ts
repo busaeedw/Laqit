@@ -55,6 +55,23 @@ function isSafeImageUri(uri: string): boolean {
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 async function fetchImageBuffer(uri: string): Promise<Buffer | null> {
+  // Handle base64 data URIs directly (from the mobile app camera/gallery)
+  if (uri.startsWith("data:image/")) {
+    try {
+      const comma = uri.indexOf(",");
+      if (comma === -1) return null;
+      const buf = Buffer.from(uri.slice(comma + 1), "base64");
+      if (buf.byteLength > MAX_IMAGE_BYTES) {
+        console.warn(`[analysisPdf] Base64 image too large: ${buf.byteLength} bytes`);
+        return null;
+      }
+      return buf;
+    } catch {
+      console.warn("[analysisPdf] Failed to decode base64 image");
+      return null;
+    }
+  }
+
   if (!isSafeImageUri(uri)) {
     console.warn(`[analysisPdf] Image URI rejected by SSRF guard: ${uri.slice(0, 80)}`);
     return null;
@@ -399,8 +416,13 @@ export async function generateAnalysisPdf(
       doc.moveDown(0.5);
       const maxImgHeight = 200;
       try {
-        doc.image(imageBuffer, 50, doc.y, { fit: [pageWidth, maxImgHeight], align: "center", valign: "center" });
-        doc.y = Math.max(doc.y, imgSectionY + 28 + maxImgHeight + 8);
+        const imgY = doc.y;
+        doc.image(imageBuffer, 50, imgY, { fit: [pageWidth, maxImgHeight], align: "center", valign: "center" });
+        // Move past the image without direct doc.y assignment (unsupported by PDFKit)
+        const expectedBottom = imgSectionY + 28 + maxImgHeight + 8;
+        if (doc.y < expectedBottom) {
+          doc.moveDown(Math.max(0, (expectedBottom - doc.y) / 12));
+        }
       } catch (imgErr: any) {
         console.warn(`[analysisPdf] Could not embed image: ${imgErr?.message}`);
         doc.font(isAr ? "Arabic" : "Helvetica").fontSize(10).fillColor(gray)
