@@ -71,6 +71,7 @@ function PlaceholderScreen() {
 
 export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
+  const { isLoggedIn } = useUser();
 
   return (
     <Tab.Navigator
@@ -145,12 +146,9 @@ export default function MainTabNavigator() {
         component={AccountStackNavigator}
         options={{
           title: "الحساب",
-          tabBarIcon: ({ color, size }) => {
-            const { isLoggedIn } = useUser();
-            return (
-              <Feather name="user" size={size} color={isLoggedIn ? "#9CA3AF" : color} />
-            );
-          },
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="user" size={size} color={isLoggedIn ? "#9CA3AF" : color} />
+          ),
         }}
       />
     </Tab.Navigator>
