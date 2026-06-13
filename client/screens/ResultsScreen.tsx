@@ -27,7 +27,6 @@ import { WebView } from "react-native-webview";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
-import { usePdfPageNumbers } from "@/hooks/usePdfPageNumbers";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
@@ -227,8 +226,7 @@ interface PdfPreviewModalProps {
   onShare: () => void;
   sharing: boolean;
   pdfLocale: PdfLocale;
-  showPageNumbers: boolean;
-  onReload: (locale: PdfLocale, pageNumbers: boolean) => void;
+  onReload: (locale: PdfLocale) => void;
 }
 
 const PREVIEW_LOCALE_OPTIONS: { value: PdfLocale; label: string }[] = [
@@ -246,7 +244,6 @@ function PdfPreviewModal({
   onShare,
   sharing,
   pdfLocale,
-  showPageNumbers,
   onReload,
 }: PdfPreviewModalProps) {
   const { theme } = useTheme();
@@ -305,7 +302,7 @@ function PdfPreviewModal({
           </ThemedText>
 
           <Pressable
-            onPress={() => onReload(pdfLocale, showPageNumbers)}
+            onPress={() => onReload(pdfLocale)}
             disabled={loading}
             style={({ pressed }) => [previewStyles.topBarButton, { opacity: pressed || loading ? 0.5 : 1 }]}
             testID="button-reload-preview"
@@ -332,7 +329,7 @@ function PdfPreviewModal({
                 testID={`button-preview-locale-${opt.value}`}
                 onPress={() => {
                   if (opt.value !== pdfLocale) {
-                    onReload(opt.value, showPageNumbers);
+                    onReload(opt.value);
                   }
                 }}
                 style={[
@@ -355,37 +352,6 @@ function PdfPreviewModal({
             ))}
           </View>
 
-          <Pressable
-            testID="button-preview-toggle-page-numbers"
-            onPress={() => onReload(pdfLocale, !showPageNumbers)}
-            style={[
-              previewStyles.inlinePageNumToggle,
-              {
-                borderColor: showPageNumbers ? theme.primary : theme.border,
-                backgroundColor: showPageNumbers ? theme.primary + "15" : "transparent",
-              },
-            ]}
-          >
-            <View
-              style={[
-                previewStyles.inlineCheckbox,
-                {
-                  borderColor: theme.primary,
-                  backgroundColor: showPageNumbers ? theme.primary : "transparent",
-                },
-              ]}
-            >
-              {showPageNumbers ? <Feather name="check" size={10} color="#fff" /> : null}
-            </View>
-            <ThemedText
-              style={[
-                previewStyles.inlinePageNumLabel,
-                { color: showPageNumbers ? theme.primary : theme.textSecondary, fontFamily: "Cairo_400Regular" },
-              ]}
-            >
-              أرقام الصفحات
-            </ThemedText>
-          </Pressable>
         </View>
 
         <View style={previewStyles.webViewContainer}>
@@ -491,7 +457,6 @@ export default function ResultsScreen() {
 
   const { imageUri, carInfo, parts } = route.params;
   const { pdfLocale, savePdfLocale } = usePdfLocale();
-  const { showPageNumbers, saveShowPageNumbers } = usePdfPageNumbers();
 
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [emailModalVisible, setEmailModalVisible] = useState(false);
@@ -553,18 +518,13 @@ export default function ResultsScreen() {
     setEmailModalVisible(true);
   };
 
-  const handlePreviewPdf = async (overrideLocale?: PdfLocale, overridePageNumbers?: boolean) => {
+  const handlePreviewPdf = async (overrideLocale?: PdfLocale) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const effectiveLocale = overrideLocale ?? pdfLocale;
-    const effectivePageNumbers = overridePageNumbers ?? showPageNumbers;
 
     if (overrideLocale !== undefined && overrideLocale !== pdfLocale) {
       savePdfLocale(overrideLocale);
-      settingsChangedInModal.current = true;
-    }
-    if (overridePageNumbers !== undefined && overridePageNumbers !== showPageNumbers) {
-      saveShowPageNumbers(overridePageNumbers);
       settingsChangedInModal.current = true;
     }
 
@@ -579,7 +539,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ carInfo, parts, imageUri, locale: effectiveLocale, showPageNumbers: effectivePageNumbers }),
+        body: JSON.stringify({ carInfo, parts, imageUri, locale: effectiveLocale }),
       });
 
       if (!resp.ok) {
@@ -649,7 +609,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ carInfo, parts, imageUri, locale: pdfLocale, showPageNumbers }),
+        body: JSON.stringify({ carInfo, parts, imageUri, locale: pdfLocale }),
       });
 
       if (!resp.ok) {
@@ -733,7 +693,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ carInfo, parts, imageUri, locale: pdfLocale, showPageNumbers }),
+        body: JSON.stringify({ carInfo, parts, imageUri, locale: pdfLocale }),
       });
       const json = await resp.json().catch(() => ({} as any));
       if (!resp.ok) {
@@ -765,7 +725,7 @@ export default function ResultsScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, carInfo, parts, imageUri, locale, showPageNumbers }),
+        body: JSON.stringify({ email, carInfo, parts, imageUri, locale }),
       });
 
       const json = await resp.json();
@@ -1227,7 +1187,6 @@ export default function ResultsScreen() {
         onShare={handleShareFromPreview}
         sharing={previewSharing}
         pdfLocale={pdfLocale}
-        showPageNumbers={showPageNumbers}
         onReload={handlePreviewPdf}
       />
     </View>

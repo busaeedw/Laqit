@@ -25,7 +25,6 @@ import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
-import { usePdfPageNumbers } from "@/hooks/usePdfPageNumbers";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
@@ -55,8 +54,7 @@ interface PdfPreviewModalProps {
   onShare: () => void;
   sharing: boolean;
   pdfLocale: PdfLocale;
-  showPageNumbers: boolean;
-  onReload: (locale: PdfLocale, pageNumbers: boolean) => void;
+  onReload: (locale: PdfLocale) => void;
 }
 
 function PdfPreviewModal({
@@ -68,7 +66,6 @@ function PdfPreviewModal({
   onShare,
   sharing,
   pdfLocale,
-  showPageNumbers,
   onReload,
 }: PdfPreviewModalProps) {
   const { theme } = useTheme();
@@ -129,7 +126,7 @@ function PdfPreviewModal({
           </ThemedText>
           <Pressable
             style={({ pressed }) => [previewStyles.topBarButton, { opacity: pressed || loading ? 0.5 : 1 }]}
-            onPress={() => onReload(pdfLocale, showPageNumbers)}
+            onPress={() => onReload(pdfLocale)}
             disabled={loading}
             testID="button-reload-preview"
           >
@@ -156,7 +153,7 @@ function PdfPreviewModal({
                 testID={`button-preview-locale-${opt.value}`}
                 onPress={() => {
                   if (opt.value !== pdfLocale) {
-                    onReload(opt.value, showPageNumbers);
+                    onReload(opt.value);
                   }
                 }}
                 style={[
@@ -179,38 +176,6 @@ function PdfPreviewModal({
             ))}
           </View>
 
-          {/* Page numbers toggle */}
-          <Pressable
-            testID="button-preview-toggle-page-numbers"
-            onPress={() => onReload(pdfLocale, !showPageNumbers)}
-            style={[
-              previewStyles.inlinePageNumToggle,
-              {
-                borderColor: showPageNumbers ? theme.primary : theme.border,
-                backgroundColor: showPageNumbers ? theme.primary + "15" : "transparent",
-              },
-            ]}
-          >
-            <View
-              style={[
-                previewStyles.inlineCheckbox,
-                {
-                  borderColor: theme.primary,
-                  backgroundColor: showPageNumbers ? theme.primary : "transparent",
-                },
-              ]}
-            >
-              {showPageNumbers ? <Feather name="check" size={10} color="#fff" /> : null}
-            </View>
-            <ThemedText
-              style={[
-                previewStyles.inlinePageNumLabel,
-                { color: showPageNumbers ? theme.primary : theme.textSecondary, fontFamily: "Cairo_400Regular" },
-              ]}
-            >
-              أرقام الصفحات
-            </ThemedText>
-          </Pressable>
         </View>
 
         {/* PDF / loading / error area */}
@@ -310,7 +275,6 @@ export default function InspectionDetailScreen() {
   const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
   const [whatsAppSentTo, setWhatsAppSentTo] = useState<string | null>(null);
   const { pdfLocale, savePdfLocale } = usePdfLocale();
-  const { showPageNumbers, saveShowPageNumbers } = usePdfPageNumbers();
 
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
@@ -391,7 +355,6 @@ export default function InspectionDetailScreen() {
     try {
       const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
       url.searchParams.set("locale", pdfLocale);
-      url.searchParams.set("showPageNumbers", showPageNumbers ? "true" : "false");
       const resp = await fetch(url.toString(), {
         method: "GET",
         headers: { ...authHeaders() },
@@ -473,7 +436,7 @@ export default function InspectionDetailScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ locale: pdfLocale, showPageNumbers }),
+        body: JSON.stringify({ locale: pdfLocale }),
       });
       const json = await resp.json().catch(() => ({} as any));
       if (!resp.ok) {
@@ -494,18 +457,12 @@ export default function InspectionDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const effectiveLocale = overrideLocale ?? pdfLocale;
-    const effectivePageNumbers = overridePageNumbers ?? showPageNumbers;
-
     if (overrideLocale !== undefined && overrideLocale !== pdfLocale) {
       savePdfLocale(overrideLocale);
       settingsChangedInModal.current = true;
     }
-    if (overridePageNumbers !== undefined && overridePageNumbers !== showPageNumbers) {
-      saveShowPageNumbers(overridePageNumbers);
-      settingsChangedInModal.current = true;
-    }
 
-    const cacheKey = `${inspectionId}|${effectiveLocale}|${effectivePageNumbers}`;
+    const cacheKey = `${inspectionId}|${effectiveLocale}`;
 
     if (pdfCache.current?.key === cacheKey) {
       setPreviewError(null);
@@ -525,7 +482,6 @@ export default function InspectionDetailScreen() {
     try {
       const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
       url.searchParams.set("locale", effectiveLocale);
-      url.searchParams.set("showPageNumbers", effectivePageNumbers ? "true" : "false");
       const resp = await fetch(url.toString(), {
         method: "GET",
         headers: { ...authHeaders() },
@@ -611,7 +567,7 @@ export default function InspectionDetailScreen() {
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ email: trimmed, locale: pdfLocale, showPageNumbers }),
+        body: JSON.stringify({ email: trimmed, locale: pdfLocale }),
       });
 
       const json = await resp.json();
@@ -768,19 +724,6 @@ export default function InspectionDetailScreen() {
                 ))}
               </View>
 
-              {/* Page numbers toggle */}
-              <Pressable
-                testID="button-toggle-page-numbers"
-                onPress={() => saveShowPageNumbers(!showPageNumbers)}
-                style={[styles.pageNumToggle, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
-              >
-                <View style={[styles.pageNumCheckbox, { borderColor: theme.primary, backgroundColor: showPageNumbers ? theme.primary : "transparent" }]}>
-                  {showPageNumbers ? <Feather name="check" size={12} color="#fff" /> : null}
-                </View>
-                <ThemedText style={[styles.pageNumLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                  إظهار أرقام الصفحات في PDF
-                </ThemedText>
-              </Pressable>
             </Animated.View>
 
             {/* Preview button — full width */}
@@ -925,7 +868,6 @@ export default function InspectionDetailScreen() {
         onShare={handleShareFromPreview}
         sharing={previewSharing}
         pdfLocale={pdfLocale}
-        showPageNumbers={showPageNumbers}
         onReload={handlePreviewPdf}
       />
 
@@ -1211,23 +1153,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   pdfBtnText: { fontSize: 14 },
-  pageNumToggle: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1.5,
-  },
-  pageNumCheckbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pageNumLabel: { fontSize: 13, flex: 1, textAlign: "right" },
   errorText: { fontSize: 13, textAlign: "center" },
   quotesBtn: {
     flexDirection: "row-reverse",

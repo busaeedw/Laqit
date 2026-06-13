@@ -221,7 +221,6 @@ export async function generateAnalysisPdf(
   parts: PartEntry[],
   imageUri?: string,
   locale: PdfLocale = "ar",
-  showPageNumbers = true
 ): Promise<Buffer> {
   const imageBuffer = imageUri ? await fetchImageBuffer(imageUri) : null;
   const L = LABELS[locale];
@@ -610,7 +609,7 @@ export async function generateAnalysisPdf(
     // to avoid PDFKit's overflow guard triggering doc.addPage() in switchToPage loops.
     // We also reset doc.y to a safe value before each text draw for the same reason.
     const totalPages = doc.bufferedPageRange().count;
-    if (showPageNumbers && totalPages > 1) {
+    if (totalPages > 1) {
       const pageNumY = doc.page.height - doc.page.margins.bottom - pageNumberStyle.bottomOffset;
       for (let p = 0; p < totalPages; p++) {
         doc.switchToPage(p);

@@ -63,8 +63,7 @@ function maskMobile(e164: string): string {
 // failure with the appropriate HTTP status.
 async function buildInspectionPdfBuffer(
   inspection: typeof laqitInspections.$inferSelect,
-  locale: unknown,
-  showPageNumbers: unknown
+  locale: unknown
 ): Promise<{ ok: true; pdfBuffer: Buffer } | { ok: false; status: number; error: string }> {
   const parts = await db
     .select()
@@ -119,9 +118,7 @@ async function buildInspectionPdfBuffer(
 
   const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
   const safeLocale: PdfLocale = VALID_LOCALES.includes(locale as PdfLocale) ? (locale as PdfLocale) : "ar";
-  const safeShowPageNumbers = showPageNumbers !== false;
-
-  const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale, safeShowPageNumbers);
+  const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
   return { ok: true, pdfBuffer };
 }
 
@@ -398,7 +395,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { email, carInfo, parts, imageUri, locale, showPageNumbers } = req.body;
+      const { email, carInfo, parts, imageUri, locale } = req.body;
 
       if (!email || typeof email !== "string") {
         return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
@@ -416,8 +413,7 @@ Rules:
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
       const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
       const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
-      const safeShowPageNumbers = showPageNumbers !== false;
-      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale, safeShowPageNumbers);
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
       const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
 
@@ -442,16 +438,15 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { carInfo, parts, imageUri, locale, showPageNumbers } = req.body;
+      const { carInfo, parts, imageUri, locale } = req.body;
 
       if (!carInfo || !Array.isArray(parts)) {
         return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
       }
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
-      const safeShowPageNumbers = showPageNumbers !== false;
       const safeLocale = ["ar", "en", "bilingual"].includes(locale) ? locale : "ar";
-      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale, safeShowPageNumbers);
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
 
       res.setHeader("Content-Type", "application/pdf");
@@ -476,7 +471,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { carInfo, parts, imageUri, locale, showPageNumbers } = req.body;
+      const { carInfo, parts, imageUri, locale } = req.body;
       if (!carInfo || !Array.isArray(parts)) {
         return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
       }
@@ -494,8 +489,7 @@ Rules:
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
       const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
       const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
-      const safeShowPageNumbers = showPageNumbers !== false;
-      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale, safeShowPageNumbers);
+      const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
       const caption = "لاقط: تقرير تحليل الأضرار";
 
@@ -1122,9 +1116,7 @@ Rules:
       const rawLocale = req.query.locale;
       const safeLocale: PdfLocale =
         rawLocale === "en" || rawLocale === "bilingual" ? rawLocale : "ar";
-      const safeShowPageNumbers = req.query.showPageNumbers !== "false";
-
-      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale, safeShowPageNumbers);
+      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -1145,7 +1137,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { email, locale, showPageNumbers } = req.body;
+      const { email, locale } = req.body;
       if (!email || typeof email !== "string") {
         return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
       }
@@ -1219,9 +1211,8 @@ Rules:
 
       const VALID_LOCALES: PdfLocale[] = ["ar", "en", "bilingual"];
       const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
-      const safeShowPageNumbers = showPageNumbers !== false;
 
-      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale, safeShowPageNumbers);
+      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
       if (!result.success) {
@@ -1244,7 +1235,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { locale, showPageNumbers } = req.body;
+      const { locale } = req.body;
       const callerCustomerId: string = res.locals.customerId;
 
       const [inspection] = await db
@@ -1268,7 +1259,7 @@ Rules:
         return res.status(400).json({ error: "لا يوجد رقم جوال مرتبط بحسابك" });
       }
 
-      const built = await buildInspectionPdfBuffer(inspection, locale, showPageNumbers);
+      const built = await buildInspectionPdfBuffer(inspection, locale);
       if (!built.ok) {
         return res.status(built.status).json({ error: built.error });
       }
