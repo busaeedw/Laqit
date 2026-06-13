@@ -228,11 +228,6 @@ interface PdfPreviewModalProps {
   onReload: (locale: PdfLocale) => void;
 }
 
-const PREVIEW_LOCALE_OPTIONS: { value: PdfLocale; label: string }[] = [
-  { value: "ar", label: "عربي" },
-  { value: "en", label: "English" },
-];
-
 function PdfPreviewModal({
   visible,
   pdfBase64,
@@ -311,44 +306,6 @@ function PdfPreviewModal({
               <Feather name="refresh-cw" size={20} color={theme.primary} />
             )}
           </Pressable>
-        </View>
-
-        {/* Settings strip: language picker */}
-        <View
-          style={[
-            previewStyles.settingsStrip,
-            { backgroundColor: theme.backgroundDefault, borderBottomColor: theme.border },
-          ]}
-        >
-          <View style={[previewStyles.inlineLocalePicker, { borderColor: theme.border }]}>
-            {PREVIEW_LOCALE_OPTIONS.map((opt) => (
-              <Pressable
-                key={opt.value}
-                testID={`button-preview-locale-${opt.value}`}
-                onPress={() => {
-                  if (opt.value !== pdfLocale) {
-                    onReload(opt.value);
-                  }
-                }}
-                style={[
-                  previewStyles.inlineLocaleOption,
-                  pdfLocale === opt.value && { backgroundColor: theme.primary },
-                ]}
-              >
-                <ThemedText
-                  style={[
-                    previewStyles.inlineLocaleText,
-                    {
-                      fontFamily: "Cairo_700Bold",
-                      color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
-                    },
-                  ]}
-                >
-                  {opt.label}
-                </ThemedText>
-              </Pressable>
-            ))}
-          </View>
         </View>
 
         <View style={previewStyles.webViewContainer}>
@@ -1715,28 +1672,6 @@ const previewStyles = StyleSheet.create({
   topBarSpacer: {
     width: 36,
   },
-  settingsStrip: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    gap: Spacing.sm,
-  },
-  inlineLocalePicker: {
-    flexDirection: "row-reverse",
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    overflow: "hidden",
-    flex: 1,
-  },
-  inlineLocaleOption: {
-    flex: 1,
-    paddingVertical: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  inlineLocaleText: { fontSize: 12 },
   inlineCheckbox: {
     width: 16,
     height: 16,
