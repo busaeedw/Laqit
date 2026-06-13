@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
+import { Feather, FontAwesome } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -306,6 +306,7 @@ export default function InspectionDetailScreen() {
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
   const { pdfLocale, savePdfLocale } = usePdfLocale();
   const { showPageNumbers, saveShowPageNumbers } = usePdfPageNumbers();
 
@@ -377,10 +378,14 @@ export default function InspectionDetailScreen() {
     prevDataVersionRef.current = dataVersion;
   }, [dataVersion]);
 
-  const handleDownloadPdf = async () => {
+  const exportPdf = async (
+    dialogTitle: string,
+    setLoading: (v: boolean) => void,
+    tryWebShare = false,
+  ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDownloadError(null);
-    setDownloading(true);
+    setLoading(true);
 
     try {
       const url = new URL(`/api/laqit-inspections/${inspectionId}/pdf`, getApiUrl());
@@ -411,12 +416,28 @@ export default function InspectionDetailScreen() {
         const bytes = new Uint8Array(byteChars.length);
         for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
         const blob = new Blob([bytes], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
+
+        if (tryWebShare && typeof navigator !== "undefined" && (navigator as any).canShare) {
+          const webFile = new (window as any).File([blob], filename, { type: "application/pdf" });
+          if ((navigator as any).canShare({ files: [webFile] })) {
+            try {
+              await (navigator as any).share({ files: [webFile], title: dialogTitle });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              return;
+            } catch (err: any) {
+              // User dismissed the share sheet — don't surprise them with a download.
+              if (err?.name === "AbortError") return;
+              // Other failures fall through to the download fallback below.
+            }
+          }
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
+        a.href = objectUrl;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(objectUrl);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         const fileUri =
@@ -429,7 +450,7 @@ export default function InspectionDetailScreen() {
         if (canShare) {
           await Sharing.shareAsync(fileUri, {
             mimeType: "application/pdf",
-            dialogTitle: "تنزيل أو مشاركة تقرير PDF",
+            dialogTitle,
             UTI: "com.adobe.pdf",
           });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -440,9 +461,12 @@ export default function InspectionDetailScreen() {
     } catch {
       setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
     } finally {
-      setDownloading(false);
+      setLoading(false);
     }
   };
+
+  const handleDownloadPdf = () => exportPdf("تنزيل أو مشاركة تقرير PDF", setDownloading);
+  const handleSendWhatsApp = () => exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp, true);
 
   const handlePreviewPdf = async (overrideLocale?: PdfLocale, overridePageNumbers?: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -801,6 +825,29 @@ export default function InspectionDetailScreen() {
                 </ThemedText>
               </Pressable>
             </View>
+
+            <Pressable
+              testID="button-whatsapp-pdf"
+              onPress={handleSendWhatsApp}
+              disabled={sharingWhatsApp}
+              style={({ pressed }) => [
+                styles.pdfPreviewBtn,
+                {
+                  backgroundColor: "#25D366",
+                  marginTop: Spacing.sm,
+                  opacity: pressed || sharingWhatsApp ? 0.85 : 1,
+                },
+              ]}
+            >
+              {sharingWhatsApp ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <FontAwesome name="whatsapp" size={20} color="#fff" />
+              )}
+              <ThemedText style={[styles.pdfPreviewBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                إرسال عبر واتساب
+              </ThemedText>
+            </Pressable>
 
             {downloadError != null ? (
               <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>

@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
+import { Feather, FontAwesome } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { arrayBufferToBase64 } from "../lib/pdfUtils";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
@@ -500,6 +500,7 @@ export default function ResultsScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showDownloadSuccess, setShowDownloadSuccess] = useState(false);
+  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
 
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -633,10 +634,14 @@ export default function ResultsScreen() {
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const exportPdf = async (
+    dialogTitle: string,
+    setLoading: (v: boolean) => void,
+    tryWebShare = false,
+  ) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDownloadError(null);
-    setDownloading(true);
+    setLoading(true);
 
     try {
       const url = new URL("/api/analysis/download-pdf", getApiUrl());
@@ -666,12 +671,29 @@ export default function ResultsScreen() {
         const bytes = new Uint8Array(byteChars.length);
         for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
         const blob = new Blob([bytes], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
+
+        if (tryWebShare && typeof navigator !== "undefined" && (navigator as any).canShare) {
+          const webFile = new (window as any).File([blob], filename, { type: "application/pdf" });
+          if ((navigator as any).canShare({ files: [webFile] })) {
+            try {
+              await (navigator as any).share({ files: [webFile], title: dialogTitle });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setShowDownloadSuccess(true);
+              return;
+            } catch (err: any) {
+              // User dismissed the share sheet — don't surprise them with a download.
+              if (err?.name === "AbortError") return;
+              // Other failures fall through to the download fallback below.
+            }
+          }
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
+        a.href = objectUrl;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(objectUrl);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setShowDownloadSuccess(true);
       } else {
@@ -683,7 +705,7 @@ export default function ResultsScreen() {
         if (canShare) {
           await Sharing.shareAsync(fileUri, {
             mimeType: "application/pdf",
-            dialogTitle: "تنزيل تقرير PDF",
+            dialogTitle,
             UTI: "com.adobe.pdf",
           });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -695,9 +717,12 @@ export default function ResultsScreen() {
     } catch {
       setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
     } finally {
-      setDownloading(false);
+      setLoading(false);
     }
   };
+
+  const handleDownloadPdf = () => exportPdf("تنزيل تقرير PDF", setDownloading);
+  const handleSendWhatsApp = () => exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp, true);
 
   const handleSendPdf = async (email: string, locale: PdfLocale) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -910,6 +935,37 @@ export default function ResultsScreen() {
             </View>
           </Pressable>
         </View>
+
+        <View style={{ height: Spacing.sm }} />
+        <Pressable
+          onPress={handleSendWhatsApp}
+          disabled={sharingWhatsApp}
+          style={({ pressed }) => [
+            styles.pdfPreviewButton,
+            {
+              backgroundColor: "#25D366",
+              opacity: pressed || sharingWhatsApp ? 0.88 : 1,
+            },
+          ]}
+          testID="button-whatsapp-pdf"
+        >
+          <View style={[styles.pdfPreviewIconWrap, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+            {sharingWhatsApp ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <FontAwesome name="whatsapp" size={22} color="#FFFFFF" />
+            )}
+          </View>
+          <View style={styles.pdfContentSmall}>
+            <ThemedText style={[styles.pdfPreviewTitle, { fontFamily: "Cairo_700Bold" }]}>
+              إرسال عبر واتساب
+            </ThemedText>
+            <ThemedText style={[styles.pdfPreviewSubtitle, { fontFamily: "Cairo_400Regular" }]}>
+              مشاركة التقرير عبر واتساب
+            </ThemedText>
+          </View>
+          <Feather name="chevron-left" size={18} color="rgba(255,255,255,0.8)" />
+        </Pressable>
 
         {downloadError != null ? (
           <Animated.View
