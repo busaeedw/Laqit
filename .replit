@@ -89,8 +89,8 @@ timeoutMs = 120000
 [userenv]
 
 [userenv.shared]
-EMAIL_HOST = "smtp.gmail.com"
+EMAIL_HOST = "smtp-mail.outlook.com"
 EMAIL_PORT = "587"
-EMAIL_USER = "wahclaw@gmail.com"
-EMAIL_FROM = "wahclaw@gmail.com"
+EMAIL_USER = "wahclaw@hotmail.com"
+EMAIL_FROM = "wahclaw@hotmail.com"
 ANALYSIS_EMAIL_TO = "wahclaw@hotmail.com"
