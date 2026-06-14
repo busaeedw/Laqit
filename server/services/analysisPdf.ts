@@ -462,9 +462,9 @@ export async function generateAnalysisPdf(
 
       const drawEnHeaders = () => {
         doc.font("Helvetica-Bold").fontSize(tableHeaderStyle.fontSizeEn).fillColor(tableHeaderStyle.fillColor)
-          .text(L.colNameEn, cName, rowTop, { width: nameW })
-          .text(L.colConfidence, cConf, rowTop, { width: confW })
-          .text(L.colPrice, cPrice, rowTop, { width: priceW });
+          .text(L.colNameEn, cName, rowTop, { width: nameW, align: "left" })
+          .text(L.colConfidence, cConf, rowTop, { width: confW, align: "center" })
+          .text(L.colPrice, cPrice, rowTop, { width: priceW, align: "left" });
         rowTop += 18;
         doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
           .strokeColor(rowDividerStyle.strokeColor).lineWidth(rowDividerStyle.lineWidthHeader).stroke();
@@ -481,12 +481,13 @@ export async function generateAnalysisPdf(
         }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
-        doc.font("Arabic").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
-          .text(reverseArabicWords(part.name), cName, rowTop + tableRowStyle.paddingTop, { width: nameW, align: "right" });
+        // Part names are Arabic in DB; render with Arabic font and right-align
+        doc.font("Arabic").fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
+          .text(reverseArabicWords(part.nameAr), cName, rowTop + tableRowStyle.paddingTop, { width: nameW, align: "right" });
         doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
-          .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW });
+          .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW, align: "center" });
         doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
-          .text(`${part.price.toLocaleString()} SAR`, cPrice, rowTop + tableRowStyle.paddingTop, { width: priceW });
+          .text(`${part.price.toLocaleString()} SAR`, cPrice, rowTop + tableRowStyle.paddingTop, { width: priceW, align: "left" });
 
         rowTop += tableRowStyle.height;
         doc.moveTo(50, rowTop).lineTo(50 + pageWidth, rowTop)
