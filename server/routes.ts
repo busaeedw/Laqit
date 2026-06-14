@@ -446,7 +446,6 @@ Rules:
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
       const safeLocale = ["ar", "en"].includes(locale) ? locale : "ar";
-      console.log(`[analysisPdf] POST locale=${locale}, safeLocale=${safeLocale}, parts=${parts.length}`);
       const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
 
@@ -1117,7 +1116,6 @@ Rules:
       const rawLocale = req.query.locale;
       const safeLocale: PdfLocale =
         rawLocale === "en" ? rawLocale : "ar";
-      console.log(`[PDF] locale=${rawLocale}, safeLocale=${safeLocale}, parts=${partEntries.length}`);
       const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
