@@ -22,8 +22,6 @@ import { CartProvider } from "@/context/CartContext";
 import { UserProvider } from "@/context/UserContext";
 import { CustomSplash } from "@/components/CustomSplash";
 
-SplashScreen.preventAutoHideAsync();
-
 I18nManager.allowRTL(true);
 I18nManager.forceRTL(true);
 
@@ -35,18 +33,29 @@ export default function App() {
     Cairo_700Bold,
   });
 
+  console.log("App render", { fontsLoaded, fontError: !!fontError, showSplash });
+
   useEffect(() => {
+    console.log("App effect", { fontsLoaded, fontError: !!fontError });
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-      setTimeout(() => {
+      console.log("Firing timer");
+      SplashScreen.hideAsync().catch(() => {});
+      const timer = setTimeout(() => {
+        console.log("Timer fired, hiding splash");
         setShowSplash(false);
       }, 1500);
+      return () => clearTimeout(timer);
     }
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) {
-    return null;
+    console.log("Fonts not loaded yet, showing splash");
+    return (
+      <CustomSplash visible={true} />
+    );
   }
+
+  console.log("Fonts loaded, rendering app", { showSplash });
 
   return (
     <ErrorBoundary>
@@ -59,7 +68,7 @@ export default function App() {
                   <NavigationContainer>
                     <RootStackNavigator />
                   </NavigationContainer>
-                  <CustomSplash visible={showSplash} />
+                  {showSplash && <CustomSplash visible={showSplash} />}
                   <StatusBar style="auto" />
                 </KeyboardProvider>
               </GestureHandlerRootView>

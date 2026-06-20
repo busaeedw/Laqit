@@ -1,6 +1,5 @@
 import React from "react";
 import { View, Image, StyleSheet } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing } from "@/constants/theme";
@@ -11,14 +10,16 @@ interface CustomSplashProps {
 }
 
 export function CustomSplash({ visible }: CustomSplashProps) {
+  console.log("CustomSplash render visible=", visible);
   const { theme, isDark } = useTheme();
 
-  if (!visible) return null;
+  if (!visible) {
+    console.log("CustomSplash: not visible, returning null");
+    return null;
+  }
 
   return (
-    <Animated.View
-      entering={FadeIn.duration(300)}
-      exiting={FadeOut.duration(500)}
+    <View
       style={[
         styles.container,
         { backgroundColor: isDark ? "#1B1B1E" : "#F5F7FA" },
@@ -35,16 +36,20 @@ export function CustomSplash({ visible }: CustomSplashProps) {
           لاقط قطع السيارات
         </ThemedText>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 1000,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 1000,
   },
   content: {
     alignItems: "center",
