@@ -483,9 +483,18 @@ export async function generateAnalysisPdf(
         }
         if (i % 2 === 0) doc.rect(50, rowTop, pageWidth, tableRowStyle.height).fill(tableRowStyle.altBg);
 
-        // Part names are Arabic in DB; render with Arabic font and right-align
-        doc.font("Arabic").fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
-          .text(reverseArabicWords(part.nameAr), cName, rowTop + tableRowStyle.paddingTop, { width: nameW, align: "right" });
+        // Use English name (from AI) if available, fall back to Arabic
+        const displayName = part.name && part.name.trim() && part.name !== part.nameAr
+          ? part.name
+          : part.nameAr;
+        const useArabicFont = displayName === part.nameAr;
+        doc.font(useArabicFont ? "ArabicBold" : "Helvetica-Bold")
+          .fontSize(tableRowStyle.fontSizeArName).fillColor(tableRowStyle.fillColor)
+          .text(
+            useArabicFont ? reverseArabicWords(displayName) : displayName,
+            cName, rowTop + tableRowStyle.paddingTop,
+            { width: nameW, align: useArabicFont ? "right" : "left" }
+          );
         doc.font("Helvetica-Bold").fontSize(tableRowStyle.fontSize).fillColor(confColor(part.confidence))
           .text(`${part.confidence}%`, cConf, rowTop + tableRowStyle.paddingTop, { width: confW, align: "center" });
         doc.font("Helvetica").fontSize(tableRowStyle.fontSize).fillColor(tableRowStyle.fillColor)
