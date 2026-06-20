@@ -17,6 +17,7 @@ const QuotesListScreen = lazy(() => import("@/screens/QuotesListScreen"));
 const CarBrandsScreen = lazy(() => import("@/screens/CarBrandsScreen"));
 const CarBrandDetailScreen = lazy(() => import("@/screens/CarBrandDetailScreen"));
 const CarAgentsScreen = lazy(() => import("@/screens/CarAgentsScreen"));
+const WelcomeScreen = lazy(() => import("@/screens/WelcomeScreen"));
 
 function ScreenFallback() {
   return (
@@ -55,6 +56,10 @@ export type DetectedPart = {
   price: number;
   confidence: number;
   boundingBox: { x: number; y: number; width: number; height: number };
+  category?: "external" | "internal";
+  inferred?: boolean;
+  condition?: string;
+  conditionAr?: string;
 };
 
 export type AgentInfo = {
@@ -73,6 +78,7 @@ export type CarMakeParam = {
 };
 
 export type RootStackParamList = {
+  Welcome: undefined;
   Main: undefined;
   Camera: {
     carInfo?: CarInfo;
@@ -100,6 +106,11 @@ export default function RootStackNavigator() {
 
   return (
     <Stack.Navigator screenOptions={screenOptions}>
+      <Stack.Screen
+        name="Welcome"
+        component={withSuspense(WelcomeScreen)}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen
         name="Main"
         component={MainTabNavigator}

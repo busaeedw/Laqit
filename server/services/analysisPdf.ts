@@ -42,6 +42,8 @@ export interface PartEntry {
   nameAr: string;
   confidence: number;
   price: number;
+  category?: "external" | "internal";
+  inferred?: boolean;
 }
 
 // ── SSRF guard ────────────────────────────────────────────────────────────────

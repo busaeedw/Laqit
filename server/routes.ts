@@ -195,7 +195,7 @@ STEP 1 - Identify the car:
 - Study the body shape, taillights, and distinctive features
 - Estimate the year based on the generation/design
 
-STEP 2 - Systematically inspect for damage (scan EVERY zone):
+STEP 2 - Systematically inspect for VISIBLE EXTERNAL damage (scan EVERY zone):
 This is a damage inspection tool; missing real damage is the worst possible outcome. Work zone by zone and report EVERY visible defect as its own separate part entry:
 - FRONT: bumper, grille, headlights, fog lights, hood, emblem, license plate area
 - REAR: bumper, tail lights, trunk/tailgate, exhaust tip, emblem
@@ -205,7 +205,27 @@ This is a damage inspection tool; missing real damage is the worst possible outc
 - LIGHTS: any cracked, broken, fogged, hazed, or missing lamp/lens
 - PAINT & BODY: scratches, scuffs, dents, dings, rust, faded/peeling/chipped paint, paint transfer, misaligned panels or uneven gaps
 
-For EACH defect, create a SEPARATE entry. Report damage even when minor (small scratches, light scuffs, paint chips, curb rash). Describe the condition precisely: "missing", "damaged", "cracked", "broken", "dented", "scratched", "worn", "faded", etc. Provide a realistic replacement/repair price in Saudi Riyals (SAR) for each.
+For EACH defect, create a SEPARATE entry. Report damage even when minor. Each external part entry must include:
+- "category": "external"
+- "inferred": false
+
+STEP 3 - Infer LIKELY INTERNAL damage:
+Based on the visible external damage you found, infer what INTERNAL components are likely also affected. For example:
+- Front bumper impact → likely radiator, condenser, fan, or headlight mounts damage
+- Door dent / side impact → likely inner door panel, window regulator, or side airbag damage
+- Hood damage → likely hood latch, hinges, or insulation damage
+- Rear bumper damage → likely parking sensors, wiring harness, or trunk latch damage
+- Major front-end damage → likely frame, engine mounts, or wiring harness damage
+
+For EACH likely internal part, create a separate entry with:
+- "category": "internal"
+- "inferred": true
+- "confidence": 40-70 (lower than direct observations because they are inferred)
+- "price": realistic replacement/repair estimate in SAR
+- "name": "Internal: Component Name - Inferred Damage"
+- "nameAr": "داخلي: اسم القطعة - ضرر متوقع"
+- "description": Explain WHY this internal part is likely damaged based on the visible external damage
+- "descriptionAr": Arabic explanation
 
 You MUST return this exact JSON structure (no exceptions):
 {
@@ -229,7 +249,25 @@ You MUST return this exact JSON structure (no exceptions):
       "primaryUseAr": "حماية مقدمة السيارة في التصادمات منخفضة السرعة",
       "price": 1200,
       "confidence": 85,
-      "boundingBox": { "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.2 }
+      "boundingBox": { "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.2 },
+      "category": "external",
+      "inferred": false
+    },
+    {
+      "id": "2",
+      "name": "Internal: Radiator - Inferred Damage",
+      "nameAr": "داخلي: المبرد - ضرر متوقع",
+      "description": "Front bumper impact likely damaged the radiator behind it",
+      "descriptionAr": "تصادم الصدام الأمامي قد أثر على المبرد خلفه",
+      "condition": "likely damaged",
+      "conditionAr": "من المحتمل تالف",
+      "primaryUse": "Cools the engine coolant",
+      "primaryUseAr": "تبريد سائل المحرك",
+      "price": 800,
+      "confidence": 55,
+      "boundingBox": { "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.2 },
+      "category": "internal",
+      "inferred": true
     }
   ]
 }

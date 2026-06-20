@@ -988,6 +988,26 @@ export default function ResultsScreen() {
     </View>
   );
 
+  const renderCategoryHeader = (category: "external" | "internal", count: number, index: number) => {
+    const isExternal = category === "external";
+    return (
+      <Animated.View entering={FadeInDown.duration(400).delay(300 + index * 100)}>
+        <View style={[styles.categoryHeader, {
+          backgroundColor: isExternal ? theme.success + "12" : theme.warning + "12",
+          borderColor: isExternal ? theme.success + "30" : theme.warning + "30",
+        }]}>
+          <Feather name={isExternal ? "eye" : "cpu"} size={18} color={isExternal ? theme.success : theme.warning} />
+          <ThemedText style={[styles.categoryTitle, { color: isExternal ? theme.success : theme.warning, fontFamily: "Cairo_700Bold" }]}>
+            {isExternal ? "القطع الظاهرية" : "القطع الداخلية المتوقعة"}
+          </ThemedText>
+          <ThemedText style={[styles.categoryCount, { color: isExternal ? theme.success : theme.warning, fontFamily: "Cairo_600SemiBold" }]}>
+            ({count})
+          </ThemedText>
+        </View>
+      </Animated.View>
+    );
+  };
+
   const renderPartItem = ({ item, index }: { item: DetectedPart; index: number }) => (
     <Animated.View entering={FadeInDown.duration(400).delay(300 + index * 100)}>
       <Pressable
@@ -999,15 +1019,17 @@ export default function ResultsScreen() {
             styles.partCard,
             {
               backgroundColor: theme.backgroundDefault,
-              borderColor: selectedPart === item.id ? theme.primary : "transparent",
-              borderWidth: selectedPart === item.id ? 2 : 0,
+              borderColor: selectedPart === item.id ? theme.primary : item.category === "internal" ? theme.warning + "40" : "transparent",
+              borderWidth: selectedPart === item.id ? 2 : item.category === "internal" ? 1 : 0,
             },
           ]}
         >
           <View style={styles.partCardHeader}>
             <View style={styles.partCardContent}>
-              <View style={[styles.partIcon, { backgroundColor: theme.primary + "15" }]}>
-                <Feather name="box" size={24} color={theme.primary} />
+              <View style={[styles.partIcon, {
+                backgroundColor: item.category === "internal" ? theme.warning + "15" : theme.primary + "15",
+              }]}>
+                <Feather name={item.category === "internal" ? "cpu" : "box"} size={24} color={item.category === "internal" ? theme.warning : theme.primary} />
               </View>
               <View style={styles.partInfo}>
                 <ThemedText style={[styles.partName, { fontFamily: "Cairo_700Bold" }]}>
@@ -1046,11 +1068,11 @@ export default function ResultsScreen() {
 
           <View style={styles.partFooter}>
             <View style={styles.partPriceRow}>
-              <ThemedText style={[styles.partPrice, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+              <ThemedText style={[styles.partPrice, { color: item.category === "internal" ? theme.warning : theme.primary, fontFamily: "Cairo_700Bold" }]}>
                 {item.price} ريال
               </ThemedText>
               <ThemedText style={[styles.partPriceLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                السعر التقديري
+                {item.category === "internal" ? "سعر تقديري (متوقع)" : "السعر التقديري"}
               </ThemedText>
             </View>
             <View style={styles.partActions}>
@@ -1071,7 +1093,7 @@ export default function ResultsScreen() {
                 style={({ pressed }) => [
                   styles.addButton,
                   {
-                    backgroundColor: theme.primary,
+                    backgroundColor: item.category === "internal" ? theme.warning : theme.primary,
                     transform: [{ scale: pressed ? 0.95 : 1 }],
                   },
                 ]}
@@ -1120,7 +1142,15 @@ export default function ResultsScreen() {
       <FlatList
         data={parts}
         keyExtractor={(item) => item.id}
-        renderItem={renderPartItem}
+        renderItem={({ item, index }) => {
+          const isFirstOfCategory = index === 0 || parts[index - 1].category !== item.category;
+          return (
+            <>
+              {isFirstOfCategory ? renderCategoryHeader(item.category ?? "external", parts.filter(p => p.category === item.category).length, index) : null}
+              {renderPartItem({ item, index })}
+            </>
+          );
+        }}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
@@ -1389,6 +1419,26 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     gap: Spacing.xs,
+  },
+  categoryHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.xs,
+  },
+  categoryTitle: {
+    fontSize: 15,
+  },
+  categoryCount: {
+    fontSize: 14,
+  },
+  inferredBadge: {
+    fontSize: 12,
   },
   sectionTitle: {
     fontSize: 18,
