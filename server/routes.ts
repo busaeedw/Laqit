@@ -515,7 +515,7 @@ Rules:
       const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
       const pdfBuffer = await generateAnalysisPdf(carInfo, parts, safeImageUri, safeLocale);
       const filename = `laqit-analysis-${Date.now()}.pdf`;
-      const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
+      const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename, safeLocale);
 
       if (!result.success) {
         return res.status(500).json({ error: "فشل في إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
@@ -1210,7 +1210,7 @@ Rules:
         return res.status(built.status).json({ error: built.error });
       }
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
-      const result = await sendAnalysisPdfEmail(email, built.pdfBuffer, filename);
+      const result = await sendAnalysisPdfEmail(email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar");
       if (!result.success) {
         return res.status(500).json({ error: "فشل في إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
       }
