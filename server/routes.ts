@@ -1161,67 +1161,15 @@ Rules:
         return res.status(403).json({ error: "غير مسموح" });
       }
 
-      const parts = await db
-        .select()
-        .from(inspectionParts)
-        .where(eq(inspectionParts.inspectionId, req.params.id));
-
-      if (parts.length === 0) {
-        return res.status(400).json({ error: "لا توجد قطع مرتبطة بهذا الفحص" });
+      const built = await buildInspectionPdfBuffer(inspection, req.query.locale);
+      if (!built.ok) {
+        return res.status(built.status).json({ error: built.error });
       }
-
-      const [carModel] = await db
-        .select()
-        .from(carModels)
-        .where(eq(carModels.carModelId, inspection.carModelId))
-        .limit(1);
-
-      const makeName = carModel
-        ? await db
-            .select({ makeName: carMakes.makeName, nameAr: carMakes.nameAr })
-            .from(carMakes)
-            .where(eq(carMakes.makeId, carModel.makeId))
-            .limit(1)
-            .then((rows) => rows[0] ?? null)
-        : null;
-
-      const mediaRows = await db
-        .select()
-        .from(inspectionMedia)
-        .where(eq(inspectionMedia.inspectionId, req.params.id));
-      const damagePhoto = mediaRows.find((m) => m.mediaType === "damage_photo") ?? mediaRows[0] ?? null;
-      const safeImageUri =
-        damagePhoto?.fileUrl &&
-        typeof damagePhoto.fileUrl === "string" &&
-        damagePhoto.fileUrl.startsWith("https://")
-          ? damagePhoto.fileUrl
-          : undefined;
-
-      const carInfo = {
-        make: makeName?.makeName ?? "",
-        makeAr: makeName?.nameAr ?? makeName?.makeName ?? "",
-        model: carModel?.modelName ?? "",
-        modelAr: carModel?.modelName ?? "",
-        year: inspection.carYear ? String(inspection.carYear) : "",
-      };
-
-      const partEntries = parts.map((p) => ({
-        id: p.inspectionPartId,
-        name: p.partName,
-        nameAr: p.partName,
-        confidence: 1,
-        price: 0,
-      }));
-
-      const rawLocale = req.query.locale;
-      const safeLocale: PdfLocale =
-        rawLocale === "en" ? rawLocale : "ar";
-      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Length", pdfBuffer.length);
-      res.send(pdfBuffer);
+      res.setHeader("Content-Length", built.pdfBuffer.length);
+      res.send(built.pdfBuffer);
     } catch (err: any) {
       console.error("GET inspection pdf error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء إنشاء التقرير" });
@@ -1257,64 +1205,12 @@ Rules:
         return res.status(403).json({ error: "غير مسموح" });
       }
 
-      const parts = await db
-        .select()
-        .from(inspectionParts)
-        .where(eq(inspectionParts.inspectionId, req.params.id));
-
-      if (parts.length === 0) {
-        return res.status(400).json({ error: "لا توجد قطع مرتبطة بهذا الفحص" });
+      const built = await buildInspectionPdfBuffer(inspection, locale);
+      if (!built.ok) {
+        return res.status(built.status).json({ error: built.error });
       }
-
-      const [carModel] = await db
-        .select()
-        .from(carModels)
-        .where(eq(carModels.carModelId, inspection.carModelId))
-        .limit(1);
-
-      const makeName = carModel
-        ? await db
-            .select({ makeName: carMakes.makeName, nameAr: carMakes.nameAr })
-            .from(carMakes)
-            .where(eq(carMakes.makeId, carModel.makeId))
-            .limit(1)
-            .then((rows) => rows[0] ?? null)
-        : null;
-
-      const mediaRows = await db
-        .select()
-        .from(inspectionMedia)
-        .where(eq(inspectionMedia.inspectionId, req.params.id));
-      const damagePhoto = mediaRows.find((m) => m.mediaType === "damage_photo") ?? mediaRows[0] ?? null;
-      const safeImageUri =
-        damagePhoto?.fileUrl &&
-        typeof damagePhoto.fileUrl === "string" &&
-        damagePhoto.fileUrl.startsWith("https://")
-          ? damagePhoto.fileUrl
-          : undefined;
-
-      const carInfo = {
-        make: makeName?.makeName ?? "",
-        makeAr: makeName?.nameAr ?? makeName?.makeName ?? "",
-        model: carModel?.modelName ?? "",
-        modelAr: carModel?.modelName ?? "",
-        year: inspection.carYear ? String(inspection.carYear) : "",
-      };
-
-      const partEntries = parts.map((p) => ({
-        id: p.inspectionPartId,
-        name: p.partName,
-        nameAr: p.partName,
-        confidence: 1,
-        price: 0,
-      }));
-
-      const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
-      const safeLocale: PdfLocale = VALID_LOCALES.includes(locale) ? (locale as PdfLocale) : "ar";
-
-      const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
-      const result = await sendAnalysisPdfEmail(email, pdfBuffer, filename);
+      const result = await sendAnalysisPdfEmail(email, built.pdfBuffer, filename);
       if (!result.success) {
         return res.status(500).json({ error: "فشل في إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
       }
