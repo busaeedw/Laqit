@@ -33,6 +33,7 @@ import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
 import { createPaymentIntent } from "./services/payment";
 import { generateAnalysisPdf, PdfLocale, CarInfo, PartEntry } from "./services/analysisPdf";
+import { translatePartNames } from "./services/translate";
 import { sendAnalysisPdfEmail } from "./services/email";
 
 const openai = new OpenAI({
@@ -108,16 +109,25 @@ async function buildInspectionPdfBuffer(
     year: inspection.carYear ? String(inspection.carYear) : "",
   };
 
-  const partEntries = parts.map((p) => ({
+  const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
+  const safeLocale: PdfLocale = VALID_LOCALES.includes(locale as PdfLocale) ? (locale as PdfLocale) : "ar";
+
+  // Inspection parts are stored in Arabic only. For an English report, translate
+  // the Arabic labels into English so the PDF doesn't show Arabic text under
+  // English headers. Falls back to the Arabic name if translation fails.
+  const englishNames =
+    safeLocale === "en"
+      ? await translatePartNames(parts.map((p) => p.partName))
+      : parts.map((p) => p.partName);
+
+  const partEntries = parts.map((p, i) => ({
     id: p.inspectionPartId,
-    name: p.partName,
+    name: englishNames[i] ?? p.partName,
     nameAr: p.partName,
     confidence: 1,
     price: 0,
   }));
 
-  const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
-  const safeLocale: PdfLocale = VALID_LOCALES.includes(locale as PdfLocale) ? (locale as PdfLocale) : "ar";
   const pdfBuffer = await generateAnalysisPdf(carInfo, partEntries, safeImageUri, safeLocale);
   return { ok: true, pdfBuffer };
 }
