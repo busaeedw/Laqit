@@ -10,13 +10,9 @@ interface CustomSplashProps {
 }
 
 export function CustomSplash({ visible }: CustomSplashProps) {
-  console.log("CustomSplash render visible=", visible);
   const { theme, isDark } = useTheme();
 
-  if (!visible) {
-    console.log("CustomSplash: not visible, returning null");
-    return null;
-  }
+  if (!visible) return null;
 
   return (
     <View
@@ -42,14 +38,10 @@ export function CustomSplash({ visible }: CustomSplashProps) {
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    zIndex: 1000,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 1000,
   },
   content: {
     alignItems: "center",
