@@ -182,7 +182,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { imageUri, carInfo } = req.body;
-      
+
+      if (!imageUri || typeof imageUri !== "string") {
+        return res.status(400).json({
+          error: true,
+          message: "الصورة مطلوبة لتحليل الأضرار",
+          carInfo: {
+            make: "Unknown",
+            makeAr: "غير معروف",
+            model: "Unknown",
+            modelAr: "غير معروف",
+            year: "---",
+          },
+          parts: [],
+        });
+      }
+
       console.log("Received analyze request");
 
       const systemPrompt = `You are an expert automotive damage and missing parts detection system. You MUST analyze the image and identify the car, then detect any missing, damaged, broken, or worn parts.
@@ -314,22 +329,22 @@ RULES:
           },
         ],
         response_format: { type: "json_object" },
-        reasoning_effort: "medium",
-        max_completion_tokens: 8192,
+        reasoning_effort: "low",
+        max_completion_tokens: 16384,
       });
 
       const finishReason = response.choices[0]?.finish_reason;
       console.log(`OpenAI API response received (finish_reason=${finishReason})`);
-      if (finishReason === "length") {
-        console.warn("Analyze response was truncated (hit max_completion_tokens)");
-      }
-      const content = response.choices[0]?.message?.content || "{}";
-      const result = JSON.parse(content);
 
-      // Validate the response has the expected structure
-      if (!result.carInfo || !Array.isArray(result.parts)) {
-        console.log("Invalid response structure, returning default");
-        return res.json({
+      const content = response.choices[0]?.message?.content?.trim() || "";
+
+      if (finishReason === "length" || !content) {
+        console.warn(
+          `Analyze response unusable (finish_reason=${finishReason}, contentLength=${content.length})`
+        );
+        return res.status(502).json({
+          error: true,
+          message: "تعذر إكمال تحليل الصورة، يرجى المحاولة مرة أخرى",
           carInfo: {
             make: "Unknown",
             makeAr: "غير معروف",
@@ -341,6 +356,43 @@ RULES:
         });
       }
 
+      let result: any;
+      try {
+        result = JSON.parse(content);
+      } catch (parseErr) {
+        console.warn("Analyze response was not valid JSON");
+        return res.status(502).json({
+          error: true,
+          message: "تعذر قراءة نتيجة التحليل، يرجى المحاولة مرة أخرى",
+          carInfo: {
+            make: "Unknown",
+            makeAr: "غير معروف",
+            model: "Unknown",
+            modelAr: "غير معروف",
+            year: "---",
+          },
+          parts: [],
+        });
+      }
+
+      // Validate the response has the expected structure
+      if (!result.carInfo || !Array.isArray(result.parts)) {
+        console.warn("Analyze response had invalid structure");
+        return res.status(502).json({
+          error: true,
+          message: "تعذر تحليل الصورة بشكل صحيح، يرجى المحاولة مرة أخرى",
+          carInfo: {
+            make: "Unknown",
+            makeAr: "غير معروف",
+            model: "Unknown",
+            modelAr: "غير معروف",
+            year: "---",
+          },
+          parts: [],
+        });
+      }
+
+      console.log(`Analyze success: ${result.parts.length} part(s) detected`);
       res.json(result);
     } catch (error: any) {
       console.error("Analysis error details:", {
