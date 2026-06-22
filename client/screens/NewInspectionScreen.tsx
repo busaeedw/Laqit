@@ -853,32 +853,6 @@ export default function NewInspectionScreen() {
           </Pressable>
         )}
 
-        {!submitted && (
-          <Pressable
-            onPress={() => {
-              Alert.alert(
-                "\u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u0637\u0644\u0628",
-                "\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f \u0645\u0646 \u0625\u0644\u063a\u0627\u0621 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628\u061f \u0644\u0646 \u064a\u062a\u0645 \u062d\u0641\u0638\u0647.",
-                [
-                  { text: "\u0645\u062a\u0627\u0628\u0639\u0629", style: "cancel" },
-                  {
-                    text: "\u0625\u0644\u063a\u0627\u0621",
-                    style: "destructive",
-                    onPress: () => {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      navigation.navigate("Main");
-                    },
-                  },
-                ]
-              );
-            }}
-            style={[styles.cancelBtn, { backgroundColor: "#EF4444" }]}
-          >
-            <ThemedText style={[styles.cancelBtnText, { fontFamily: "Cairo_600SemiBold" }]}>
-              إلغاء
-            </ThemedText>
-          </Pressable>
-        )}
 
         {step < 4 ? (
           <Pressable
@@ -1087,13 +1061,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   backBtnText: { fontSize: 15 },
-  cancelBtn: {
-    flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-  },
-  cancelBtnText: { color: "#fff", fontSize: 15 },
+  /* cancel button removed per request */
+
   nextBtn: {
     flex: 2,
     flexDirection: "row-reverse",
