@@ -433,7 +433,7 @@ export default function NewInspectionScreen() {
             <Feather name="check-circle" size={56} color={theme.success} />
           </View>
           <ThemedText style={[styles.successTitle, { fontFamily: "Cairo_700Bold" }]}>
-            تم إرسال الطلب بنجاح
+            تم حفظ الطلب في السجل
           </ThemedText>
           <ThemedText style={[styles.successInspNo, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
             {inspectionNo}
