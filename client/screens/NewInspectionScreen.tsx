@@ -826,7 +826,7 @@ export default function NewInspectionScreen() {
             )}
 
             <ThemedText style={[styles.reviewHint, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              بالضغط على إرسال، سيُولَّد رقم فحص فريد ويُرسَل طلب عرض السعر للموردين المناسبين في مدينتك.
+              اضغط على حفظ الطلب و راجع الطلب في قائمة الطلبات و ارسله للموردين
             </ThemedText>
           </Animated.View>
         )}
