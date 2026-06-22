@@ -27,7 +27,7 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: keyof typeof Feather.glyphMap }> = {
   draft: { label: "مسودة", color: "#6B7280", icon: "edit-2" },
-  rfq_sent: { label: "أُرسل للموردين", color: "#1E74F2", icon: "send" },
+  rfq_sent: { label: "إنشاء الطلب", color: "#1E74F2", icon: "send" },
   waiting_quotes: { label: "بانتظار العروض", color: "#F59E0B", icon: "clock" },
   quotes_received: { label: "وصلت عروض", color: "#10B981", icon: "inbox" },
   quote_accepted: { label: "تم قبول عرض", color: "#10B981", icon: "check-circle" },
