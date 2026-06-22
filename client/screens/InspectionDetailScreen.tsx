@@ -840,9 +840,9 @@ export default function InspectionDetailScreen() {
           </Pressable>
         ) : (
           <View style={[styles.waitCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <Feather name="clock" size={24} color={theme.textSecondary} />
+            <Feather name={inspection.status === "draft" ? "edit-3" : "clock"} size={24} color={theme.textSecondary} />
             <ThemedText style={[styles.waitText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              بانتظار ردود الموردين...
+              {inspection.status === "draft" ? "جهز الطلب للارسال للموردين" : "بانتظار ردود الموردين..."}
             </ThemedText>
           </View>
         )}
