@@ -402,11 +402,6 @@ export default function NewInspectionScreen() {
       if (damagePhotoUri) await uploadPhoto(inspId, damagePhotoUri, "damage_photo");
       await saveParts(inspId);
 
-      await fetch(
-        new URL(`/api/laqit-inspections/${inspId}/submit`, apiUrl).toString(),
-        { method: "POST", headers: authHeaders() }
-      );
-
       setInspectionId(inspId);
       setInspectionNo(inspNo);
       setSubmitted(true);
@@ -439,7 +434,7 @@ export default function NewInspectionScreen() {
             {inspectionNo}
           </ThemedText>
           <ThemedText style={[styles.successHint, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-            سيتواصل معك الموردون عبر الواتساب بعروض الأسعار. ستصلك إشعارات SMS عند وصول العروض.
+            تم حفظ الطلب كمسودة. راجع الطلب في قائمة الطلبات ثم أرسله للموردين للحصول على عروض الأسعار.
           </ThemedText>
           <Pressable
             onPress={() => navigation.navigate("Main")}
