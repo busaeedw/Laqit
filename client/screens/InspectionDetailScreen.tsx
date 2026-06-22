@@ -10,6 +10,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -516,6 +517,40 @@ export default function InspectionDetailScreen() {
     setEmailModalVisible(true);
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      "\u062d\u0630\u0641 \u0627\u0644\u0637\u0644\u0628",
+      "\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f \u0645\u0646 \u0623\u0646\u0643 \u062a\u0631\u064a\u062f \u062d\u0630\u0641 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628\u061f \u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646\u0647.",
+      [
+        { text: "\u0625\u0644\u063a\u0627\u0621", style: "cancel" },
+        {
+          text: "\u062d\u0630\u0641",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const url = new URL(`/api/laqit-inspections/${inspectionId}`, getApiUrl());
+              const resp = await fetch(url.toString(), {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+              });
+              if (!resp.ok) {
+                const json = await resp.json().catch(() => ({} as any));
+                Alert.alert("\u062e\u0637\u0623", json.error ?? "\u062a\u0639\u0630\u0631 \u062d\u0630\u0641 \u0627\u0644\u0637\u0644\u0628");
+                return;
+              }
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("\u062a\u0645 \u0627\u0644\u062d\u0630\u0641", "\u062a\u0645 \u062d\u0630\u0641 \u0627\u0644\u0637\u0644\u0628 \u0628\u0646\u062c\u0627\u062d", [
+                { text: "\u062d\u0633\u0646\u0627", onPress: () => navigation.goBack() },
+              ]);
+            } catch {
+              Alert.alert("\u062e\u0637\u0623", "\u062a\u0639\u0630\u0631 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0627\u0644\u062e\u0627\u062f\u0645");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSendEmail = async () => {
     const trimmed = emailAddress.trim();
     if (!trimmed) {
@@ -787,6 +822,23 @@ export default function InspectionDetailScreen() {
             </ThemedText>
           </View>
         )}
+
+        {/* Delete button */}
+        <Pressable
+          testID="button-delete-order"
+          onPress={handleDelete}
+          style={({ pressed }) => [
+            styles.deleteBtn,
+            {
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Feather name="trash-2" size={18} color="#fff" />
+          <ThemedText style={[styles.deleteBtnText, { fontFamily: "Cairo_700Bold" }]}>
+            حذف الطلب
+          </ThemedText>
+        </Pressable>
       </ScrollView>
 
       {/* PDF Preview modal */}
@@ -1082,6 +1134,17 @@ const styles = StyleSheet.create({
   },
   pdfBtnText: { fontSize: 14 },
   errorText: { fontSize: 13, textAlign: "center" },
+  deleteBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "#EF4444",
+    marginBottom: Spacing.lg,
+  },
+  deleteBtnText: { color: "#fff", fontSize: 15 },
   quotesBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",

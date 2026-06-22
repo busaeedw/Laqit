@@ -1371,6 +1371,37 @@ Rules:
     }
   });
 
+  // Delete an inspection (and its related records) owned by the customer.
+  app.delete("/api/laqit-inspections/:id", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      const inspectionId = req.params.id;
+
+      const [inspection] = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, inspectionId))
+        .limit(1);
+      if (!inspection) return res.status(404).json({ error: "\u0627\u0644\u0637\u0644\u0628 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063a\u064a\u0631 \u0645\u0633\u0645\u0648\u062d" });
+
+      // Child tables first (no FK cascades configured).
+      await db.delete(whatsappMessages).where(eq(whatsappMessages.inspectionId, inspectionId));
+      await db.delete(quotes).where(eq(quotes.inspectionId, inspectionId));
+      await db.delete(payments).where(eq(payments.inspectionId, inspectionId));
+      await db.delete(inspectionParts).where(eq(inspectionParts.inspectionId, inspectionId));
+      await db.delete(inspectionMedia).where(eq(inspectionMedia.inspectionId, inspectionId));
+      await db.delete(rfqRecipients).where(eq(rfqRecipients.inspectionId, inspectionId));
+      await db.delete(rfqDocuments).where(eq(rfqDocuments.inspectionId, inspectionId));
+      await db.delete(notifications).where(eq(notifications.inspectionId, inspectionId));
+      await db.delete(laqitInspections).where(eq(laqitInspections.inspectionId, inspectionId));
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // ─── RFQ Submit: targets eligible vendors and sends WhatsApp ─────────────
 
   app.post("/api/laqit-inspections/:id/submit", requireCustomer, async (req: Request, res: Response) => {
