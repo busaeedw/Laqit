@@ -1,6 +1,8 @@
 import React, { lazy, Suspense } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { HeaderButton } from "@react-navigation/elements";
+import { Feather } from "@expo/vector-icons";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
 
@@ -174,9 +176,14 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="NewInspection"
         component={withSuspense(NewInspectionScreen)}
-        options={{
+        options={({ navigation }) => ({
           headerTitle: "طلب عرض سعر جديد",
-        }}
+          headerLeft: () => (
+            <HeaderButton onPress={() => navigation.navigate("Main")}>
+              <Feather name="x" size={22} color="#1E74F2" />
+            </HeaderButton>
+          ),
+        })}
       />
       <Stack.Screen
         name="InspectionDetail"
