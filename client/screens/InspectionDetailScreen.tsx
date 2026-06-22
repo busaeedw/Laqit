@@ -688,27 +688,6 @@ export default function InspectionDetailScreen() {
           </View>
         ) : null}
 
-        {/* Quotes CTA / order status */}
-        {quotes.length > 0 ? (
-          <Pressable
-            testID="button-view-quotes"
-            onPress={() => navigation.navigate("QuotesList", { inspectionId })}
-            style={[styles.quotesBtn, { backgroundColor: theme.primary }]}
-          >
-            <ThemedText style={[styles.quotesBtnText, { fontFamily: "Cairo_700Bold" }]}>
-              \u0639\u0631\u0636 {quotes.length} {quotes.length === 1 ? "\u0639\u0631\u0636 \u0633\u0639\u0631" : "\u0639\u0631\u0648\u0636 \u0623\u0633\u0639\u0627\u0631"}
-            </ThemedText>
-            <Feather name="arrow-left" size={18} color="#fff" />
-          </Pressable>
-        ) : (
-          <View style={[styles.waitCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <Feather name="clock" size={24} color={theme.textSecondary} />
-            <ThemedText style={[styles.waitText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              \u0628\u0627\u0646\u062a\u0638\u0627\u0631 \u0631\u062f\u0648\u062f \u0627\u0644\u0645\u0648\u0631\u062f\u064a\u0646...
-            </ThemedText>
-          </View>
-        )}
-
         {/* PDF actions — only when parts exist */}
         {parts.length > 0 ? (
           <View style={styles.pdfSection}>
@@ -822,6 +801,27 @@ export default function InspectionDetailScreen() {
             ) : null}
           </View>
         ) : null}
+
+        {/* Quotes CTA */}
+        {quotes.length > 0 ? (
+          <Pressable
+            testID="button-view-quotes"
+            onPress={() => navigation.navigate("QuotesList", { inspectionId })}
+            style={[styles.quotesBtn, { backgroundColor: theme.primary }]}
+          >
+            <ThemedText style={[styles.quotesBtnText, { fontFamily: "Cairo_700Bold" }]}>
+              عرض {quotes.length} {quotes.length === 1 ? "عرض سعر" : "عروض أسعار"}
+            </ThemedText>
+            <Feather name="arrow-left" size={18} color="#fff" />
+          </Pressable>
+        ) : (
+          <View style={[styles.waitCard, { backgroundColor: theme.backgroundSecondary }]}>
+            <Feather name="clock" size={24} color={theme.textSecondary} />
+            <ThemedText style={[styles.waitText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              بانتظار ردود الموردين...
+            </ThemedText>
+          </View>
+        )}
 
         {/* Delete button */}
         <Pressable
