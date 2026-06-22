@@ -387,7 +387,7 @@ export default function NewInspectionScreen() {
 
   const handleSubmit = async () => {
     if (!user?.customerId) {
-      setSubmitError("يجب تسجيل الدخول أولاً لإرسال الطلب");
+      setSubmitError("يجب تسجيل الدخول أولاً لحفظ الطلب");
       return;
     }
     setSubmitError(null);
@@ -903,7 +903,7 @@ export default function NewInspectionScreen() {
                   ) : (
                     <>
                       <ThemedText style={[styles.nextBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                        إرسال الطلب
+                        حفظ الطلب
                       </ThemedText>
                       <Feather name="send" size={18} color="#fff" />
                     </>
