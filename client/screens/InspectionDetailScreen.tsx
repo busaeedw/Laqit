@@ -34,7 +34,7 @@ type RoutePropType = RouteProp<RootStackParamList, "InspectionDetail">;
 
 const STATUS_STEPS = [
   { key: "draft", label: "إنشاء الطلب" },
-  { key: "rfq_sent", label: "إنشاء الطلب" },
+  { key: "rfq_sent", label: "إرسال للموردين" },
   { key: "quotes_received", label: "استلام العروض" },
   { key: "quote_accepted", label: "قبول عرض" },
   { key: "paid", label: "تم الدفع" },

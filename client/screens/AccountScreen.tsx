@@ -1013,7 +1013,7 @@ export default function AccountScreen() {
                 {inspections.map((inspection: any, index: number) => {
                   const statusMap: Record<string, { label: string; color: string }> = {
                     draft:          { label: "مسودة",          color: theme.textSecondary },
-                    rfq_sent:       { label: "إنشاء الطلب", color: theme.primary },
+                    rfq_sent:       { label: "أُرسل للموردين", color: theme.primary },
                     quotes_received:{ label: "عروض واردة",     color: theme.accentYellow },
                     quote_accepted: { label: "تم القبول",      color: theme.success },
                     paid:           { label: "مدفوع",          color: theme.success },
