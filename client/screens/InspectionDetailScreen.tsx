@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather, FontAwesome } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -28,7 +28,6 @@ import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
-import { WHATSAPP_REPORT_MODE } from "@/lib/whatsappMode";
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RoutePropType = RouteProp<RootStackParamList, "InspectionDetail">;
@@ -269,8 +268,6 @@ export default function InspectionDetailScreen() {
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
-  const [whatsAppSentTo, setWhatsAppSentTo] = useState<string | null>(null);
   const { pdfLocale, savePdfLocale } = usePdfLocale();
 
   const [emailModalVisible, setEmailModalVisible] = useState(false);
@@ -413,42 +410,6 @@ export default function InspectionDetailScreen() {
 
   const handleDownloadPdf = () => exportPdf("تنزيل أو مشاركة تقرير PDF", setDownloading);
 
-  // Asks the server to send this inspection's PDF report to the logged-in
-  // customer's own WhatsApp (from the business number). The recipient is
-  // resolved server-side from the authenticated owner — never client-supplied.
-  const handleSendWhatsApp = async () => {
-    if (WHATSAPP_REPORT_MODE === "trial") {
-      // Personal-account trial: open the device share sheet with the actual
-      // report PDF so the user's own WhatsApp can forward it to any contact.
-      setWhatsAppSentTo(null);
-      await exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp);
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDownloadError(null);
-    setWhatsAppSentTo(null);
-    setSharingWhatsApp(true);
-    try {
-      const url = new URL(`/api/laqit-inspections/${inspectionId}/whatsapp-pdf`, getApiUrl());
-      const resp = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ locale: pdfLocale }),
-      });
-      const json = await resp.json().catch(() => ({} as any));
-      if (!resp.ok) {
-        setDownloadError(json.error ?? "تعذّر إرسال التقرير عبر واتساب");
-        return;
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setWhatsAppSentTo(json.sentTo ?? "");
-      setTimeout(() => setWhatsAppSentTo(null), 6000);
-    } catch {
-      setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
-    } finally {
-      setSharingWhatsApp(false);
-    }
-  };
 
   const handlePreviewPdf = async (overrideLocale?: PdfLocale, overridePageNumbers?: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -798,40 +759,9 @@ export default function InspectionDetailScreen() {
               </Pressable>
             </View>
 
-            <Pressable
-              testID="button-whatsapp-pdf"
-              onPress={handleSendWhatsApp}
-              disabled={sharingWhatsApp}
-              style={({ pressed }) => [
-                styles.pdfPreviewBtn,
-                {
-                  backgroundColor: "#25D366",
-                  marginTop: Spacing.sm,
-                  opacity: pressed || sharingWhatsApp ? 0.85 : 1,
-                },
-              ]}
-            >
-              {sharingWhatsApp ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <FontAwesome name="whatsapp" size={20} color="#fff" />
-              )}
-              <ThemedText style={[styles.pdfPreviewBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                إرسال عبر واتساب
-              </ThemedText>
-            </Pressable>
-
             {downloadError != null ? (
               <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
                 {downloadError}
-              </ThemedText>
-            ) : null}
-            {whatsAppSentTo != null ? (
-              <ThemedText
-                testID="text-whatsapp-sent"
-                style={[styles.errorText, { color: "#1B8A4C", fontFamily: "Cairo_600SemiBold" }]}
-              >
-                {whatsAppSentTo ? `تم إرسال التقرير إلى واتساب على ${whatsAppSentTo}` : "تم إرسال التقرير إلى واتساب"}
               </ThemedText>
             ) : null}
           </View>

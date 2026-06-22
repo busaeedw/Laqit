@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather, FontAwesome } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { arrayBufferToBase64 } from "../lib/pdfUtils";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
@@ -32,7 +32,6 @@ import { useUser } from "@/context/UserContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList, DetectedPart } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
-import { WHATSAPP_REPORT_MODE } from "@/lib/whatsappMode";
 
 type ResultsScreenRouteProp = RouteProp<RootStackParamList, "Results">;
 
@@ -463,9 +462,6 @@ export default function ResultsScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showDownloadSuccess, setShowDownloadSuccess] = useState(false);
-  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
-  const [whatsAppSentTo, setWhatsAppSentTo] = useState<string | null>(null);
-
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewBase64, setPreviewBase64] = useState<string | null>(null);
@@ -675,48 +671,6 @@ export default function ResultsScreen() {
   };
 
   const handleDownloadPdf = () => exportPdf("تنزيل تقرير PDF", setDownloading);
-
-  // Asks the server to send the report PDF to the logged-in customer's own
-  // WhatsApp number (from the business number). The recipient is resolved
-  // server-side from the authenticated account — never sent from the client.
-  const handleSendWhatsApp = async () => {
-    if (WHATSAPP_REPORT_MODE === "trial") {
-      // Personal-account trial: open the device share sheet with the actual
-      // report PDF so the user's own WhatsApp can forward it to any contact.
-      // No login or Business API credentials required.
-      setWhatsAppSentTo(null);
-      await exportPdf("إرسال التقرير عبر واتساب", setSharingWhatsApp);
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDownloadError(null);
-    setWhatsAppSentTo(null);
-    if (!user?.customerId) {
-      setDownloadError("يرجى تسجيل الدخول لإرسال التقرير إلى واتساب الخاص بك");
-      return;
-    }
-    setSharingWhatsApp(true);
-    try {
-      const url = new URL("/api/analysis/whatsapp-pdf", getApiUrl());
-      const resp = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ carInfo, parts, imageUri, locale: pdfLocale }),
-      });
-      const json = await resp.json().catch(() => ({} as any));
-      if (!resp.ok) {
-        setDownloadError(json.error ?? "تعذّر إرسال التقرير عبر واتساب");
-        return;
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setWhatsAppSentTo(json.sentTo ?? "");
-      setTimeout(() => setWhatsAppSentTo(null), 6000);
-    } catch {
-      setDownloadError("تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً");
-    } finally {
-      setSharingWhatsApp(false);
-    }
-  };
 
   const handleSendPdf = async (email: string, locale: PdfLocale) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -930,37 +884,6 @@ export default function ResultsScreen() {
           </Pressable>
         </View>
 
-        <View style={{ height: Spacing.sm }} />
-        <Pressable
-          onPress={handleSendWhatsApp}
-          disabled={sharingWhatsApp}
-          style={({ pressed }) => [
-            styles.pdfPreviewButton,
-            {
-              backgroundColor: "#25D366",
-              opacity: pressed || sharingWhatsApp ? 0.88 : 1,
-            },
-          ]}
-          testID="button-whatsapp-pdf"
-        >
-          <View style={[styles.pdfPreviewIconWrap, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
-            {sharingWhatsApp ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <FontAwesome name="whatsapp" size={22} color="#FFFFFF" />
-            )}
-          </View>
-          <View style={styles.pdfContentSmall}>
-            <ThemedText style={[styles.pdfPreviewTitle, { fontFamily: "Cairo_700Bold" }]}>
-              إرسال عبر واتساب
-            </ThemedText>
-            <ThemedText style={[styles.pdfPreviewSubtitle, { fontFamily: "Cairo_400Regular" }]}>
-              مشاركة التقرير عبر واتساب
-            </ThemedText>
-          </View>
-          <Feather name="chevron-left" size={18} color="rgba(255,255,255,0.8)" />
-        </Pressable>
-
         {downloadError != null ? (
           <Animated.View
             entering={FadeInDown.duration(300)}
@@ -1126,19 +1049,6 @@ export default function ResultsScreen() {
           </ThemedText>
         </Animated.View>
       ) : null}
-      {whatsAppSentTo != null ? (
-        <Animated.View
-          entering={FadeInDown.duration(300)}
-          style={[styles.successBanner, { backgroundColor: "#25D36618", borderColor: "#25D36640", top: showSuccess ? 150 : 100 }]}
-          testID="banner-whatsapp-sent"
-        >
-          <FontAwesome name="whatsapp" size={18} color="#1B8A4C" />
-          <ThemedText style={[styles.successText, { color: "#1B8A4C", fontFamily: "Cairo_600SemiBold" }]}>
-            {whatsAppSentTo ? `تم إرسال التقرير إلى واتساب على ${whatsAppSentTo}` : "تم إرسال التقرير إلى واتساب"}
-          </ThemedText>
-        </Animated.View>
-      ) : null}
-
       <FlatList
         data={parts}
         keyExtractor={(item) => item.id}
@@ -1168,18 +1078,6 @@ export default function ResultsScreen() {
           style={[
             styles.cartBar,
             {
-              backgroundColor: theme.backgroundDefault,
-              paddingBottom: insets.bottom + Spacing.md,
-            },
-          ]}
-        >
-          <View style={styles.cartInfo}>
-            <View style={[styles.cartBadge, { backgroundColor: theme.primary }]}>
-              <ThemedText style={[styles.cartBadgeText, { fontFamily: "Cairo_700Bold" }]}>
-                {itemCount}
-              </ThemedText>
-            </View>
-            <ThemedText style={[styles.cartText, { fontFamily: "Cairo_600SemiBold" }]}>
               قطع في السلة
             </ThemedText>
           </View>
