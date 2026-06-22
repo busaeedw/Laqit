@@ -1078,6 +1078,18 @@ export default function ResultsScreen() {
           style={[
             styles.cartBar,
             {
+              backgroundColor: theme.backgroundDefault,
+              paddingBottom: insets.bottom + Spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.cartInfo}>
+            <View style={[styles.cartBadge, { backgroundColor: theme.primary }]}>
+              <ThemedText style={[styles.cartBadgeText, { fontFamily: "Cairo_700Bold" }]}>
+                {itemCount}
+              </ThemedText>
+            </View>
+            <ThemedText style={[styles.cartText, { fontFamily: "Cairo_600SemiBold" }]}>
               قطع في السلة
             </ThemedText>
           </View>
