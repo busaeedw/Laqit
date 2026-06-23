@@ -6,7 +6,17 @@ import * as path from "path";
 // so the visual output reads correctly.
 function reverseArabicWords(text: string): string {
   if (!text || text.trim().length === 0) return text;
-  return text.split(/\s+/).reverse().join(" ");
+  return stripArabicDiacritics(text).split(/\s+/).reverse().join(" ");
+}
+
+// The Amiri font's GPOS table has null anchors for certain Arabic diacritical
+// mark combinations (e.g. U+0651 SHADDA). fontkit crashes with
+// "Cannot read properties of null (reading 'xCoordinate')" when it hits them.
+// Stripping harakat (U+0610-U+061A, U+064B-U+065F) before rendering keeps text
+// fully readable and avoids the crash entirely.
+function stripArabicDiacritics(text: string): string {
+  if (!text) return text;
+  return text.replace(/[\u0610-\u061A\u064B-\u065F]/g, "");
 }
 
 const AMIRI_FONT_PATH = path.resolve(process.cwd(), "server/assets/fonts/Amiri-Regular.ttf");
