@@ -25,6 +25,7 @@ interface VendorItem {
   website: string | null;
   email: string | null;
   cities: string[];
+  makes: string[];
 }
 
 interface ApiResponse {
@@ -79,6 +80,15 @@ function VendorCard({ vendor, index }: { vendor: VendorItem; index: number }) {
         </View>
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+        {vendor.makes.length > 0 ? (
+          <View style={styles.infoRow}>
+            <Feather name="tag" size={14} color={theme.textSecondary} style={styles.infoIcon} />
+            <ThemedText style={[styles.infoText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]} numberOfLines={2}>
+              {vendor.makes.join("  ·  ")}
+            </ThemedText>
+          </View>
+        ) : null}
 
         {vendor.cities.length > 0 ? (
           <View style={styles.infoRow}>

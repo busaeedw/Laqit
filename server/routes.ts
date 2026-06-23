@@ -960,7 +960,8 @@ Rules:
 
   app.get("/api/vendors/public", async (_req, res) => {
     try {
-      const rows = await db
+      // Query 1: vendor base info + cities
+      const cityRows = await db
         .select({
           vendorId: vendors.vendorId,
           vendorName: vendors.vendorName,
@@ -977,6 +978,33 @@ Rules:
         .where(eq(vendors.status, "active"))
         .orderBy(vendors.vendorName);
 
+      // Query 2: distinct car makes per vendor
+      const makeRows = await db
+        .selectDistinct({
+          vendorId: vendorSupportedModels.vendorId,
+          makeId: carMakes.makeId,
+          makeName: carMakes.makeName,
+          makeNameAr: carMakes.nameAr,
+        })
+        .from(vendorSupportedModels)
+        .innerJoin(carModels, eq(carModels.carModelId, vendorSupportedModels.carModelId))
+        .innerJoin(carMakes, eq(carMakes.makeId, carModels.makeId))
+        .innerJoin(vendors, and(
+          eq(vendors.vendorId, vendorSupportedModels.vendorId),
+          eq(vendors.status, "active"),
+        ));
+
+      // Group makes by vendorId
+      const makesMap = new Map<string, string[]>();
+      for (const row of makeRows) {
+        if (!makesMap.has(row.vendorId)) makesMap.set(row.vendorId, []);
+        const label = row.makeNameAr ?? row.makeName;
+        if (!makesMap.get(row.vendorId)!.includes(label)) {
+          makesMap.get(row.vendorId)!.push(label);
+        }
+      }
+
+      // Merge
       const map = new Map<string, {
         vendorId: string;
         vendorName: string;
@@ -985,8 +1013,9 @@ Rules:
         website: string | null;
         email: string | null;
         cities: string[];
+        makes: string[];
       }>();
-      for (const row of rows) {
+      for (const row of cityRows) {
         if (!map.has(row.vendorId)) {
           map.set(row.vendorId, {
             vendorId: row.vendorId,
@@ -996,10 +1025,13 @@ Rules:
             website: row.website,
             email: row.email,
             cities: [],
+            makes: makesMap.get(row.vendorId) ?? [],
           });
         }
         const city = row.cityNameAr ?? row.cityNameEn;
-        if (city) map.get(row.vendorId)!.cities.push(city);
+        if (city && !map.get(row.vendorId)!.cities.includes(city)) {
+          map.get(row.vendorId)!.cities.push(city);
+        }
       }
 
       res.json({ vendors: Array.from(map.values()) });
