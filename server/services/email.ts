@@ -18,34 +18,41 @@ const AGENTMAIL_FROM_NAME = process.env.AGENTMAIL_FROM_NAME ?? "Laqit";
 const SMTP_HOST = process.env.AGENTMAIL_SMTP_HOST ?? "smtp.agentmail.to";
 const SMTP_PORT = Number(process.env.AGENTMAIL_SMTP_PORT ?? 465);
 
-const EMAIL_CONTENT: Record<"ar" | "en", { subject: string; html: string }> = {
+const EMAIL_DEFAULTS: Record<"ar" | "en", { subject: string; bodyLine: string; footer: string; detail: string; greeting: string; title: string; dir: string }> = {
   ar: {
     subject: "تقرير تشخيص السيارة - لاقط",
-    html: `
-  <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h2 style="color: #1E74F2;">لاقط — تقرير تشخيص السيارة</h2>
-    <p>مرحباً،</p>
-    <p>يرجى الاطلاع على تقرير تشخيص سيارتك المرفق أدناه.</p>
-    <p>يحتوي التقرير على معلومات السيارة والقطع المكتشفة مع الأسعار التقديرية.</p>
-    <hr />
-    <p style="color: #888; font-size: 12px;">تم إرسال هذا البريد تلقائياً من منصة لاقط.</p>
-  </div>
-`,
+    title: "لاقط — تقرير تشخيص السيارة",
+    greeting: "مرحباً،",
+    bodyLine: "يرجى الاطلاع على تقرير تشخيص سيارتك المرفق أدناه.",
+    detail: "يحتوي التقرير على معلومات السيارة والقطع المكتشفة مع الأسعار التقديرية.",
+    footer: "تم إرسال هذا البريد تلقائياً من منصة لاقط.",
+    dir: "rtl",
   },
   en: {
     subject: "Car Diagnostic Report - Laqit",
-    html: `
-  <div dir="ltr" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h2 style="color: #1E74F2;">Laqit — Car Diagnostic Report</h2>
-    <p>Hello,</p>
-    <p>Please find your car diagnostic report attached below.</p>
-    <p>The report contains your vehicle information and the detected parts with estimated prices.</p>
-    <hr />
-    <p style="color: #888; font-size: 12px;">This email was sent automatically by the Laqit platform.</p>
-  </div>
-`,
+    title: "Laqit — Car Diagnostic Report",
+    greeting: "Hello,",
+    bodyLine: "Please find your car diagnostic report attached below.",
+    detail: "The report contains your vehicle information and the detected parts with estimated prices.",
+    footer: "This email was sent automatically by the Laqit platform.",
+    dir: "ltr",
   },
 };
+
+function buildEmailHtml(locale: "ar" | "en", bodyLineOverride?: string): string {
+  const d = EMAIL_DEFAULTS[locale];
+  const body = bodyLineOverride ?? d.bodyLine;
+  return `
+  <div dir="${d.dir}" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #1E74F2;">${d.title}</h2>
+    <p>${d.greeting}</p>
+    <p>${body}</p>
+    <p>${d.detail}</p>
+    <hr />
+    <p style="color: #888; font-size: 12px;">${d.footer}</p>
+  </div>
+`;
+}
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -70,7 +77,8 @@ export async function sendAnalysisPdfEmail(
   to: string,
   pdfBuffer: Buffer,
   filename: string,
-  locale: string = "ar"
+  locale: string = "ar",
+  bodyLineOverride?: string
 ): Promise<EmailSendResult> {
   try {
     const tx = getTransporter();
@@ -78,12 +86,14 @@ export async function sendAnalysisPdfEmail(
       return { success: false, error: "Email transport not configured" };
     }
 
-    const content = locale === "en" ? EMAIL_CONTENT.en : EMAIL_CONTENT.ar;
+    const safeLocale: "ar" | "en" = locale === "en" ? "en" : "ar";
+    const subject = EMAIL_DEFAULTS[safeLocale].subject;
+    const html = buildEmailHtml(safeLocale, bodyLineOverride);
     const info = await tx.sendMail({
       from: `${AGENTMAIL_FROM_NAME} <${AGENTMAIL_INBOX}>`,
       to,
-      subject: content.subject,
-      html: content.html,
+      subject,
+      html,
       attachments: [{ filename, content: pdfBuffer }],
     });
 

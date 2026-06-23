@@ -1264,7 +1264,8 @@ Rules:
       }
 
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
-      const result = await sendAnalysisPdfEmail(agent.email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar");
+      const agentBodyLine = "يرجى الاطلاع على تقرير تشخيص لسيارة العميل المرفق أدناه.";
+      const result = await sendAnalysisPdfEmail(agent.email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar", agentBodyLine);
       if (!result.success) {
         return res.status(500).json({ error: "فشل إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
       }
