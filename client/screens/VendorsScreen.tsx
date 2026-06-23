@@ -3,6 +3,8 @@ import {
   StyleSheet,
   View,
   FlatList,
+  Pressable,
+  Linking,
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +20,10 @@ import { Spacing, BorderRadius } from "@/constants/theme";
 interface VendorItem {
   vendorId: string;
   vendorName: string;
+  vendorNameEn: string | null;
+  phone: string | null;
+  website: string | null;
+  email: string | null;
   cities: string[];
 }
 
@@ -27,34 +33,109 @@ interface ApiResponse {
 
 function VendorCard({ vendor, index }: { vendor: VendorItem; index: number }) {
   const { theme } = useTheme();
+
+  const initials = vendor.vendorName.slice(0, 2);
+
+  const openPhone = () => {
+    if (!vendor.phone) return;
+    Linking.openURL(`tel:${vendor.phone}`).catch(() => {});
+  };
+
+  const openWebsite = () => {
+    if (!vendor.website) return;
+    const url = vendor.website.startsWith("http")
+      ? vendor.website
+      : `https://${vendor.website}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
+  const openEmail = () => {
+    if (!vendor.email) return;
+    Linking.openURL(`mailto:${vendor.email}`).catch(() => {});
+  };
+
   return (
-    <Animated.View entering={FadeInDown.duration(400).delay(index * 50)}>
+    <Animated.View entering={FadeInDown.duration(400).delay(index * 60)}>
       <View
         style={[styles.card, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
         testID={`card-vendor-${vendor.vendorId}`}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.iconWrapper}>
-            <View style={[styles.iconCircle, { backgroundColor: theme.primary + "18" }]}>
-              <Feather name="tool" size={20} color={theme.primary} />
-            </View>
+          <View style={styles.cardTitles}>
+            <ThemedText style={[styles.vendorName, { fontFamily: "Cairo_700Bold" }]}>
+              {vendor.vendorName}
+            </ThemedText>
+            {vendor.vendorNameEn ? (
+              <ThemedText style={[styles.vendorNameEn, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                {vendor.vendorNameEn}
+              </ThemedText>
+            ) : null}
           </View>
-          <ThemedText style={[styles.vendorName, { fontFamily: "Cairo_700Bold" }]}>
-            {vendor.vendorName}
-          </ThemedText>
+          <View style={[styles.badge, { backgroundColor: theme.primary + "18" }]}>
+            <ThemedText style={[styles.badgeText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+              {initials}
+            </ThemedText>
+          </View>
         </View>
 
+        <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
         {vendor.cities.length > 0 ? (
-          <View style={styles.citiesRow}>
-            <Feather name="map-pin" size={13} color={theme.textSecondary} style={styles.cityIcon} />
-            <ThemedText
-              style={[styles.citiesText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
-              numberOfLines={2}
-            >
+          <View style={styles.infoRow}>
+            <Feather name="map-pin" size={14} color={theme.textSecondary} style={styles.infoIcon} />
+            <ThemedText style={[styles.infoText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
               {vendor.cities.join("  ·  ")}
             </ThemedText>
           </View>
         ) : null}
+
+        <View style={styles.actionsRow}>
+          {vendor.phone ? (
+            <Pressable
+              onPress={openPhone}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
+              ]}
+              testID={`button-call-vendor-${vendor.vendorId}`}
+            >
+              <Feather name="phone" size={14} color={theme.primary} />
+              <ThemedText style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                {vendor.phone}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+          {vendor.website ? (
+            <Pressable
+              onPress={openWebsite}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
+              ]}
+              testID={`button-website-vendor-${vendor.vendorId}`}
+            >
+              <Feather name="globe" size={14} color={theme.primary} />
+              <ThemedText style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]} numberOfLines={1}>
+                الموقع الإلكتروني
+              </ThemedText>
+            </Pressable>
+          ) : null}
+          {vendor.email ? (
+            <Pressable
+              onPress={openEmail}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
+              ]}
+              testID={`button-email-vendor-${vendor.vendorId}`}
+            >
+              <Feather name="mail" size={14} color={theme.primary} />
+              <ThemedText style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]} numberOfLines={1}>
+                {vendor.email}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </Animated.View>
   );
@@ -151,38 +232,66 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row-reverse",
-    alignItems: "center",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     gap: Spacing.sm,
   },
-  iconWrapper: {
+  cardTitles: {
+    flex: 1,
     alignItems: "flex-end",
+    gap: 2,
   },
-  iconCircle: {
+  vendorName: {
+    fontSize: 16,
+    textAlign: "right",
+  },
+  vendorNameEn: {
+    fontSize: 12,
+    textAlign: "right",
+  },
+  badge: {
     width: 44,
     height: 44,
     borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
   },
-  vendorName: {
-    flex: 1,
-    fontSize: 16,
-    textAlign: "right",
+  badgeText: {
+    fontSize: 14,
+    textAlign: "center",
   },
-  citiesRow: {
+  divider: {
+    height: 1,
+  },
+  infoRow: {
     flexDirection: "row-reverse",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: Spacing.xs,
   },
-  cityIcon: {
-    marginTop: 2,
+  infoIcon: {
     marginLeft: Spacing.xs,
   },
-  citiesText: {
-    flex: 1,
+  infoText: {
     fontSize: 13,
     textAlign: "right",
-    lineHeight: 20,
+    flex: 1,
+  },
+  actionsRow: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  actionBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.sm,
+  },
+  actionText: {
+    fontSize: 13,
   },
   emptyState: {
     flex: 1,

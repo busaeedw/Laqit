@@ -964,9 +964,12 @@ Rules:
         .select({
           vendorId: vendors.vendorId,
           vendorName: vendors.vendorName,
+          vendorNameEn: vendors.vendorNameEn,
+          phone: vendors.phone,
+          website: vendors.website,
+          email: vendors.email,
           cityNameAr: cities.nameAr,
           cityNameEn: cities.nameEn,
-          isPrimary: vendorLocations.isPrimary,
         })
         .from(vendors)
         .leftJoin(vendorLocations, eq(vendorLocations.vendorId, vendors.vendorId))
@@ -974,10 +977,26 @@ Rules:
         .where(eq(vendors.status, "active"))
         .orderBy(vendors.vendorName);
 
-      const map = new Map<string, { vendorId: string; vendorName: string; cities: string[] }>();
+      const map = new Map<string, {
+        vendorId: string;
+        vendorName: string;
+        vendorNameEn: string | null;
+        phone: string | null;
+        website: string | null;
+        email: string | null;
+        cities: string[];
+      }>();
       for (const row of rows) {
         if (!map.has(row.vendorId)) {
-          map.set(row.vendorId, { vendorId: row.vendorId, vendorName: row.vendorName, cities: [] });
+          map.set(row.vendorId, {
+            vendorId: row.vendorId,
+            vendorName: row.vendorName,
+            vendorNameEn: row.vendorNameEn,
+            phone: row.phone,
+            website: row.website,
+            email: row.email,
+            cities: [],
+          });
         }
         const city = row.cityNameAr ?? row.cityNameEn;
         if (city) map.get(row.vendorId)!.cities.push(city);

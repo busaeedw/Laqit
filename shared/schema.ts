@@ -251,9 +251,13 @@ export const vendors = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     vendorName: varchar("vendor_name", { length: 150 }).notNull(),
+    vendorNameEn: varchar("vendor_name_en", { length: 200 }),
     legalName: varchar("legal_name", { length: 150 }),
     crNumber: varchar("cr_number", { length: 50 }),
     vatNumber: varchar("vat_number", { length: 50 }),
+    phone: varchar("phone", { length: 30 }),
+    website: varchar("website", { length: 300 }),
+    email: varchar("email", { length: 254 }),
     status: vendorStatusEnum("status").notNull().default("pending_verification"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

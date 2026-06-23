@@ -253,31 +253,43 @@ export async function seedReferenceData() {
   const vendorsSeed = [
     {
       vendorName: "شركة النجمة لقطع الغيار",
+      vendorNameEn: "Al Najma Auto Parts Co.",
+      phone: "0114001001",
+      website: "https://alnajma-parts.sa",
+      email: "info@alnajma-parts.sa",
       city: riyadhCity,
       whatsapp: "+966501111001",
       mobile: "+966501111001",
-      email: "star@example.com",
     },
     {
       vendorName: "مؤسسة الخليج لقطع السيارات",
+      vendorNameEn: "Gulf Auto Parts Est.",
+      phone: "0114002002",
+      website: "https://gulf-autoparts.sa",
+      email: "info@gulf-autoparts.sa",
       city: riyadhCity,
       whatsapp: "+966501111002",
       mobile: "+966501111002",
-      email: "gulf@example.com",
     },
     {
       vendorName: "مخازن جدة للقطع",
+      vendorNameEn: "Jeddah Parts Warehouses",
+      phone: "0122003003",
+      website: null,
+      email: "info@jeddah-parts.sa",
       city: jeddahCity,
       whatsapp: "+966501111003",
       mobile: "+966501111003",
-      email: "jeddah@example.com",
     },
     {
       vendorName: "شركة الشرقية للسيارات",
+      vendorNameEn: "Eastern Auto Parts Co.",
+      phone: "0138004004",
+      website: "https://eastern-auto.sa",
+      email: "info@eastern-auto.sa",
       city: dammamCity,
       whatsapp: "+966501111004",
       mobile: "+966501111004",
-      email: "eastern@example.com",
     },
   ];
 
@@ -287,11 +299,30 @@ export async function seedReferenceData() {
       .from(vendors)
       .where(eq(vendors.vendorName, v.vendorName))
       .limit(1);
-    if (existing.length > 0) continue;
+
+    if (existing.length > 0) {
+      await db
+        .update(vendors)
+        .set({
+          vendorNameEn: v.vendorNameEn,
+          phone: v.phone,
+          website: v.website ?? null,
+          email: v.email,
+        })
+        .where(eq(vendors.vendorName, v.vendorName));
+      continue;
+    }
 
     const [vendor] = await db
       .insert(vendors)
-      .values({ vendorName: v.vendorName, status: "active" })
+      .values({
+        vendorName: v.vendorName,
+        vendorNameEn: v.vendorNameEn,
+        phone: v.phone,
+        website: v.website ?? null,
+        email: v.email,
+        status: "active",
+      })
       .returning();
 
     const [vendorUser] = await db
