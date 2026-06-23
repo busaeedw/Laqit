@@ -27,7 +27,7 @@ import {
   notifications,
   inspectionStatusEnum,
 } from "../shared/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendWhatsAppDocument } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
@@ -978,29 +978,27 @@ Rules:
         .where(eq(vendors.status, "active"))
         .orderBy(vendors.vendorName);
 
-      // Query 2: distinct car makes per vendor
-      const makeRows = await db
-        .selectDistinct({
-          vendorId: vendorSupportedModels.vendorId,
-          makeId: carMakes.makeId,
-          makeName: carMakes.makeName,
-          makeNameAr: carMakes.nameAr,
-        })
-        .from(vendorSupportedModels)
-        .innerJoin(carModels, eq(carModels.carModelId, vendorSupportedModels.carModelId))
-        .innerJoin(carMakes, eq(carMakes.makeId, carModels.makeId))
-        .innerJoin(vendors, and(
-          eq(vendors.vendorId, vendorSupportedModels.vendorId),
-          eq(vendors.status, "active"),
-        ));
+      // Query 2: distinct car makes per vendor (raw SQL for clarity)
+      const makeRows = await db.execute<{
+        vendor_id: string;
+        make_name: string;
+        name_ar: string | null;
+      }>(sql`
+        SELECT DISTINCT vsm.vendor_id, cm.make_name, cm.name_ar
+        FROM vendor_supported_models vsm
+        INNER JOIN car_models ON car_models.car_model_id = vsm.car_model_id
+        INNER JOIN car_makes cm ON cm.make_id = car_models.make_id
+        INNER JOIN vendors v ON v.vendor_id = vsm.vendor_id AND v.status = 'active'
+      `);
 
-      // Group makes by vendorId
+      // Group makes by vendorId (raw SQL returns snake_case keys; pg driver wraps in .rows)
       const makesMap = new Map<string, string[]>();
-      for (const row of makeRows) {
-        if (!makesMap.has(row.vendorId)) makesMap.set(row.vendorId, []);
-        const label = row.makeNameAr ?? row.makeName;
-        if (!makesMap.get(row.vendorId)!.includes(label)) {
-          makesMap.get(row.vendorId)!.push(label);
+      for (const row of (makeRows as any).rows ?? makeRows) {
+        const vid = row.vendor_id;
+        if (!makesMap.has(vid)) makesMap.set(vid, []);
+        const label = (row.name_ar ?? row.make_name) as string;
+        if (!makesMap.get(vid)!.includes(label)) {
+          makesMap.get(vid)!.push(label);
         }
       }
 
