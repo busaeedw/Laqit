@@ -1265,7 +1265,7 @@ Rules:
 
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       const agentBodyLine = "يرجى الاطلاع على تقرير تشخيص لسيارة العميل المرفق أدناه.";
-      const agentDetailLine = "يحتوي التقرير على معلومات السيارة والقطع المكتشفة، نرجو الرد على هذا البريد الالكتروني و ارفاق ملف pdf بالاسعار لكل قطعة لكي يتم تحليلها آليا و الرد للعميل.";
+      const agentDetailLine = "يحتوي التقرير على معلومات السيارة والقطع المكتشفة نرجو الرد على هذا البريد الالكتروني و ارفاق ملف (بي دي اف) بالاسعار لكل قطعة لكي يتم تحليلها آليا و الرد للعميل.";
       const result = await sendAnalysisPdfEmail(agent.email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar", agentBodyLine, agentDetailLine);
       if (!result.success) {
         return res.status(500).json({ error: "فشل إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
