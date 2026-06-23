@@ -757,44 +757,6 @@ export default function InspectionDetailScreen() {
         {/* PDF actions — only when parts exist */}
         {parts.length > 0 ? (
           <View style={styles.pdfSection}>
-            {/* Language selector + page-numbers toggle — wrapped in an Animated.View
-                so a brief highlight flash draws attention when settings are changed
-                from inside the preview modal and the modal is then closed. */}
-            <Animated.View style={[styles.settingsHighlightWrapper, { backgroundColor: highlightBg }]}>
-              {/* Language selector */}
-              <View style={[styles.localePicker, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}>
-                {(
-                  [
-                    { value: "ar", label: "عربي" },
-                    { value: "en", label: "English" },
-                  ] as const
-                ).map((opt) => (
-                  <Pressable
-                    key={opt.value}
-                    testID={`button-pdf-locale-${opt.value}`}
-                    onPress={() => savePdfLocale(opt.value)}
-                    style={[
-                      styles.localeOption,
-                      pdfLocale === opt.value && { backgroundColor: theme.primary },
-                    ]}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.localeOptionText,
-                        {
-                          fontFamily: "Cairo_700Bold",
-                          color: pdfLocale === opt.value ? "#fff" : theme.textSecondary,
-                        },
-                      ]}
-                    >
-                      {opt.label}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-
-            </Animated.View>
-
             {/* Preview button — full width */}
             <Pressable
               testID="button-preview-pdf"
@@ -975,15 +937,6 @@ export default function InspectionDetailScreen() {
             <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
               أدخل عنوان بريدك الإلكتروني أو بريد الورشة
             </ThemedText>
-
-            <View style={[styles.localeBadgeRow]}>
-              <View style={[styles.localeBadge, { backgroundColor: theme.primary + "18", borderColor: theme.primary + "40" }]}>
-                <Feather name="file-text" size={13} color={theme.primary} />
-                <ThemedText style={[styles.localeBadgeText, { color: theme.primary, fontFamily: "Cairo_400Regular" }]}>
-                  {pdfLocale === "ar" ? "لغة التقرير: عربي" : pdfLocale === "en" ? "لغة التقرير: English" : "لغة التقرير: عربي / English"}
-                </ThemedText>
-              </View>
-            </View>
 
             <TextInput
               testID="input-email-pdf"
