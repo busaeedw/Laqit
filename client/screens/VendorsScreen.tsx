@@ -82,11 +82,14 @@ function VendorCard({ vendor, index }: { vendor: VendorItem; index: number }) {
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
         {vendor.makes.length > 0 ? (
-          <View style={styles.infoRow}>
-            <Feather name="tag" size={14} color={theme.textSecondary} style={styles.infoIcon} />
-            <ThemedText style={[styles.infoText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]} numberOfLines={2}>
-              {vendor.makes.join("  ·  ")}
-            </ThemedText>
+          <View style={styles.makesContainer}>
+            {vendor.makes.map((make) => (
+              <View key={make} style={[styles.makeChip, { backgroundColor: theme.primary + "14", borderColor: theme.primary + "30" }]}>
+                <ThemedText style={[styles.makeChipText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                  {make}
+                </ThemedText>
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -272,6 +275,20 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
+  },
+  makesContainer: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  makeChip: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  makeChipText: {
+    fontSize: 12,
   },
   infoRow: {
     flexDirection: "row-reverse",
