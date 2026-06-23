@@ -86,6 +86,10 @@ function AgentCard({ make, index }: { make: CarMake; index: number }) {
     Linking.openURL(url).catch(() => {});
   };
 
+  const openEmail = () => {
+    Linking.openURL("mailto:wahclaw@hotmail.com").catch(() => {});
+  };
+
   return (
     <Animated.View entering={FadeInDown.duration(400).delay(index * 60)}>
       <View
@@ -135,43 +139,57 @@ function AgentCard({ make, index }: { make: CarMake; index: number }) {
           </View>
         ) : null}
 
-        {agent.phone || agent.website ? (
-          <View style={styles.actionsRow}>
-            {agent.phone ? (
-              <Pressable
-                onPress={openPhone}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
-                ]}
-                testID={`button-call-${make.makeId}`}
+        <View style={styles.actionsRow}>
+          {agent.phone ? (
+            <Pressable
+              onPress={openPhone}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
+              ]}
+              testID={`button-call-${make.makeId}`}
+            >
+              <Feather name="phone" size={14} color={theme.primary} />
+              <ThemedText style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                {agent.phone}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+          {agent.website ? (
+            <Pressable
+              onPress={openWebsite}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
+              ]}
+              testID={`button-website-${make.makeId}`}
+            >
+              <Feather name="globe" size={14} color={theme.primary} />
+              <ThemedText
+                style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}
+                numberOfLines={1}
               >
-                <Feather name="phone" size={14} color={theme.primary} />
-                <ThemedText style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
-                  {agent.phone}
-                </ThemedText>
-              </Pressable>
-            ) : null}
-            {agent.website ? (
-              <Pressable
-                onPress={openWebsite}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
-                ]}
-                testID={`button-website-${make.makeId}`}
-              >
-                <Feather name="globe" size={14} color={theme.primary} />
-                <ThemedText
-                  style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}
-                  numberOfLines={1}
-                >
-                  الموقع الإلكتروني
-                </ThemedText>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
+                الموقع الإلكتروني
+              </ThemedText>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={openEmail}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              { backgroundColor: theme.primary + "15", opacity: pressed ? 0.7 : 1 },
+            ]}
+            testID={`button-email-${make.makeId}`}
+          >
+            <Feather name="mail" size={14} color={theme.primary} />
+            <ThemedText
+              style={[styles.actionText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}
+              numberOfLines={1}
+            >
+              wahclaw@hotmail.com
+            </ThemedText>
+          </Pressable>
+        </View>
       </View>
     </Animated.View>
   );
