@@ -322,6 +322,7 @@ export default function InspectionDetailScreen() {
     parts: any[];
     media: any[];
     quotes: any[];
+    agentEmail: string | null;
   }>({ queryKey: [`/api/laqit-inspections/${inspectionId}`] });
 
   // Invalidate the PDF cache whenever the inspection data changes (e.g. parts
@@ -522,7 +523,8 @@ export default function InspectionDetailScreen() {
   const handleSendToAgent = async () => {
     if (sendingToAgent) return;
     const confirmTitle = "إرسال الطلب للوكيل";
-    const confirmMsg = "سيتم إرسال قائمة القطع المطلوبة إلى الوكيل المعتمد للماركة بالبريد الإلكتروني وتحديث حالة الطلب.";
+    const agentEmailLine = agentEmail ? `\n\nالبريد الإلكتروني للوكيل: ${agentEmail}` : "";
+    const confirmMsg = `سيتم إرسال قائمة القطع المطلوبة إلى الوكيل المعتمد للماركة بالبريد الإلكتروني وتحديث حالة الطلب.${agentEmailLine}`;
     const doSend = async () => {
       setSendingToAgent(true);
       try {
@@ -664,7 +666,7 @@ export default function InspectionDetailScreen() {
     );
   }
 
-  const { inspection, parts = [], quotes = [] } = data ?? {};
+  const { inspection, parts = [], quotes = [], agentEmail = null } = data ?? {};
   if (!inspection) {
     return (
       <View style={[styles.center, { backgroundColor: theme.backgroundRoot }]}>

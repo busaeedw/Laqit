@@ -1142,7 +1142,17 @@ Rules:
         .where(eq(quotes.inspectionId, req.params.id))
         .orderBy(desc(quotes.createdAt));
 
-      res.json({ inspection, media, parts, quotes: quotesList });
+      // Resolve agent email for the confirm-dialog on the frontend
+      let agentEmail: string | null = null;
+      if (inspection.carModelId) {
+        const [cm] = await db.select({ makeId: carModels.makeId }).from(carModels).where(eq(carModels.carModelId, inspection.carModelId)).limit(1);
+        if (cm) {
+          const [ag] = await db.select({ email: carMakeAgents.email }).from(carMakeAgents).where(eq(carMakeAgents.makeId, cm.makeId)).limit(1);
+          agentEmail = ag?.email ?? null;
+        }
+      }
+
+      res.json({ inspection, media, parts, quotes: quotesList, agentEmail });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }
