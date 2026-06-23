@@ -29,9 +29,9 @@ Production scope for this scan is the public deployment at `https://laqit.app`. 
 ## Scan Anchors
 
 - **Production entry points:** `server/index.ts` and `server/routes.ts`; web app requests share the same Express origin as the API.
-- **Highest-risk code areas:** `server/routes.ts` customer registration/OTP, inspection submission, quote acceptance, payment creation, and webhook routes; `server/services/payment.ts`; `server/services/ocr.ts`; `server/services/whatsapp.ts`.
-- **Public surfaces:** customer registration/login/OTP endpoints, reference-data endpoints, authenticated customer inspection/quote/payment routes, admin vendor-management routes behind `x-admin-api-key`, `/api/analyze`, `/api/identify-car`, and both signed webhook endpoints.
-- **Authenticated/admin surfaces to verify carefully:** customer profile access, pre-verification registration handling, quote acceptance/payment flow, vendor management, and webhook-triggered state changes.
+- **Highest-risk code areas:** `server/routes.ts` customer registration/login/OTP, public analysis PDF delivery, inspection deletion/submission, quote acceptance, payment creation, and webhook routes; `server/services/payment.ts`; `server/services/ocr.ts`; `server/services/whatsapp.ts`; `server/services/email.ts`.
+- **Public surfaces:** customer registration/login/OTP endpoints, reference-data endpoints, authenticated customer inspection/quote/payment routes, admin vendor-management routes behind `x-admin-api-key`, `/api/analyze`, `/api/identify-car`, `/api/analysis/send-pdf`, `/api/analysis/download-pdf`, and both signed webhook endpoints.
+- **Authenticated/admin surfaces to verify carefully:** customer profile access, pre-verification registration handling, inspection deletion/cancellation, quote acceptance/payment flow, vendor management, and webhook-triggered state changes.
 - **Retired legacy surface:** `/api/login` and `/api/inspections*` now return `410` and should stay out of future production attack-surface assumptions unless reintroduced.
 - **Usually dev-only / lower-priority areas:** `server/seed.ts`, `server/replit_integrations/**` (currently unmounted), Expo development proxy behavior in `server/index.ts`, build scripts, and client-only presentation code unless it reveals a production trust assumption.
 
