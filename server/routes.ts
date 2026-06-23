@@ -669,6 +669,7 @@ Rules:
           agentNameAr: carMakeAgents.agentNameAr,
           website: carMakeAgents.website,
           phone: carMakeAgents.phone,
+          email: carMakeAgents.email,
           headquartersCity: carMakeAgents.headquartersCity,
         })
         .from(carMakes)
@@ -677,7 +678,7 @@ Rules:
 
       const makes = rows.map((r) => {
         const dbAgent = r.agentNameEn
-          ? { agentNameEn: r.agentNameEn, agentNameAr: r.agentNameAr, website: r.website, phone: r.phone, headquartersCity: r.headquartersCity }
+          ? { agentNameEn: r.agentNameEn, agentNameAr: r.agentNameAr, website: r.website, phone: r.phone, email: r.email, headquartersCity: r.headquartersCity }
           : null;
         const staticAgent = STATIC_AGENTS[r.makeName] ?? null;
         return {
@@ -1218,6 +1219,66 @@ Rules:
     } catch (err: any) {
       console.error("POST inspection send-pdf error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء إنشاء أو إرسال التقرير" });
+    }
+  });
+
+  // ─── Send inspection PDF to the car make's official agent email ─────────────
+  // Generates the parts PDF, emails it to the agent registered for the car make,
+  // then advances the inspection status from "draft" to "rfq_sent".
+  app.post("/api/laqit-inspections/:id/send-to-agent", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+
+      const [inspection] = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, req.params.id))
+        .limit(1);
+      if (!inspection) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (inspection.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
+
+      // Resolve the agent email for this inspection's car make
+      const [carModel] = await db
+        .select()
+        .from(carModels)
+        .where(eq(carModels.carModelId, inspection.carModelId))
+        .limit(1);
+      if (!carModel) return res.status(400).json({ error: "لم يتم تحديد موديل السيارة" });
+
+      const [agent] = await db
+        .select({ email: carMakeAgents.email, agentNameAr: carMakeAgents.agentNameAr })
+        .from(carMakeAgents)
+        .where(eq(carMakeAgents.makeId, carModel.makeId))
+        .limit(1);
+      if (!agent?.email) {
+        return res.status(400).json({ error: "لا يوجد بريد إلكتروني مسجل للوكيل" });
+      }
+
+      // Build PDF
+      const { locale } = req.body;
+      const built = await buildInspectionPdfBuffer(inspection, locale ?? "ar");
+      if (!built.ok) {
+        return res.status(built.status).json({ error: built.error });
+      }
+
+      const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
+      const result = await sendAnalysisPdfEmail(agent.email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar");
+      if (!result.success) {
+        return res.status(500).json({ error: "فشل إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
+      }
+
+      // Advance status to rfq_sent
+      await db
+        .update(laqitInspections)
+        .set({ status: "rfq_sent", updatedAt: new Date() })
+        .where(eq(laqitInspections.inspectionId, inspection.inspectionId));
+
+      res.json({ ok: true, agentEmail: agent.email });
+    } catch (err: any) {
+      console.error("POST send-to-agent error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إرسال الطلب" });
     }
   });
 

@@ -232,6 +232,7 @@ export async function seedReferenceData() {
         agentNameAr: a.agentNameAr,
         website: a.website,
         phone: a.phone,
+        email: "wahclaw@hotmail.com",
         headquartersCity: a.headquartersCity,
       })
       .onConflictDoNothing();
@@ -444,7 +445,7 @@ export async function seedAgentsIfEmpty() {
         if (!makeId) continue;
         await db
           .insert(carMakeAgents)
-          .values({ makeId, agentNameEn: a.agentNameEn, agentNameAr: a.agentNameAr, website: a.website, phone: a.phone, headquartersCity: a.headquartersCity })
+          .values({ makeId, agentNameEn: a.agentNameEn, agentNameAr: a.agentNameAr, website: a.website, phone: a.phone, email: "wahclaw@hotmail.com", headquartersCity: a.headquartersCity })
           .onConflictDoNothing();
         seeded++;
       }

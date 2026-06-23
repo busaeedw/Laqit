@@ -317,7 +317,7 @@ export default function InspectionDetailScreen() {
     outputRange: ["transparent", theme.primary + "22"],
   });
 
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, refetch } = useQuery<{
     inspection: any;
     parts: any[];
     media: any[];
@@ -515,6 +515,48 @@ export default function InspectionDetailScreen() {
     setSendEmailError(null);
     setSendEmailSuccess(false);
     setEmailModalVisible(true);
+  };
+
+  const [sendingToAgent, setSendingToAgent] = useState(false);
+
+  const handleSendToAgent = async () => {
+    if (sendingToAgent) return;
+    const confirmTitle = "إرسال الطلب للوكيل";
+    const confirmMsg = "سيتم إرسال قائمة القطع المطلوبة إلى الوكيل المعتمد للماركة بالبريد الإلكتروني وتحديث حالة الطلب.";
+    const doSend = async () => {
+      setSendingToAgent(true);
+      try {
+        const url = new URL(`/api/laqit-inspections/${inspectionId}/send-to-agent`, getApiUrl());
+        const resp = await fetch(url.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ locale: "ar" }),
+        });
+        const json = await resp.json().catch(() => ({} as any));
+        if (!resp.ok) {
+          const msg = json.error ?? "تعذر إرسال الطلب";
+          if (Platform.OS === "web") { window.alert(msg); } else { Alert.alert("خطأ", msg); }
+          return;
+        }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        refetch();
+        const successMsg = "تم إرسال طلب قطع الغيار إلى الوكيل بنجاح";
+        if (Platform.OS === "web") { window.alert(successMsg); } else { Alert.alert("تم الإرسال", successMsg); }
+      } catch {
+        const msg = "تعذر الاتصال بالخادم";
+        if (Platform.OS === "web") { window.alert(msg); } else { Alert.alert("خطأ", msg); }
+      } finally {
+        setSendingToAgent(false);
+      }
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) doSend();
+    } else {
+      Alert.alert(confirmTitle, confirmMsg, [
+        { text: "إلغاء", style: "cancel" },
+        { text: "إرسال", style: "default", onPress: doSend },
+      ]);
+    }
   };
 
   const [deleting, setDeleting] = useState(false);
@@ -838,11 +880,30 @@ export default function InspectionDetailScreen() {
             </ThemedText>
             <Feather name="arrow-left" size={18} color="#fff" />
           </Pressable>
+        ) : inspection.status === "draft" ? (
+          <Pressable
+            testID="button-send-to-agent"
+            onPress={handleSendToAgent}
+            disabled={sendingToAgent}
+            style={({ pressed }) => [
+              styles.agentSendBtn,
+              { backgroundColor: theme.primary, opacity: sendingToAgent ? 0.6 : pressed ? 0.85 : 1 },
+            ]}
+          >
+            {sendingToAgent ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Feather name="send" size={18} color="#fff" />
+            )}
+            <ThemedText style={[styles.agentSendBtnText, { fontFamily: "Cairo_700Bold" }]}>
+              {sendingToAgent ? "جارٍ الإرسال..." : "أرسل الطلب للوكيل"}
+            </ThemedText>
+          </Pressable>
         ) : (
           <View style={[styles.waitCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <Feather name={inspection.status === "draft" ? "edit-3" : "clock"} size={24} color={theme.textSecondary} />
+            <Feather name="clock" size={24} color={theme.textSecondary} />
             <ThemedText style={[styles.waitText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              {inspection.status === "draft" ? "جهز الطلب للارسال للموردين" : "بانتظار ردود الموردين..."}
+              بانتظار ردود الموردين...
             </ThemedText>
           </View>
         )}
@@ -1193,6 +1254,16 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   waitText: { fontSize: 14 },
+  agentSendBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+  },
+  agentSendBtnText: { color: "#fff", fontSize: 16 },
   // Modal
   modalOverlay: {
     flex: 1,

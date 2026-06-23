@@ -654,6 +654,7 @@ export const carMakeAgents = pgTable(
     agentNameAr: varchar("agent_name_ar", { length: 200 }),
     website: varchar("website", { length: 300 }),
     phone: varchar("phone", { length: 30 }),
+    email: varchar("email", { length: 254 }),
     headquartersCity: varchar("headquarters_city", { length: 100 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
