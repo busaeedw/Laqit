@@ -196,6 +196,34 @@ export default function HomeScreen() {
         </Pressable>
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.duration(600).delay(510)}>
+        <Pressable
+          testID="button-vendors"
+          onPress={() => rootNavigation.navigate("Vendors")}
+          style={({ pressed }) => [
+            styles.ctaCard,
+            {
+              backgroundColor: theme.backgroundDefault,
+              opacity: pressed ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.99 : 1 }],
+              marginBottom: Spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.ctaContent}>
+            <ThemedText style={[styles.ctaTitle, { fontFamily: "Cairo_700Bold" }]}>
+              تجار قطع الغيار
+            </ThemedText>
+            <ThemedText style={[styles.ctaSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              تعرف على الموردين المعتمدين في المنصة
+            </ThemedText>
+          </View>
+          <View style={[styles.brandIcon, { backgroundColor: theme.primary + "15" }]}>
+            <Feather name="tool" size={22} color={theme.primary} />
+          </View>
+        </Pressable>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable
           testID="button-pricing-cta"

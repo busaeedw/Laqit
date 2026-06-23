@@ -956,6 +956,39 @@ Rules:
     }
   });
 
+  // ─── Vendors (public directory) ──────────────────────────────────────────
+
+  app.get("/api/vendors/public", async (_req, res) => {
+    try {
+      const rows = await db
+        .select({
+          vendorId: vendors.vendorId,
+          vendorName: vendors.vendorName,
+          cityNameAr: cities.nameAr,
+          cityNameEn: cities.nameEn,
+          isPrimary: vendorLocations.isPrimary,
+        })
+        .from(vendors)
+        .leftJoin(vendorLocations, eq(vendorLocations.vendorId, vendors.vendorId))
+        .leftJoin(cities, eq(cities.cityId, vendorLocations.cityId))
+        .where(eq(vendors.status, "active"))
+        .orderBy(vendors.vendorName);
+
+      const map = new Map<string, { vendorId: string; vendorName: string; cities: string[] }>();
+      for (const row of rows) {
+        if (!map.has(row.vendorId)) {
+          map.set(row.vendorId, { vendorId: row.vendorId, vendorName: row.vendorName, cities: [] });
+        }
+        const city = row.cityNameAr ?? row.cityNameEn;
+        if (city) map.get(row.vendorId)!.cities.push(city);
+      }
+
+      res.json({ vendors: Array.from(map.values()) });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // ─── Vendors (admin / self-registration) ─────────────────────────────────
 
   app.get("/api/vendors", requireAdmin, async (_req, res) => {
