@@ -39,15 +39,16 @@ const EMAIL_DEFAULTS: Record<"ar" | "en", { subject: string; bodyLine: string; f
   },
 };
 
-function buildEmailHtml(locale: "ar" | "en", bodyLineOverride?: string): string {
+function buildEmailHtml(locale: "ar" | "en", bodyLineOverride?: string, detailOverride?: string): string {
   const d = EMAIL_DEFAULTS[locale];
   const body = bodyLineOverride ?? d.bodyLine;
+  const detail = detailOverride ?? d.detail;
   return `
   <div dir="${d.dir}" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: #1E74F2;">${d.title}</h2>
     <p>${d.greeting}</p>
     <p>${body}</p>
-    <p>${d.detail}</p>
+    <p>${detail}</p>
     <hr />
     <p style="color: #888; font-size: 12px;">${d.footer}</p>
   </div>
@@ -78,7 +79,8 @@ export async function sendAnalysisPdfEmail(
   pdfBuffer: Buffer,
   filename: string,
   locale: string = "ar",
-  bodyLineOverride?: string
+  bodyLineOverride?: string,
+  detailOverride?: string
 ): Promise<EmailSendResult> {
   try {
     const tx = getTransporter();
@@ -88,7 +90,7 @@ export async function sendAnalysisPdfEmail(
 
     const safeLocale: "ar" | "en" = locale === "en" ? "en" : "ar";
     const subject = EMAIL_DEFAULTS[safeLocale].subject;
-    const html = buildEmailHtml(safeLocale, bodyLineOverride);
+    const html = buildEmailHtml(safeLocale, bodyLineOverride, detailOverride);
     const info = await tx.sendMail({
       from: `${AGENTMAIL_FROM_NAME} <${AGENTMAIL_INBOX}>`,
       to,
