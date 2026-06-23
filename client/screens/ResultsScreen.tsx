@@ -686,7 +686,7 @@ export default function ResultsScreen() {
       const url = new URL("/api/analysis/send-pdf", getApiUrl());
       const resp = await fetch(url.toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ email, carInfo, parts, imageUri, locale }),
       });
 
