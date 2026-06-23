@@ -880,33 +880,36 @@ export default function InspectionDetailScreen() {
             </ThemedText>
             <Feather name="arrow-left" size={18} color="#fff" />
           </Pressable>
-        ) : inspection.status === "draft" ? (
+        ) : (inspection.status === "draft" || inspection.status === "rfq_sent") ? (
           <Pressable
             testID="button-send-to-agent"
             onPress={handleSendToAgent}
-            disabled={sendingToAgent}
-            style={({ pressed }) => [
+            disabled={sendingToAgent || inspection.status !== "draft"}
+            style={[
               styles.agentSendBtn,
-              { backgroundColor: theme.primary, opacity: sendingToAgent ? 0.6 : pressed ? 0.85 : 1 },
+              {
+                backgroundColor: inspection.status === "draft" ? theme.primary : theme.backgroundSecondary,
+                opacity: sendingToAgent ? 0.6 : 1,
+              },
             ]}
           >
             {sendingToAgent ? (
               <ActivityIndicator size="small" color="#fff" />
-            ) : (
+            ) : inspection.status === "draft" ? (
               <Feather name="send" size={18} color="#fff" />
+            ) : (
+              <Feather name="check-circle" size={18} color={theme.textSecondary} />
             )}
-            <ThemedText style={[styles.agentSendBtnText, { fontFamily: "Cairo_700Bold" }]}>
-              {sendingToAgent ? "جارٍ الإرسال..." : "أرسل الطلب للوكيل"}
+            <ThemedText
+              style={[
+                styles.agentSendBtnText,
+                { fontFamily: "Cairo_700Bold", color: inspection.status === "draft" ? "#fff" : theme.textSecondary },
+              ]}
+            >
+              {sendingToAgent ? "جارٍ الإرسال..." : inspection.status === "draft" ? "أرسل الطلب للوكيل" : "تم الإرسال للوكيل"}
             </ThemedText>
           </Pressable>
-        ) : (
-          <View style={[styles.waitCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <Feather name="clock" size={24} color={theme.textSecondary} />
-            <ThemedText style={[styles.waitText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              بانتظار ردود الموردين...
-            </ThemedText>
-          </View>
-        )}
+        ) : null}
 
         {/* Delete button */}
         <Pressable
