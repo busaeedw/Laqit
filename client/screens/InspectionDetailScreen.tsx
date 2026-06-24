@@ -324,6 +324,8 @@ export default function InspectionDetailScreen() {
     quotes: any[];
     agentEmail: string | null;
     vendorCount: number;
+    makeName: string | null;
+    modelName: string | null;
   }>({ queryKey: [`/api/laqit-inspections/${inspectionId}`] });
 
   // Invalidate the PDF cache whenever the inspection data changes (e.g. parts
@@ -711,7 +713,7 @@ export default function InspectionDetailScreen() {
     );
   }
 
-  const { inspection, parts = [], quotes = [], agentEmail = null, vendorCount = 0 } = data ?? {};
+  const { inspection, parts = [], quotes = [], agentEmail = null, vendorCount = 0, makeName = null, modelName = null } = data ?? {};
   if (!inspection) {
     return (
       <View style={[styles.center, { backgroundColor: theme.backgroundRoot }]}>
@@ -740,6 +742,19 @@ export default function InspectionDetailScreen() {
             {inspection.inspectionNo}
           </ThemedText>
         </View>
+
+        {/* Car make / model */}
+        {(makeName || modelName) ? (
+          <View style={[styles.carInfoCard, { backgroundColor: theme.backgroundDefault }]}>
+            <ThemedText style={[styles.carInfoLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              السيارة
+            </ThemedText>
+            <ThemedText style={[styles.carInfoValue, { fontFamily: "Cairo_700Bold" }]}>
+              {[makeName, modelName].filter(Boolean).join("  ")}
+              {inspection.carYear ? `  ·  ${inspection.carYear}` : ""}
+            </ThemedText>
+          </View>
+        ) : null}
 
         {/* Status timeline */}
         <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
@@ -1179,6 +1194,17 @@ const styles = StyleSheet.create({
   },
   inspNoLabel: { color: "rgba(255,255,255,0.8)", fontSize: 13 },
   inspNoValue: { color: "#fff", fontSize: 24 },
+  carInfoCard: {
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  carInfoLabel: { fontSize: 13 },
+  carInfoValue: { fontSize: 15, textAlign: "right" },
   card: {
     borderRadius: BorderRadius.md,
     padding: Spacing.lg,

@@ -1227,9 +1227,14 @@ Rules:
       // Resolve agent email + count of matching vendors for the confirm-dialogs on the frontend
       let agentEmail: string | null = null;
       let vendorCount = 0;
+      let makeName: string | null = null;
+      let modelName: string | null = null;
       if (inspection.carModelId) {
-        const [cm] = await db.select({ makeId: carModels.makeId }).from(carModels).where(eq(carModels.carModelId, inspection.carModelId)).limit(1);
+        const [cm] = await db.select({ makeId: carModels.makeId, modelName: carModels.modelName }).from(carModels).where(eq(carModels.carModelId, inspection.carModelId)).limit(1);
         if (cm) {
+          modelName = cm.modelName ?? null;
+          const [mk] = await db.select({ makeName: carMakes.makeName }).from(carMakes).where(eq(carMakes.makeId, cm.makeId)).limit(1);
+          makeName = mk?.makeName ?? null;
           const [ag] = await db.select({ email: carMakeAgents.email }).from(carMakeAgents).where(eq(carMakeAgents.makeId, cm.makeId)).limit(1);
           agentEmail = ag?.email ?? null;
           const vcResult = await db.execute<{ count: string }>(sql`
@@ -1244,7 +1249,7 @@ Rules:
         }
       }
 
-      res.json({ inspection, media, parts, quotes: quotesList, agentEmail, vendorCount });
+      res.json({ inspection, media, parts, quotes: quotesList, agentEmail, vendorCount, makeName, modelName });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }
