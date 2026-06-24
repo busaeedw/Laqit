@@ -323,6 +323,7 @@ export default function InspectionDetailScreen() {
     media: any[];
     quotes: any[];
     agentEmail: string | null;
+    vendorCount: number;
   }>({ queryKey: [`/api/laqit-inspections/${inspectionId}`] });
 
   // Invalidate the PDF cache whenever the inspection data changes (e.g. parts
@@ -561,6 +562,50 @@ export default function InspectionDetailScreen() {
     }
   };
 
+  const [sendingToVendors, setSendingToVendors] = useState(false);
+
+  const handleSendToVendors = async () => {
+    if (sendingToVendors) return;
+    const confirmTitle = "إرسال الطلب للتجار";
+    const vendorCountLine = vendorCount > 0 ? `\n\nعدد التجار: ${vendorCount}` : "";
+    const confirmMsg = `سيتم إرسال قائمة القطع المطلوبة إلى التجار الذين يبيعون قطع غيار لنفس ماركة السيارة بالبريد الإلكتروني وتحديث حالة الطلب.${vendorCountLine}`;
+    const doSend = async () => {
+      setSendingToVendors(true);
+      try {
+        const url = new URL(`/api/laqit-inspections/${inspectionId}/send-to-vendors`, getApiUrl());
+        const resp = await fetch(url.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ locale: "ar" }),
+        });
+        const json = await resp.json().catch(() => ({} as any));
+        if (!resp.ok) {
+          const msg = json.error ?? "تعذر إرسال الطلب";
+          if (Platform.OS === "web") { window.alert(msg); } else { Alert.alert("خطأ", msg); }
+          return;
+        }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        refetch();
+        const count = json.sentCount ?? 0;
+        const successMsg = `تم إرسال طلب قطع الغيار إلى ${count} تاجر بنجاح`;
+        if (Platform.OS === "web") { window.alert(successMsg); } else { Alert.alert("تم الإرسال", successMsg); }
+      } catch {
+        const msg = "تعذر الاتصال بالخادم";
+        if (Platform.OS === "web") { window.alert(msg); } else { Alert.alert("خطأ", msg); }
+      } finally {
+        setSendingToVendors(false);
+      }
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) doSend();
+    } else {
+      Alert.alert(confirmTitle, confirmMsg, [
+        { text: "إلغاء", style: "cancel" },
+        { text: "إرسال", style: "default", onPress: doSend },
+      ]);
+    }
+  };
+
   const [deleting, setDeleting] = useState(false);
 
   const performDelete = async () => {
@@ -666,7 +711,7 @@ export default function InspectionDetailScreen() {
     );
   }
 
-  const { inspection, parts = [], quotes = [], agentEmail = null } = data ?? {};
+  const { inspection, parts = [], quotes = [], agentEmail = null, vendorCount = 0 } = data ?? {};
   if (!inspection) {
     return (
       <View style={[styles.center, { backgroundColor: theme.backgroundRoot }]}>
@@ -845,6 +890,35 @@ export default function InspectionDetailScreen() {
             <Feather name="arrow-left" size={18} color="#fff" />
           </Pressable>
         ) : (inspection.status === "draft" || inspection.status === "rfq_sent") ? (
+          <>
+          <Pressable
+            testID="button-send-to-vendors"
+            onPress={handleSendToVendors}
+            disabled={sendingToVendors || inspection.status !== "draft"}
+            style={[
+              styles.agentSendBtn,
+              {
+                backgroundColor: inspection.status === "draft" ? theme.primary : theme.backgroundSecondary,
+                opacity: sendingToVendors ? 0.6 : 1,
+              },
+            ]}
+          >
+            {sendingToVendors ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : inspection.status === "draft" ? (
+              <Feather name="users" size={18} color="#fff" />
+            ) : (
+              <Feather name="check-circle" size={18} color={theme.textSecondary} />
+            )}
+            <ThemedText
+              style={[
+                styles.agentSendBtnText,
+                { fontFamily: "Cairo_700Bold", color: inspection.status === "draft" ? "#fff" : theme.textSecondary },
+              ]}
+            >
+              {sendingToVendors ? "جارٍ الإرسال..." : inspection.status === "draft" ? "أرسل الطلب للتجار" : "تم الإرسال للتجار"}
+            </ThemedText>
+          </Pressable>
           <Pressable
             testID="button-send-to-agent"
             onPress={handleSendToAgent}
@@ -873,6 +947,7 @@ export default function InspectionDetailScreen() {
               {sendingToAgent ? "جارٍ الإرسال..." : inspection.status === "draft" ? "أرسل الطلب للوكيل" : "تم الإرسال للوكيل"}
             </ThemedText>
           </Pressable>
+          </>
         ) : null}
 
         {/* Delete button */}

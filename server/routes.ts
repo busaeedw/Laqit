@@ -1224,17 +1224,27 @@ Rules:
         .where(eq(quotes.inspectionId, req.params.id))
         .orderBy(desc(quotes.createdAt));
 
-      // Resolve agent email for the confirm-dialog on the frontend
+      // Resolve agent email + count of matching vendors for the confirm-dialogs on the frontend
       let agentEmail: string | null = null;
+      let vendorCount = 0;
       if (inspection.carModelId) {
         const [cm] = await db.select({ makeId: carModels.makeId }).from(carModels).where(eq(carModels.carModelId, inspection.carModelId)).limit(1);
         if (cm) {
           const [ag] = await db.select({ email: carMakeAgents.email }).from(carMakeAgents).where(eq(carMakeAgents.makeId, cm.makeId)).limit(1);
           agentEmail = ag?.email ?? null;
+          const vcResult = await db.execute<{ count: string }>(sql`
+            SELECT COUNT(DISTINCT v.vendor_id) AS count
+            FROM vendors v
+            INNER JOIN vendor_supported_models vsm ON vsm.vendor_id = v.vendor_id
+            INNER JOIN car_models cm2 ON cm2.car_model_id = vsm.car_model_id
+            WHERE v.status = 'active' AND cm2.make_id = ${cm.makeId} AND v.email IS NOT NULL AND v.email <> ''
+          `);
+          const vcRows = ((vcResult as any).rows ?? vcResult) as Array<{ count: string }>;
+          vendorCount = Number(vcRows[0]?.count ?? 0);
         }
       }
 
-      res.json({ inspection, media, parts, quotes: quotesList, agentEmail });
+      res.json({ inspection, media, parts, quotes: quotesList, agentEmail, vendorCount });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }
@@ -1372,6 +1382,97 @@ Rules:
       res.json({ ok: true, agentEmail: agent.email });
     } catch (err: any) {
       console.error("POST send-to-agent error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إرسال الطلب" });
+    }
+  });
+
+  // POST /api/laqit-inspections/:id/send-to-vendors
+  // Generates the parts PDF and emails it to every active vendor that sells parts
+  // for the inspection's car make, then advances status from "draft" to "rfq_sent".
+  app.post("/api/laqit-inspections/:id/send-to-vendors", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+
+      const [inspection] = await db
+        .select()
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, req.params.id))
+        .limit(1);
+      if (!inspection) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (inspection.customerId !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
+
+      // Resolve the car make for this inspection
+      const [carModel] = await db
+        .select()
+        .from(carModels)
+        .where(eq(carModels.carModelId, inspection.carModelId))
+        .limit(1);
+      if (!carModel) return res.status(400).json({ error: "لم يتم تحديد موديل السيارة" });
+
+      // Find active vendors selling parts for this car make that have an email
+      const vendorResult = await db.execute<{
+        vendor_id: string;
+        email: string;
+        vendor_name: string;
+      }>(sql`
+        SELECT DISTINCT v.vendor_id, v.email, v.vendor_name
+        FROM vendors v
+        INNER JOIN vendor_supported_models vsm ON vsm.vendor_id = v.vendor_id
+        INNER JOIN car_models cm ON cm.car_model_id = vsm.car_model_id
+        WHERE v.status = 'active'
+          AND cm.make_id = ${carModel.makeId}
+          AND v.email IS NOT NULL
+          AND v.email <> ''
+      `);
+      const vendorRows = ((vendorResult as any).rows ?? vendorResult) as Array<{
+        vendor_id: string;
+        email: string;
+        vendor_name: string;
+      }>;
+
+      if (vendorRows.length === 0) {
+        return res.status(400).json({ error: "لا يوجد تجار مسجلون لهذه الماركة" });
+      }
+
+      // Build PDF once and reuse for all vendors
+      const { locale } = req.body;
+      const built = await buildInspectionPdfBuffer(inspection, locale ?? "ar");
+      if (!built.ok) {
+        return res.status(built.status).json({ error: built.error });
+      }
+
+      const vendorBodyLine = "يرجى الاطلاع على تقرير تشخيص لسيارة العميل المرفق أدناه.";
+      const vendorDetailLine = "يحتوي التقرير على معلومات السيارة والقطع المكتشفة نرجو الرد على هذا البريد الالكتروني و ارفاق ملف (بي دي اف) بالاسعار لكل قطعة لكي يتم تحليلها آليا و الرد للعميل.";
+
+      let sentCount = 0;
+      for (const vendor of vendorRows) {
+        const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
+        const result = await sendAnalysisPdfEmail(
+          vendor.email,
+          built.pdfBuffer,
+          filename,
+          typeof locale === "string" ? locale : "ar",
+          vendorBodyLine,
+          vendorDetailLine,
+        );
+        if (result.success) sentCount++;
+      }
+
+      if (sentCount === 0) {
+        return res.status(500).json({ error: "فشل إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
+      }
+
+      // Advance status to rfq_sent
+      await db
+        .update(laqitInspections)
+        .set({ status: "rfq_sent", updatedAt: new Date() })
+        .where(eq(laqitInspections.inspectionId, inspection.inspectionId));
+
+      res.json({ ok: true, sentCount });
+    } catch (err: any) {
+      console.error("POST send-to-vendors error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء إرسال الطلب" });
     }
   });
