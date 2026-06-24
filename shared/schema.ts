@@ -15,6 +15,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -258,6 +259,10 @@ export const vendors = pgTable(
     phone: varchar("phone", { length: 30 }),
     website: varchar("website", { length: 300 }),
     email: varchar("email", { length: 254 }),
+    vendorType: varchar("vendor_type", { length: 100 }),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    district: varchar("district", { length: 150 }),
     status: vendorStatusEnum("status").notNull().default("pending_verification"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
