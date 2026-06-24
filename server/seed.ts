@@ -256,7 +256,7 @@ export async function seedReferenceData() {
       vendorNameEn: "Al Najma Auto Parts Co.",
       phone: "0114001001",
       website: "https://alnajma-parts.sa",
-      email: "wahclaw@gmail.com",
+      email: "tshrhan@gmail.com",
       city: riyadhCity,
       whatsapp: "+966501111001",
       mobile: "+966501111001",
