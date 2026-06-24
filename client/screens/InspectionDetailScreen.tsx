@@ -743,19 +743,6 @@ export default function InspectionDetailScreen() {
           </ThemedText>
         </View>
 
-        {/* Car make / model */}
-        {(makeName || modelName) ? (
-          <View style={[styles.carInfoCard, { backgroundColor: theme.backgroundDefault }]}>
-            <ThemedText style={[styles.carInfoLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              السيارة
-            </ThemedText>
-            <ThemedText style={[styles.carInfoValue, { fontFamily: "Cairo_700Bold" }]}>
-              {[makeName, modelName].filter(Boolean).join("  ")}
-              {inspection.carYear ? `  ·  ${inspection.carYear}` : ""}
-            </ThemedText>
-          </View>
-        ) : null}
-
         {/* Status timeline */}
         <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
           <ThemedText style={[styles.sectionTitle, { fontFamily: "Cairo_700Bold" }]}>
@@ -796,6 +783,19 @@ export default function InspectionDetailScreen() {
             })}
           </View>
         </View>
+
+        {/* Car make / model */}
+        {(makeName || modelName) ? (
+          <View style={[styles.carInfoCard, { backgroundColor: theme.backgroundDefault }]}>
+            <ThemedText style={[styles.carInfoLabel, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              السيارة
+            </ThemedText>
+            <ThemedText style={[styles.carInfoValue, { fontFamily: "Cairo_700Bold" }]}>
+              {[makeName, modelName].filter(Boolean).join("  ")}
+              {inspection.carYear ? `  ·  ${inspection.carYear}` : ""}
+            </ThemedText>
+          </View>
+        ) : null}
 
         {/* Parts */}
         {parts.length > 0 ? (
