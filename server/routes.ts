@@ -1523,6 +1523,106 @@ Rules:
     }
   });
 
+  // GET /api/admin/audit-log/export — download filtered audit log as CSV (admin only)
+  // Query params: since (ISO), until (ISO), person (text search), entityType, action
+  app.get("/api/admin/audit-log/export", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    const ALLOWED_ACTIONS = ["admin_granted", "admin_revoked"];
+    try {
+      const { since, until, person, entityType, action } = req.query as Record<string, string | undefined>;
+
+      const conditions: ReturnType<typeof sql>[] = [];
+
+      if (entityType && entityType.trim().length > 0) {
+        conditions.push(sql`${auditLog.entityType} = ${entityType.trim()}`);
+      }
+      if (action && ALLOWED_ACTIONS.includes(action.trim())) {
+        conditions.push(sql`${auditLog.action} = ${action.trim()}`);
+      }
+      if (since) {
+        const sinceDate = new Date(since);
+        if (!isNaN(sinceDate.getTime())) {
+          conditions.push(sql`${auditLog.createdAt} >= ${sinceDate.toISOString()}`);
+        }
+      }
+      if (until) {
+        const untilDate = new Date(until);
+        if (!isNaN(untilDate.getTime())) {
+          untilDate.setHours(23, 59, 59, 999);
+          conditions.push(sql`${auditLog.createdAt} <= ${untilDate.toISOString()}`);
+        }
+      }
+      if (person && person.trim().length > 0) {
+        const term = `%${person.trim().toLowerCase()}%`;
+        conditions.push(
+          sql`(
+            lower(${auditLog.payload}->>'actorName') LIKE ${term}
+            OR lower(${auditLog.payload}->>'actorMobile') LIKE ${term}
+            OR lower(${auditLog.payload}->>'targetName') LIKE ${term}
+            OR lower(${auditLog.payload}->>'targetMobile') LIKE ${term}
+            OR lower(${auditLog.payload}->>'vendorName') LIKE ${term}
+            OR lower(${auditLog.payload}->>'fullName') LIKE ${term}
+          )`
+        );
+      }
+
+      const rows = await db
+        .select()
+        .from(auditLog)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(auditLog.createdAt));
+
+      const escape = (v: string | null | undefined) => {
+        const s = v ?? "";
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const actionLabelMap: Record<string, string> = {
+        admin_granted: "منح صلاحيات المشرف",
+        admin_revoked: "سحب صلاحيات المشرف",
+        vendor_created: "إضافة مورد",
+        vendor_activated: "تفعيل المورد",
+        vendor_deactivated: "إيقاف المورد",
+        vendor_user_created: "إضافة مستخدم مورد",
+        vendor_user_removed: "حذف مستخدم مورد",
+        inspection_status_override: "تغيير حالة الطلب",
+      };
+
+      const header = ["التاريخ", "الإجراء", "نوع الكيان", "المنفذ", "جوال المنفذ", "المستهدف", "جوال المستهدف", "تفاصيل"];
+      const csvRows = [header.join(",")];
+
+      for (const row of rows) {
+        const payload = row.payload as Record<string, string | null> | null;
+        const actionLabel = actionLabelMap[row.action] ?? row.action;
+        const detail =
+          payload?.previousStatus && payload?.newStatus
+            ? `${payload.previousStatus} ← ${payload.newStatus}`
+            : payload?.inspectionNo ?? payload?.vendorName ?? "";
+
+        csvRows.push([
+          escape(row.createdAt ? new Date(row.createdAt).toISOString().replace("T", " ").slice(0, 19) : ""),
+          escape(actionLabel),
+          escape(row.entityType ?? ""),
+          escape(payload?.actorName ?? ""),
+          escape(payload?.actorMobile ?? ""),
+          escape(payload?.targetName ?? payload?.fullName ?? ""),
+          escape(payload?.targetMobile ?? ""),
+          escape(detail),
+        ].join(","));
+      }
+
+      const csv = "\uFEFF" + csvRows.join("\r\n");
+      const filename = `audit_log_${new Date().toISOString().slice(0, 10)}.csv`;
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // PATCH /api/admin/laqit-inspections/:id/status — admin-only inspection status override
   app.patch("/api/admin/laqit-inspections/:id/status", ...requireAdminCustomer, async (req: Request, res: Response) => {
     try {

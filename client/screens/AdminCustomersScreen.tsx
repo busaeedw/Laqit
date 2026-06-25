@@ -392,6 +392,7 @@ export default function AdminCustomersScreen() {
   const [adminsOnly, setAdminsOnly] = useState(false);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAuditExporting, setIsAuditExporting] = useState(false);
 
   // Audit log filters
   const [auditPerson, setAuditPerson] = useState("");
@@ -496,6 +497,62 @@ export default function AdminCustomersScreen() {
 
   const handleToggle = (customerId: string, isAdmin: boolean) => {
     toggleMutation.mutate({ customerId, isAdmin });
+  };
+
+  const handleAuditExport = async () => {
+    if (isAuditExporting) return;
+    setIsAuditExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (auditPerson.trim()) params.set("person", auditPerson.trim());
+      const range = presetToDateRange(auditDatePreset);
+      if (range) {
+        params.set("since", range.since);
+        params.set("until", range.until);
+      }
+      if (auditEntityType) params.set("entityType", auditEntityType);
+      if (auditAction) params.set("action", auditAction);
+      const qs = params.toString();
+      const path = `/api/admin/audit-log/export${qs ? `?${qs}` : ""}`;
+      const baseUrl = getApiUrl();
+      const url = new URL(path, baseUrl).toString();
+
+      if (Platform.OS === "web") {
+        const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        const today = new Date().toISOString().slice(0, 10);
+        a.download = `audit_log_${today}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        const fileUri = FileSystem.cacheDirectory + `audit_log_${today}.csv`;
+        const result = await FileSystem.downloadAsync(url, fileUri, {
+          headers: authHeaders(),
+        });
+        if (result.status !== 200) throw new Error(`${result.status}`);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(result.uri, {
+            mimeType: "text/csv",
+            dialogTitle: "تصدير سجل التغييرات",
+            UTI: "public.comma-separated-values-text",
+          });
+        } else {
+          Alert.alert("تصدير", `تم حفظ الملف في:\n${result.uri}`);
+        }
+      }
+    } catch {
+      Alert.alert("خطأ", "تعذر تصدير السجل، يرجى المحاولة مجدداً");
+    } finally {
+      setIsAuditExporting(false);
+    }
   };
 
   const handleExport = async () => {
@@ -764,13 +821,39 @@ export default function AdminCustomersScreen() {
 
   const auditSection = (
     <View style={styles.auditSection}>
-      <View style={styles.sectionHeader}>
-        <Feather name="clock" size={14} color={theme.textSecondary} />
-        <ThemedText
-          style={[styles.sectionTitle, { color: theme.textSecondary, fontFamily: "Cairo_600SemiBold" }]}
+      <View style={[styles.sectionHeader, { justifyContent: "space-between" }]}>
+        <View style={[styles.sectionHeader, { marginBottom: 0 }]}>
+          <Feather name="clock" size={14} color={theme.textSecondary} />
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary, fontFamily: "Cairo_600SemiBold" }]}
+          >
+            سجل التغييرات
+          </ThemedText>
+        </View>
+        <Pressable
+          testID="button-export-audit-log"
+          onPress={handleAuditExport}
+          disabled={isAuditExporting}
+          style={({ pressed }) => [
+            styles.auditExportBtn,
+            {
+              backgroundColor: theme.backgroundDefault,
+              borderColor: theme.border,
+              opacity: pressed || isAuditExporting ? 0.5 : 1,
+            },
+          ]}
         >
-          سجل التغييرات
-        </ThemedText>
+          {isAuditExporting ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <>
+              <Feather name="download" size={12} color={theme.primary} />
+              <ThemedText style={[styles.auditExportText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                تصدير CSV
+              </ThemedText>
+            </>
+          )}
+        </Pressable>
       </View>
 
       {auditFilterBar}
@@ -1339,6 +1422,20 @@ const styles = StyleSheet.create({
   },
   auditLoadMoreText: {
     fontSize: 13,
+  },
+  auditExportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    minWidth: 36,
+    justifyContent: "center",
+  },
+  auditExportText: {
+    fontSize: 12,
   },
   cityFilterRow: {
     flexDirection: "row-reverse",
