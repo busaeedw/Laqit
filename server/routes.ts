@@ -1333,6 +1333,72 @@ Rules:
     }
   });
 
+  // GET /api/customers/export — download filtered customer list as CSV (admin only)
+  app.get("/api/customers/export", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const { search, adminsOnly, cityId } = req.query as Record<string, string | undefined>;
+
+      const cityMap = new Map<string, string>();
+      const cityRows = await db
+        .select({ cityId: cities.cityId, nameAr: cities.nameAr })
+        .from(cities);
+      for (const c of cityRows) cityMap.set(c.cityId, c.nameAr);
+
+      const rows = await db
+        .select({
+          customerId: customers.customerId,
+          fullName: customers.fullName,
+          mobileE164: customers.mobileE164,
+          email: customers.email,
+          isAdmin: customers.isAdmin,
+          createdAt: customers.createdAt,
+          cityId: customers.cityId,
+        })
+        .from(customers)
+        .orderBy(customers.createdAt);
+
+      const normalizedQuery = (search ?? "").trim().toLowerCase();
+      const filtered = rows.filter((c) => {
+        if (adminsOnly === "true" && !c.isAdmin) return false;
+        if (cityId && c.cityId !== cityId) return false;
+        if (normalizedQuery.length === 0) return true;
+        const nameMatch = (c.fullName ?? "").toLowerCase().includes(normalizedQuery);
+        const mobileMatch = c.mobileE164.toLowerCase().includes(normalizedQuery);
+        return nameMatch || mobileMatch;
+      });
+
+      const escape = (v: string | null | undefined) => {
+        const s = v ?? "";
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const header = ["الاسم", "رقم الجوال", "البريد الإلكتروني", "المدينة", "مشرف", "تاريخ التسجيل"];
+      const csvRows = [header.join(",")];
+      for (const c of filtered) {
+        const row = [
+          escape(c.fullName),
+          escape(c.mobileE164),
+          escape(c.email),
+          escape(c.cityId ? (cityMap.get(c.cityId) ?? "") : ""),
+          c.isAdmin ? "نعم" : "لا",
+          escape(c.createdAt ? new Date(c.createdAt).toISOString().slice(0, 10) : ""),
+        ];
+        csvRows.push(row.join(","));
+      }
+
+      const csv = "\uFEFF" + csvRows.join("\r\n");
+      const filename = `customers_${new Date().toISOString().slice(0, 10)}.csv`;
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // PATCH /api/customers/:id/admin — promote or revoke admin status
   app.patch("/api/customers/:id/admin", ...requireAdminCustomer, async (req: Request, res: Response) => {
     try {

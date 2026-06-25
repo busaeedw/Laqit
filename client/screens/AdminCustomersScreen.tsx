@@ -8,17 +8,20 @@ import {
   ActivityIndicator,
   Switch,
   TextInput,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl, authHeaders } from "@/lib/query-client";
 import { useUser } from "@/context/UserContext";
 
 interface CustomerItem {
@@ -364,6 +367,7 @@ export default function AdminCustomersScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [adminsOnly, setAdminsOnly] = useState(false);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Audit log filters
   const [auditPerson, setAuditPerson] = useState("");
@@ -431,6 +435,57 @@ export default function AdminCustomersScreen() {
 
   const handleToggle = (customerId: string, isAdmin: boolean) => {
     toggleMutation.mutate({ customerId, isAdmin });
+  };
+
+  const handleExport = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (adminsOnly) params.set("adminsOnly", "true");
+      if (selectedCityId) params.set("cityId", selectedCityId);
+      const qs = params.toString();
+      const path = `/api/customers/export${qs ? `?${qs}` : ""}`;
+      const baseUrl = getApiUrl();
+      const url = new URL(path, baseUrl).toString();
+
+      if (Platform.OS === "web") {
+        const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        const today = new Date().toISOString().slice(0, 10);
+        a.download = `customers_${today}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        const fileUri = FileSystem.cacheDirectory + `customers_${today}.csv`;
+        const result = await FileSystem.downloadAsync(url, fileUri, {
+          headers: authHeaders(),
+        });
+        if (result.status !== 200) throw new Error(`${result.status}`);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(result.uri, {
+            mimeType: "text/csv",
+            dialogTitle: "تصدير قائمة العملاء",
+            UTI: "public.comma-separated-values-text",
+          });
+        } else {
+          Alert.alert("تصدير", `تم حفظ الملف في:\n${result.uri}`);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert("خطأ", "تعذر تصدير البيانات، يرجى المحاولة مجدداً");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (isLoading) {
@@ -813,6 +868,33 @@ export default function AdminCustomersScreen() {
                     {adminCount} مشرف
                   </ThemedText>
                 </View>
+                <Pressable
+                  testID="button-export-customers"
+                  onPress={handleExport}
+                  disabled={isExporting || filteredList.length === 0}
+                  style={({ pressed }) => [
+                    styles.exportBtn,
+                    {
+                      backgroundColor: theme.primary + "14",
+                      borderColor: theme.primary + "40",
+                      opacity: pressed || isExporting || filteredList.length === 0 ? 0.5 : 1,
+                    },
+                  ]}
+                >
+                  {isExporting ? (
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  ) : (
+                    <Feather name="download" size={13} color={theme.primary} />
+                  )}
+                  <ThemedText
+                    style={[
+                      styles.statText,
+                      { color: theme.primary, fontFamily: "Cairo_600SemiBold" },
+                    ]}
+                  >
+                    تصدير CSV
+                  </ThemedText>
+                </Pressable>
               </View>
             ) : null}
           </View>
@@ -936,6 +1018,15 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
   },
   statText: { fontSize: 12 },
+  exportBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
   card: {
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
