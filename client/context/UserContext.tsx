@@ -9,6 +9,7 @@ export interface UserData {
   email: string | null;
   customerId?: string;
   cityId?: string;
+  isAdmin?: boolean;
 }
 
 const USER_STORE_KEY = "laqit_user";

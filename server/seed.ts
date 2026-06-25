@@ -8,6 +8,7 @@ import {
   vendorUsers,
   vendorLocations,
   vendorSupportedModels,
+  customers,
 } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import { pathToFileURL } from "url";
@@ -646,6 +647,47 @@ export async function dedupeCities() {
     }
   } catch (err) {
     console.error("dedupeCities failed:", err);
+  }
+}
+
+/**
+ * Idempotent admin bootstrap: reads ADMIN_MOBILES (comma-separated E.164
+ * numbers, e.g. "+966501234567,+966507654321") and sets is_admin=true for
+ * every matching customer account.
+ *
+ * Uses mobileE164 — the immutable login key that customers cannot change via
+ * any API endpoint — so there is no privilege-escalation path via profile edits.
+ * The function is a no-op for accounts already flagged as admin.
+ *
+ * To grant Waheed (or any other operator) admin access, set:
+ *   ADMIN_MOBILES=+966XXXXXXXXX
+ * in the environment before starting the server.
+ */
+export async function bootstrapAdminAccounts() {
+  try {
+    const raw = process.env.ADMIN_MOBILES ?? "";
+    const mobiles = raw
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean);
+    if (mobiles.length === 0) return;
+
+    for (const mobile of mobiles) {
+      const [row] = await db
+        .select({ customerId: customers.customerId, isAdmin: customers.isAdmin })
+        .from(customers)
+        .where(eq(customers.mobileE164, mobile))
+        .limit(1);
+      if (!row) continue;
+      if (row.isAdmin) continue;
+      await db
+        .update(customers)
+        .set({ isAdmin: true })
+        .where(eq(customers.customerId, row.customerId));
+      console.log(`[seed] Granted is_admin=true to customer ${row.customerId} (mobile ${mobile})`);
+    }
+  } catch (err) {
+    console.error("bootstrapAdminAccounts error:", err);
   }
 }
 

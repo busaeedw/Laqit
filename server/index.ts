@@ -2,7 +2,7 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
-import { seedIfEmpty, seedAgentsIfEmpty, dedupeCities, ensureMigrations, syncCarCatalog } from "./seed";
+import { seedIfEmpty, seedAgentsIfEmpty, dedupeCities, ensureMigrations, syncCarCatalog, bootstrapAdminAccounts } from "./seed";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -387,6 +387,7 @@ function validateProductionSecrets() {
         .then(() => seedIfEmpty())
         .then(() => seedAgentsIfEmpty())
         .then(() => dedupeCities())
+        .then(() => bootstrapAdminAccounts())
         .catch((e) => log("startup data reconcile error", e));
     },
   );

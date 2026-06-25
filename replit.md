@@ -157,3 +157,4 @@ RootStackNavigator
 - `WHATSAPP_API_KEY` + `WHATSAPP_PHONE_NUMBER_ID` — WhatsApp Business API
 - `SMS_API_KEY` — SMS provider (Unifonic or similar)
 - `PAYMENT_SECRET_KEY` — Stripe secret key
+- `ADMIN_MOBILES` — comma-separated E.164 mobile numbers of admin accounts (e.g. `+966501234567`); on each startup the server sets `is_admin=true` for any matching customer

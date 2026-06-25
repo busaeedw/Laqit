@@ -71,7 +71,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const rootNavigation = useRootNavigation<RootNavProp<RootStackParamList>>();
   const { user } = useUser();
-  const isWaheed = !!user?.name?.toLowerCase().includes("waheed");
+  const isAdmin = !!user?.isAdmin;
 
   return (
     <ScrollView
@@ -227,7 +227,7 @@ export default function HomeScreen() {
         </Pressable>
       </Animated.View>
 
-      {isWaheed ? (
+      {isAdmin ? (
         <Animated.View entering={FadeInDown.duration(600).delay(530)}>
           <Pressable
             testID="button-vendor-makes"

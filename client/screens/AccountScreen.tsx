@@ -333,6 +333,7 @@ export default function AccountScreen() {
             email: customer.email,
             customerId: customer.customerId,
             cityId: customer.cityId,
+            isAdmin: !!customer.isAdmin,
           },
           data.token
         );
@@ -399,6 +400,7 @@ export default function AccountScreen() {
           email: customer.email,
           customerId: customer.customerId,
           cityId: customer.cityId,
+          isAdmin: !!customer.isAdmin,
         },
         data.token
       );
@@ -493,6 +495,7 @@ export default function AccountScreen() {
           email: customer.email,
           customerId: customer.customerId,
           cityId: customer.cityId,
+          isAdmin: !!customer.isAdmin,
         },
         custData.token
       );
