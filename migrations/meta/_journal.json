@@ -8,6 +8,13 @@
       "when": 1781120394604,
       "tag": "0000_easy_tana_nile",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1750809600000,
+      "tag": "0001_customers_is_admin",
+      "breakpoints": true
     }
   ]
 }
