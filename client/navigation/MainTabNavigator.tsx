@@ -147,7 +147,7 @@ export default function MainTabNavigator() {
         options={{
           title: "الحساب",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={isLoggedIn ? "#9CA3AF" : color} />
+            <Feather name="user" size={size} color={isLoggedIn ? color : "#9CA3AF"} />
           ),
         }}
       />
