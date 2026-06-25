@@ -1282,14 +1282,52 @@ Rules:
   });
 
   // GET /api/admin/audit-log — recent admin access changes (granted/revoked)
-  app.get("/api/admin/audit-log", ...requireAdminCustomer, async (_req: Request, res: Response) => {
+  // Query params: since (ISO), until (ISO), person (name/mobile text search), actorId (UUID), targetId (UUID)
+  app.get("/api/admin/audit-log", ...requireAdminCustomer, async (req: Request, res: Response) => {
     try {
+      const { since, until, person, actorId, targetId } = req.query as Record<string, string | undefined>;
+
+      const conditions: ReturnType<typeof sql>[] = [
+        sql`${auditLog.action} IN ('admin_granted', 'admin_revoked')`,
+      ];
+
+      if (since) {
+        const sinceDate = new Date(since);
+        if (!isNaN(sinceDate.getTime())) {
+          conditions.push(sql`${auditLog.createdAt} >= ${sinceDate.toISOString()}`);
+        }
+      }
+      if (until) {
+        const untilDate = new Date(until);
+        if (!isNaN(untilDate.getTime())) {
+          untilDate.setHours(23, 59, 59, 999);
+          conditions.push(sql`${auditLog.createdAt} <= ${untilDate.toISOString()}`);
+        }
+      }
+      if (actorId) {
+        conditions.push(sql`${auditLog.actorId} = ${actorId}::uuid`);
+      }
+      if (targetId) {
+        conditions.push(sql`${auditLog.entityId} = ${targetId}::uuid`);
+      }
+      if (person && person.trim().length > 0) {
+        const term = `%${person.trim().toLowerCase()}%`;
+        conditions.push(
+          sql`(
+            lower(${auditLog.payload}->>'actorName') LIKE ${term}
+            OR lower(${auditLog.payload}->>'actorMobile') LIKE ${term}
+            OR lower(${auditLog.payload}->>'targetName') LIKE ${term}
+            OR lower(${auditLog.payload}->>'targetMobile') LIKE ${term}
+          )`
+        );
+      }
+
       const rows = await db
         .select()
         .from(auditLog)
-        .where(sql`${auditLog.action} IN ('admin_granted', 'admin_revoked')`)
+        .where(and(...conditions))
         .orderBy(desc(auditLog.createdAt))
-        .limit(50);
+        .limit(100);
       res.json({ entries: rows });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });

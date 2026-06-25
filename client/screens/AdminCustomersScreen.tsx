@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -18,7 +18,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useUser } from "@/context/UserContext";
 
 interface CustomerItem {
@@ -251,6 +251,26 @@ function CustomerRow({
   );
 }
 
+type DatePreset = "today" | "week" | "month" | null;
+
+function presetToDateRange(preset: DatePreset): { since: string; until: string } | null {
+  if (!preset) return null;
+  const now = new Date();
+  const until = now.toISOString().slice(0, 10);
+  if (preset === "today") return { since: until, until };
+  if (preset === "week") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 6);
+    return { since: d.toISOString().slice(0, 10), until };
+  }
+  if (preset === "month") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 29);
+    return { since: d.toISOString().slice(0, 10), until };
+  }
+  return null;
+}
+
 export default function AdminCustomersScreen() {
   const { theme } = useTheme();
   const headerHeight = useHeaderHeight();
@@ -262,13 +282,31 @@ export default function AdminCustomersScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [adminsOnly, setAdminsOnly] = useState(false);
 
+  // Audit log filters
+  const [auditPerson, setAuditPerson] = useState("");
+  const [auditDatePreset, setAuditDatePreset] = useState<DatePreset>(null);
+
+  const auditQueryUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (auditPerson.trim()) params.set("person", auditPerson.trim());
+    const range = presetToDateRange(auditDatePreset);
+    if (range) {
+      params.set("since", range.since);
+      params.set("until", range.until);
+    }
+    const qs = params.toString();
+    return qs ? `/api/admin/audit-log?${qs}` : "/api/admin/audit-log";
+  }, [auditPerson, auditDatePreset]);
+
+  const hasAuditFilters = auditPerson.trim().length > 0 || auditDatePreset !== null;
+
   const { data, isLoading, isError, refetch } = useQuery<CustomersResponse>({
     queryKey: ["/api/customers/all"],
     staleTime: 0,
   });
 
   const { data: auditData, isLoading: auditLoading } = useQuery<AuditLogResponse>({
-    queryKey: ["/api/admin/audit-log"],
+    queryKey: [auditQueryUrl],
     staleTime: 0,
   });
 
@@ -353,26 +391,120 @@ export default function AdminCustomersScreen() {
 
   const auditEntries = auditData?.entries ?? [];
 
-  const auditSection =
-    auditEntries.length > 0 ? (
-      <View style={styles.auditSection}>
-        <View style={styles.sectionHeader}>
-          <Feather name="clock" size={14} color={theme.textSecondary} />
-          <ThemedText
-            style={[styles.sectionTitle, { color: theme.textSecondary, fontFamily: "Cairo_600SemiBold" }]}
+  const DATE_PRESETS: { key: DatePreset; label: string }[] = [
+    { key: "today", label: "اليوم" },
+    { key: "week", label: "آخر 7 أيام" },
+    { key: "month", label: "آخر 30 يوم" },
+  ];
+
+  const auditFilterBar = (
+    <View style={styles.auditFilterBar}>
+      {/* Person search */}
+      <View
+        style={[
+          styles.auditSearchRow,
+          { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+        ]}
+      >
+        <Feather name="user" size={14} color={theme.textSecondary} />
+        <TextInput
+          testID="input-audit-person"
+          style={[styles.auditSearchInput, { color: theme.text, fontFamily: "Cairo_400Regular" }]}
+          placeholder="بحث بالاسم أو الجوال"
+          placeholderTextColor={theme.textSecondary}
+          value={auditPerson}
+          onChangeText={setAuditPerson}
+          textAlign="right"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          autoCorrect={false}
+        />
+        {auditPerson.length > 0 ? (
+          <Pressable onPress={() => setAuditPerson("")} hitSlop={8} testID="button-clear-audit-person">
+            <Feather name="x" size={13} color={theme.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* Date preset chips */}
+      <View style={styles.auditDateRow}>
+        {DATE_PRESETS.map(({ key, label }) => {
+          const active = auditDatePreset === key;
+          return (
+            <Pressable
+              key={key ?? "all"}
+              testID={`button-audit-preset-${key}`}
+              onPress={() => setAuditDatePreset(active ? null : key)}
+              style={[
+                styles.auditPresetChip,
+                {
+                  backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
+                  borderColor: active ? theme.primary + "60" : theme.border,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.auditPresetChipText,
+                  {
+                    color: active ? theme.primary : theme.textSecondary,
+                    fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
+                  },
+                ]}
+              >
+                {label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+
+        {hasAuditFilters ? (
+          <Pressable
+            testID="button-clear-audit-filters"
+            onPress={() => {
+              setAuditPerson("");
+              setAuditDatePreset(null);
+            }}
+            style={[styles.auditClearBtn, { borderColor: theme.border }]}
           >
-            سجل التغييرات
+            <Feather name="x" size={13} color={theme.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const auditSection = (
+    <View style={styles.auditSection}>
+      <View style={styles.sectionHeader}>
+        <Feather name="clock" size={14} color={theme.textSecondary} />
+        <ThemedText
+          style={[styles.sectionTitle, { color: theme.textSecondary, fontFamily: "Cairo_600SemiBold" }]}
+        >
+          سجل التغييرات
+        </ThemedText>
+      </View>
+
+      {auditFilterBar}
+
+      {auditLoading ? (
+        <View style={styles.auditLoading}>
+          <ActivityIndicator size="small" color={theme.primary} />
+        </View>
+      ) : auditEntries.length > 0 ? (
+        auditEntries.map((entry, idx) => (
+          <AuditEntryRow key={entry.auditId} entry={entry} index={idx} />
+        ))
+      ) : (
+        <View style={styles.auditEmpty}>
+          <Feather name="inbox" size={28} color={theme.textSecondary} />
+          <ThemedText style={[styles.auditEmptyText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+            {hasAuditFilters ? "لا توجد نتائج للفلاتر المحددة" : "لا توجد تغييرات بعد"}
           </ThemedText>
         </View>
-        {auditEntries.map((entry, idx) => (
-          <AuditEntryRow key={entry.auditId} entry={entry} index={idx} />
-        ))}
-      </View>
-    ) : auditLoading ? (
-      <View style={[styles.auditSection, styles.auditLoading]}>
-        <ActivityIndicator size="small" color={theme.primary} />
-      </View>
-    ) : null;
+      )}
+    </View>
+  );
 
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
@@ -723,5 +855,54 @@ const styles = StyleSheet.create({
   auditMeta: {
     fontSize: 11,
     textAlign: "right",
+  },
+  auditFilterBar: {
+    gap: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  auditSearchRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.xs,
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+  },
+  auditSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    padding: 0,
+  },
+  auditDateRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.xs,
+    flexWrap: "wrap",
+  },
+  auditPresetChip: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  auditPresetChipText: {
+    fontSize: 12,
+  },
+  auditClearBtn: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    padding: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  auditEmpty: {
+    alignItems: "center",
+    paddingVertical: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  auditEmptyText: {
+    fontSize: 13,
+    textAlign: "center",
   },
 });
