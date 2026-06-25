@@ -1236,10 +1236,12 @@ Rules:
           status: vendors.status,
           district: vendors.district,
           cityNameAr: cities.nameAr,
+          whatsappNumber: vendorUsers.whatsappE164,
         })
         .from(vendors)
         .leftJoin(vendorLocations, eq(vendorLocations.vendorId, vendors.vendorId))
         .leftJoin(cities, eq(cities.cityId, vendorLocations.cityId))
+        .leftJoin(vendorUsers, eq(vendorUsers.vendorId, vendors.vendorId))
         .orderBy(cities.nameAr, vendors.vendorName);
       // Deduplicate by vendorId (a vendor may have multiple city rows)
       const seen = new Set<string>();

@@ -29,6 +29,7 @@ interface Vendor {
   status: string | null;
   district: string | null;
   cityNameAr: string | null;
+  whatsappNumber: string | null;
 }
 
 interface MakeItem {
@@ -182,6 +183,28 @@ export default function VendorMakesScreen() {
               ]}
             >
               {item.phone}
+            </ThemedText>
+          </Pressable>
+        ) : null}
+        {item.whatsappNumber ? (
+          <Pressable
+            testID={`button-whatsapp-${item.vendorId}`}
+            onPress={(e) => {
+              e.stopPropagation();
+              const num = item.whatsappNumber!.replace(/\D/g, "");
+              Linking.openURL(`https://wa.me/${num}`);
+            }}
+            hitSlop={8}
+            style={styles.whatsappRow}
+          >
+            <Feather name="message-circle" size={13} color="#25D366" />
+            <ThemedText
+              style={[
+                styles.vendorPhone,
+                { color: "#25D366", fontFamily: "Cairo_400Regular" },
+              ]}
+            >
+              {item.whatsappNumber}
             </ThemedText>
           </Pressable>
         ) : null}
@@ -504,6 +527,11 @@ const styles = StyleSheet.create({
   vendorPhone: {
     fontSize: 12,
     textAlign: "right",
+  },
+  whatsappRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
   },
   emptyContainer: {
     alignItems: "center",
