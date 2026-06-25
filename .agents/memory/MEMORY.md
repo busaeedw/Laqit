@@ -9,4 +9,5 @@
 - [gpt-5 reasoning token budget](gpt5-reasoning-token-budget.md) — reasoning tokens eat max_completion_tokens; big prompt + medium effort → empty content (finish_reason=length), looks like "no results". Use low effort, big headroom, branch on length/empty.
 - [WhatsApp report send modes](whatsapp-send-modes.md) — personal WhatsApp can't auto-send/attach; trial uses OS share sheet, business uses Cloud API (flag-toggled).
 - [Admin secrets handling](admin-secrets-handling.md) — admin/server keys belong in Secrets, never EXPO_PUBLIC_ (bundled to client) or .replit plaintext (git); rotate if leaked; 403 vs 503 = key loaded vs missing.
+- [Expo missing dep fails publish](expo-missing-dep-fails-publish.md) — an imported-but-uninstalled Expo pkg survives dev HMR but fails the production static Metro build; install exact version from expo/bundledNativeModules.json.
 - [react-query staleTime Infinity](react-query-staletime-invalidation.md) — global default never refetches on reopen; mutations must invalidate the exact read key or edits look unsaved.
