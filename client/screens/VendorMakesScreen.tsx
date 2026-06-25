@@ -16,13 +16,44 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { apiRequest } from "@/lib/query-client";
+import { getApiUrl } from "@/lib/query-client";
+
+const ADMIN_KEY = process.env.EXPO_PUBLIC_ADMIN_API_KEY ?? "";
+
+function adminHeaders(): Record<string, string> {
+  return { "x-admin-api-key": ADMIN_KEY };
+}
+
+async function adminFetch<T>(path: string): Promise<T> {
+  const url = new URL(path, getApiUrl());
+  const res = await fetch(url.href, { headers: adminHeaders() });
+  if (!res.ok) {
+    const text = (await res.text()) || res.statusText;
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+async function adminPut<T>(path: string, body: unknown): Promise<T> {
+  const url = new URL(path, getApiUrl());
+  const res = await fetch(url.href, {
+    method: "PUT",
+    headers: { ...adminHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = (await res.text()) || res.statusText;
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json();
+}
 
 interface Vendor {
   vendorId: string;
   vendorName: string;
   vendorNameEn: string | null;
   phone: string | null;
+  status: string | null;
 }
 
 interface MakeItem {
@@ -51,10 +82,13 @@ export default function VendorMakesScreen() {
 
   const { data: vendorsData, isLoading: vendorsLoading } = useQuery<VendorsResponse>({
     queryKey: ["/api/vendors/all"],
+    queryFn: () => adminFetch<VendorsResponse>("/api/vendors/all"),
   });
 
   const { data: makesData, isLoading: makesLoading } = useQuery<MakesResponse>({
     queryKey: ["/api/vendors", selectedVendor?.vendorId, "car-makes"],
+    queryFn: () =>
+      adminFetch<MakesResponse>(`/api/vendors/${selectedVendor!.vendorId}/car-makes`),
     enabled: !!selectedVendor,
   });
 
@@ -65,12 +99,13 @@ export default function VendorMakesScreen() {
   }, [makesData]);
 
   const saveMutation = useMutation({
-    mutationFn: async ({ vendorId, makeIds }: { vendorId: string; makeIds: string[] }) => {
-      const res = await apiRequest("PUT", `/api/vendors/${vendorId}/car-makes`, { makeIds });
-      return res.json();
-    },
+    mutationFn: ({ vendorId, makeIds }: { vendorId: string; makeIds: string[] }) =>
+      adminPut<{ success: boolean; modelsCount: number }>(
+        `/api/vendors/${vendorId}/car-makes`,
+        { makeIds }
+      ),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vendors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vendors/public"] });
       setSelectedVendor(null);
       Alert.alert("", `تم الحفظ — ${data.modelsCount} موديل مرتبط`);
@@ -108,7 +143,12 @@ export default function VendorMakesScreen() {
           {item.vendorName}
         </ThemedText>
         {item.phone ? (
-          <ThemedText style={[styles.vendorPhone, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+          <ThemedText
+            style={[
+              styles.vendorPhone,
+              { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+            ]}
+          >
             {item.phone}
           </ThemedText>
         ) : null}
@@ -126,10 +166,8 @@ export default function VendorMakesScreen() {
         style={({ pressed }) => [
           styles.makeRow,
           {
-            backgroundColor: isSelected
-              ? theme.primary + "12"
-              : theme.backgroundDefault,
-            borderColor: isSelected ? theme.primary : theme.border ?? "#E5E7EB",
+            backgroundColor: isSelected ? theme.primary + "12" : theme.backgroundDefault,
+            borderColor: isSelected ? theme.primary : (theme.border ?? "#E5E7EB"),
             opacity: pressed ? 0.85 : 1,
           },
         ]}
@@ -148,7 +186,12 @@ export default function VendorMakesScreen() {
         <ThemedText style={[styles.makeName, { fontFamily: "Cairo_700Bold" }]}>
           {item.nameAr ?? item.makeName}
         </ThemedText>
-        <ThemedText style={[styles.makeNameEn, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+        <ThemedText
+          style={[
+            styles.makeNameEn,
+            { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+          ]}
+        >
           {item.makeName}
         </ThemedText>
       </Pressable>
@@ -178,7 +221,12 @@ export default function VendorMakesScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Feather name="inbox" size={48} color={theme.textSecondary} />
-            <ThemedText style={[styles.emptyText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+            <ThemedText
+              style={[
+                styles.emptyText,
+                { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+              ]}
+            >
               لا يوجد موردون
             </ThemedText>
           </View>
@@ -194,7 +242,12 @@ export default function VendorMakesScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: theme.backgroundDefault }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.border ?? "#E5E7EB" }]}>
+            <View
+              style={[
+                styles.modalHeader,
+                { borderBottomColor: theme.border ?? "#E5E7EB" },
+              ]}
+            >
               <Pressable
                 onPress={() => setSelectedVendor(null)}
                 style={styles.closeBtn}
@@ -207,7 +260,10 @@ export default function VendorMakesScreen() {
                   ماركات السيارات
                 </ThemedText>
                 <ThemedText
-                  style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
+                  style={[
+                    styles.modalSubtitle,
+                    { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+                  ]}
                   numberOfLines={1}
                 >
                   {selectedVendor?.vendorName}
@@ -234,9 +290,24 @@ export default function VendorMakesScreen() {
               />
             )}
 
-            <View style={[styles.saveBar, { borderTopColor: theme.border ?? "#E5E7EB", paddingBottom: insets.bottom + Spacing.md }]}>
-              <ThemedText style={[styles.selectedCount, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {pendingMakeIds.length > 0 ? `${pendingMakeIds.length} ماركة محددة` : "لم يتم تحديد أي ماركة"}
+            <View
+              style={[
+                styles.saveBar,
+                {
+                  borderTopColor: theme.border ?? "#E5E7EB",
+                  paddingBottom: insets.bottom + Spacing.md,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.selectedCount,
+                  { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+                ]}
+              >
+                {pendingMakeIds.length > 0
+                  ? `${pendingMakeIds.length} ماركة محددة`
+                  : "لم يتم تحديد أي ماركة"}
               </ThemedText>
               <Pressable
                 testID="button-save-makes"
@@ -316,8 +387,8 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalSheet: {
-    borderTopLeftRadius: BorderRadius.xl ?? 20,
-    borderTopRightRadius: BorderRadius.xl ?? 20,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
     maxHeight: "85%",
     minHeight: "50%",
   },
