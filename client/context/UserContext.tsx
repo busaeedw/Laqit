@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { storeItem, loadItem, deleteItem } from "@/lib/secureStorage";
-import { setAuthToken } from "@/lib/query-client";
+import { setAuthToken, getApiUrl } from "@/lib/query-client";
 
 export interface UserData {
   id: string;
@@ -47,6 +47,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setUserState(parsed);
           setTokenState(storedToken);
           setAuthToken(storedToken);
+
+          // Background refresh to pick up any server-side role changes (e.g. isAdmin toggled)
+          try {
+            const customerId = parsed.customerId ?? parsed.id;
+            const res = await fetch(
+              new URL(`/api/customers/${customerId}`, getApiUrl()).toString(),
+              { headers: { Authorization: `Bearer ${storedToken}` } }
+            );
+            if (res.status === 401) {
+              // Session no longer valid — wipe it silently
+              setUserState(null);
+              setTokenState(null);
+              setAuthToken(null);
+              deleteItem(USER_STORE_KEY).catch(() => {});
+              deleteItem(TOKEN_STORE_KEY).catch(() => {});
+            } else if (res.ok) {
+              const body = await res.json();
+              const fresh = body.customer ?? body;
+              const updated: UserData = {
+                ...parsed,
+                name: fresh.full_name ?? fresh.fullName ?? parsed.name,
+                email: fresh.email ?? parsed.email,
+                cityId: fresh.city_id ?? fresh.cityId ?? parsed.cityId,
+                isAdmin: fresh.is_admin ?? fresh.isAdmin ?? false,
+              };
+              setUserState(updated);
+              storeItem(USER_STORE_KEY, JSON.stringify(updated)).catch(() => {});
+            }
+          } catch {
+            // Network error — keep the cached session as-is
+          }
         }
       } catch {}
       setIsHydrated(true);
