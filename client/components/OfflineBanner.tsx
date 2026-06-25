@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   text: {
     color: "#FFFFFF",
-    fontFamily: Fonts.default.arabic,
+    fontFamily: Fonts.arabic,
     fontSize: 13,
     lineHeight: 18,
     textAlign: "center",
