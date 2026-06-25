@@ -33,6 +33,88 @@ interface CustomersResponse {
   customers: CustomerItem[];
 }
 
+interface AuditEntry {
+  auditId: string;
+  action: string;
+  createdAt: string;
+  payload: {
+    actorName: string | null;
+    actorMobile: string | null;
+    targetName: string | null;
+    targetMobile: string | null;
+  } | null;
+}
+
+interface AuditLogResponse {
+  entries: AuditEntry[];
+}
+
+function formatRelativeTime(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "الآن";
+  if (mins < 60) return `منذ ${mins} دقيقة`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `منذ ${hrs} ساعة`;
+  const days = Math.floor(hrs / 24);
+  return `منذ ${days} يوم`;
+}
+
+function AuditEntryRow({ entry, index }: { entry: AuditEntry; index: number }) {
+  const { theme } = useTheme();
+  const isGrant = entry.action === "admin_granted";
+  const accentColor = isGrant ? "#22C55E" : "#EF4444";
+  const actorLabel = entry.payload?.actorName ?? entry.payload?.actorMobile ?? "مشرف";
+  const targetLabel = entry.payload?.targetName ?? entry.payload?.targetMobile ?? "مستخدم";
+
+  return (
+    <Animated.View entering={FadeInDown.duration(300).delay(index * 30)}>
+      <View
+        style={[
+          styles.auditCard,
+          {
+            backgroundColor: theme.backgroundDefault,
+            borderColor: accentColor + "30",
+          },
+        ]}
+        testID={`audit-entry-${entry.auditId}`}
+      >
+        <View
+          style={[
+            styles.auditDot,
+            { backgroundColor: accentColor + "20" },
+          ]}
+        >
+          <Feather
+            name={isGrant ? "shield" : "shield-off"}
+            size={14}
+            color={accentColor}
+          />
+        </View>
+        <View style={styles.auditInfo}>
+          <ThemedText
+            style={[styles.auditAction, { fontFamily: "Cairo_600SemiBold" }]}
+            numberOfLines={2}
+          >
+            {isGrant ? "منح صلاحيات المشرف" : "سحب صلاحيات المشرف"}
+            {"  "}
+            <ThemedText
+              style={[styles.auditAction, { color: accentColor, fontFamily: "Cairo_700Bold" }]}
+            >
+              {targetLabel}
+            </ThemedText>
+          </ThemedText>
+          <ThemedText
+            style={[styles.auditMeta, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
+          >
+            {`بواسطة ${actorLabel}  •  ${formatRelativeTime(entry.createdAt)}`}
+          </ThemedText>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
 function CustomerRow({
   item,
   index,
@@ -182,6 +264,11 @@ export default function AdminCustomersScreen() {
     staleTime: 0,
   });
 
+  const { data: auditData, isLoading: auditLoading } = useQuery<AuditLogResponse>({
+    queryKey: ["/api/admin/audit-log"],
+    staleTime: 0,
+  });
+
   const toggleMutation = useMutation({
     mutationFn: async ({
       customerId,
@@ -200,6 +287,7 @@ export default function AdminCustomersScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/audit-log"] });
     },
     onError: () => {
       Alert.alert("خطأ", "حدث خطأ أثناء تعديل الصلاحيات، يرجى المحاولة مجدداً");
@@ -250,6 +338,28 @@ export default function AdminCustomersScreen() {
 
   const customerList = data?.customers ?? [];
   const adminCount = customerList.filter((c) => !!c.isAdmin).length;
+  const auditEntries = auditData?.entries ?? [];
+
+  const auditSection =
+    auditEntries.length > 0 ? (
+      <View style={styles.auditSection}>
+        <View style={styles.sectionHeader}>
+          <Feather name="clock" size={14} color={theme.textSecondary} />
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary, fontFamily: "Cairo_600SemiBold" }]}
+          >
+            سجل التغييرات
+          </ThemedText>
+        </View>
+        {auditEntries.map((entry, idx) => (
+          <AuditEntryRow key={entry.auditId} entry={entry} index={idx} />
+        ))}
+      </View>
+    ) : auditLoading ? (
+      <View style={[styles.auditSection, styles.auditLoading]}>
+        <ActivityIndicator size="small" color={theme.primary} />
+      </View>
+    ) : null;
 
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
@@ -300,6 +410,7 @@ export default function AdminCustomersScreen() {
             </View>
           ) : null
         }
+        ListFooterComponent={auditSection}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather name="users" size={48} color={theme.textSecondary} />
@@ -421,5 +532,51 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     textAlign: "center",
+  },
+  auditSection: {
+    marginTop: Spacing.lg,
+    gap: Spacing.xs,
+  },
+  auditLoading: {
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+  },
+  sectionHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: Spacing.xs,
+    paddingHorizontal: 2,
+  },
+  sectionTitle: {
+    fontSize: 13,
+  },
+  auditCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.sm,
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+  },
+  auditDot: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  auditInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  auditAction: {
+    fontSize: 13,
+    textAlign: "right",
+  },
+  auditMeta: {
+    fontSize: 11,
+    textAlign: "right",
   },
 });

@@ -25,6 +25,7 @@ import {
   quotes,
   payments,
   notifications,
+  auditLog,
   inspectionStatusEnum,
 } from "../shared/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
@@ -1248,7 +1249,48 @@ Rules:
         .where(eq(customers.customerId, targetId))
         .returning({ customerId: customers.customerId, isAdmin: customers.isAdmin });
       if (!updated) return res.status(404).json({ error: "العميل غير موجود" });
+
+      const [targetCustomer] = await db
+        .select({ fullName: customers.fullName, mobileE164: customers.mobileE164 })
+        .from(customers)
+        .where(eq(customers.customerId, targetId))
+        .limit(1);
+      const [actorCustomer] = await db
+        .select({ fullName: customers.fullName, mobileE164: customers.mobileE164 })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+
+      await db.insert(auditLog).values({
+        actorType: "customer",
+        actorId: callerCustomerId,
+        action: isAdmin ? "admin_granted" : "admin_revoked",
+        entityType: "customer",
+        entityId: targetId,
+        payload: {
+          actorName: actorCustomer?.fullName ?? null,
+          actorMobile: actorCustomer?.mobileE164 ?? null,
+          targetName: targetCustomer?.fullName ?? null,
+          targetMobile: targetCustomer?.mobileE164 ?? null,
+        },
+      });
+
       res.json({ success: true, customer: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // GET /api/admin/audit-log — recent admin access changes (granted/revoked)
+  app.get("/api/admin/audit-log", ...requireAdminCustomer, async (_req: Request, res: Response) => {
+    try {
+      const rows = await db
+        .select()
+        .from(auditLog)
+        .where(sql`${auditLog.action} IN ('admin_granted', 'admin_revoked')`)
+        .orderBy(desc(auditLog.createdAt))
+        .limit(50);
+      res.json({ entries: rows });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }
