@@ -33,6 +33,7 @@ interface UserContextType {
   clearSession: () => void;
   isLoggedIn: boolean;
   isHydrated: boolean;
+  isOffline: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -41,6 +42,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<UserData | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   // Refs so the refresh helper always sees the latest values without
   // needing to be re-created (avoids stale closures in listeners/intervals).
@@ -160,13 +162,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── NetInfo: refresh when device regains connectivity ──────────────────────
+  // ── NetInfo: track offline state + refresh when connectivity restored ───────
   useEffect(() => {
     // Track previous connectivity so we only fire on the offline→online edge.
     const wasConnectedRef = { current: true };
 
     const unsubscribe = NetInfo.addEventListener((state) => {
       const isConnected = state.isConnected === true;
+      setIsOffline(!isConnected);
       if (isConnected && !wasConnectedRef.current) {
         const u = userRef.current;
         const t = tokenRef.current;
@@ -219,6 +222,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         clearSession,
         isLoggedIn: !!user && !!token,
         isHydrated,
+        isOffline,
       }}
     >
       {children}
