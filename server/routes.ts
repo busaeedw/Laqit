@@ -1862,7 +1862,7 @@ Rules:
         inspection_status_override: "تغيير حالة الطلب",
       };
 
-      const header = ["التاريخ", "الإجراء", "نوع الكيان", "المنفذ", "جوال المنفذ", "المستهدف", "جوال المستهدف", "تفاصيل"];
+      const header = ["التاريخ", "الوقت (UTC)", "الإجراء", "نوع الكيان", "المنفذ", "جوال المنفذ", "المستهدف", "جوال المستهدف", "تفاصيل"];
       const csvRows = [header.join(",")];
 
       for (const row of rows) {
@@ -1873,8 +1873,17 @@ Rules:
             ? `${payload.previousStatus} ← ${payload.newStatus}`
             : payload?.inspectionNo ?? payload?.vendorName ?? "";
 
+        let isoDate = "";
+        let isoTime = "";
+        if (row.createdAt) {
+          const iso = new Date(row.createdAt).toISOString();
+          isoDate = iso.slice(0, 10);
+          isoTime = iso.slice(11, 19) + "Z";
+        }
+
         csvRows.push([
-          escape(row.createdAt ? new Date(row.createdAt).toISOString().replace("T", " ").slice(0, 19) : ""),
+          escape(isoDate),
+          escape(isoTime),
           escape(actionLabel),
           escape(row.entityType ?? ""),
           escape(payload?.actorName ?? ""),
