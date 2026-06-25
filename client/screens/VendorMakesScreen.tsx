@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  ViewToken,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,6 +60,9 @@ export default function VendorMakesScreen() {
   const queryClient = useQueryClient();
 
   const sectionListRef = useRef<SectionList<Vendor, VendorSection>>(null);
+  const chipScrollRef = useRef<ScrollView>(null);
+  const chipLayoutRef = useRef<Record<string, { x: number; width: number }>>({});
+  const chipBarWidthRef = useRef<number>(0);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [pendingMakeIds, setPendingMakeIds] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
@@ -140,6 +144,34 @@ export default function VendorMakesScreen() {
     if (idx < 0) return;
     sectionListRef.current?.scrollToLocation({ sectionIndex: idx, itemIndex: 0, animated: true, viewOffset: 0 });
   };
+
+  // Stable viewability config — must not be recreated on each render
+  const viewabilityConfig = useRef({
+    itemVisibilityPercentThreshold: 10,
+    minimumViewTime: 50,
+  }).current;
+
+  // Stable callback — SectionList requires this not to change between renders
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length === 0) return;
+      const firstSection = (viewableItems[0] as any).section as VendorSection | undefined;
+      if (firstSection?.title) {
+        setSelectedCity(firstSection.title);
+      }
+    }
+  ).current;
+
+  // Auto-scroll the chip bar whenever selectedCity changes
+  useEffect(() => {
+    if (!selectedCity) return;
+    const layout = chipLayoutRef.current[selectedCity];
+    if (!layout) return;
+    const barWidth = chipBarWidthRef.current;
+    // Center the chip in the visible area
+    const targetX = layout.x - barWidth / 2 + layout.width / 2;
+    chipScrollRef.current?.scrollTo({ x: Math.max(0, targetX), animated: true });
+  }, [selectedCity]);
 
   const renderVendorRow = ({ item }: { item: Vendor }) => (
     <Pressable
@@ -281,10 +313,12 @@ export default function VendorMakesScreen() {
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       {cities.length > 1 ? (
         <ScrollView
+          ref={chipScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           style={[styles.chipBar, { paddingTop: headerHeight }]}
           contentContainerStyle={styles.chipBarContent}
+          onLayout={(e) => { chipBarWidthRef.current = e.nativeEvent.layout.width; }}
         >
           <Pressable
             testID="chip-city-all"
@@ -314,6 +348,12 @@ export default function VendorMakesScreen() {
               key={city}
               testID={`chip-city-${city}`}
               onPress={() => scrollToCity(city)}
+              onLayout={(e) => {
+                chipLayoutRef.current[city] = {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                };
+              }}
               style={[
                 styles.chip,
                 {
@@ -366,6 +406,8 @@ export default function VendorMakesScreen() {
           </View>
         }
         showsVerticalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
       />
 
       <Modal
