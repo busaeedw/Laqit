@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -157,14 +158,23 @@ export default function VendorMakesScreen() {
           </ThemedText>
         ) : null}
         {item.phone ? (
-          <ThemedText
-            style={[
-              styles.vendorDistrict,
-              { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
-            ]}
+          <Pressable
+            testID={`button-call-${item.vendorId}`}
+            onPress={(e) => {
+              e.stopPropagation();
+              Linking.openURL(`tel:${item.phone}`);
+            }}
+            hitSlop={8}
           >
-            {item.phone}
-          </ThemedText>
+            <ThemedText
+              style={[
+                styles.vendorPhone,
+                { color: theme.primary, fontFamily: "Cairo_400Regular" },
+              ]}
+            >
+              {item.phone}
+            </ThemedText>
+          </Pressable>
         ) : null}
       </View>
       <Feather name="chevron-left" size={20} color={theme.textSecondary} />
@@ -478,6 +488,10 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   vendorDistrict: {
+    fontSize: 12,
+    textAlign: "right",
+  },
+  vendorPhone: {
     fontSize: 12,
     textAlign: "right",
   },
