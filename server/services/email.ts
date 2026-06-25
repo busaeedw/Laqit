@@ -74,6 +74,56 @@ function getTransporter(): nodemailer.Transporter | null {
   return transporter;
 }
 
+export async function sendCustomerExportEmail(
+  to: string | string[],
+  csvContent: string,
+  filename: string,
+): Promise<EmailSendResult> {
+  try {
+    const tx = getTransporter();
+    if (!tx) {
+      return { success: false, error: "Email transport not configured" };
+    }
+
+    const subject = "تقرير قائمة العملاء - لاقط";
+    const now = new Date().toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "Asia/Riyadh",
+    });
+    const html = `
+  <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #1E74F2;">لاقط — تقرير قائمة العملاء</h2>
+    <p>مرحباً،</p>
+    <p>يرجى الاطلاع على قائمة العملاء المرفقة بتاريخ ${now}.</p>
+    <p>يحتوي التقرير على بيانات جميع العملاء المسجلين في المنصة.</p>
+    <hr />
+    <p style="color: #888; font-size: 12px;">تم إرسال هذا البريد تلقائياً من منصة لاقط.</p>
+  </div>
+`;
+
+    const info = await tx.sendMail({
+      from: `${AGENTMAIL_FROM_NAME} <${AGENTMAIL_INBOX}>`,
+      to: Array.isArray(to) ? to.join(", ") : to,
+      subject,
+      html,
+      attachments: [
+        {
+          filename,
+          content: Buffer.from(csvContent, "utf-8"),
+          contentType: "text/csv; charset=utf-8",
+        },
+      ],
+    });
+
+    return { success: true, messageId: info.messageId };
+  } catch (err: any) {
+    console.error("[Email] Customer export send error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
 export async function sendAnalysisPdfEmail(
   to: string,
   pdfBuffer: Buffer,

@@ -27,6 +27,7 @@ import {
   notifications,
   auditLog,
   inspectionStatusEnum,
+  exportSchedules,
 } from "../shared/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendWhatsAppDocument } from "./services/whatsapp";
@@ -35,7 +36,8 @@ import { extractTotalPrice } from "./services/ocr";
 import { createPaymentIntent } from "./services/payment";
 import { generateAnalysisPdf, PdfLocale, CarInfo, PartEntry } from "./services/analysisPdf";
 import { translatePartNames } from "./services/translate";
-import { sendAnalysisPdfEmail } from "./services/email";
+import { sendAnalysisPdfEmail, sendCustomerExportEmail } from "./services/email";
+import { computeInitialNextRunAt } from "./services/exportScheduler";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -1481,6 +1483,173 @@ Rules:
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(csv);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // ── Export Schedules ───────────────────────────────────────────────────────
+
+  // GET /api/admin/export-schedules — list all schedules
+  app.get("/api/admin/export-schedules", ...requireAdminCustomer, async (_req: Request, res: Response) => {
+    try {
+      const rows = await db
+        .select()
+        .from(exportSchedules)
+        .orderBy(exportSchedules.createdAt);
+      res.json({ schedules: rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // POST /api/admin/export-schedules — create a new schedule
+  app.post("/api/admin/export-schedules", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const { frequency, recipientEmails } = req.body as {
+        frequency?: string;
+        recipientEmails?: string[];
+      };
+      if (frequency !== "daily" && frequency !== "weekly") {
+        return res.status(400).json({ error: "التكرار يجب أن يكون daily أو weekly" });
+      }
+      if (!Array.isArray(recipientEmails) || recipientEmails.length === 0) {
+        return res.status(400).json({ error: "يجب إدخال بريد إلكتروني واحد على الأقل" });
+      }
+      const validEmails = recipientEmails.filter((e) => typeof e === "string" && e.includes("@"));
+      if (validEmails.length === 0) {
+        return res.status(400).json({ error: "عناوين البريد الإلكتروني غير صالحة" });
+      }
+      const nextRunAt = computeInitialNextRunAt(frequency);
+      const [created] = await db
+        .insert(exportSchedules)
+        .values({ frequency, recipientEmails: validEmails, isActive: true, nextRunAt })
+        .returning();
+      res.status(201).json({ schedule: created });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // PATCH /api/admin/export-schedules/:id — update a schedule
+  app.patch("/api/admin/export-schedules/:id", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { frequency, recipientEmails, isActive } = req.body as {
+        frequency?: string;
+        recipientEmails?: string[];
+        isActive?: boolean;
+      };
+      const updates: Partial<{ frequency: string; recipientEmails: string[]; isActive: boolean; nextRunAt: Date }> = {};
+      if (frequency !== undefined) {
+        if (frequency !== "daily" && frequency !== "weekly") {
+          return res.status(400).json({ error: "التكرار يجب أن يكون daily أو weekly" });
+        }
+        updates.frequency = frequency;
+        updates.nextRunAt = computeInitialNextRunAt(frequency);
+      }
+      if (recipientEmails !== undefined) {
+        const valid = (recipientEmails as string[]).filter((e) => typeof e === "string" && e.includes("@"));
+        if (valid.length === 0) {
+          return res.status(400).json({ error: "يجب إدخال بريد إلكتروني واحد على الأقل" });
+        }
+        updates.recipientEmails = valid;
+      }
+      if (typeof isActive === "boolean") {
+        updates.isActive = isActive;
+        if (isActive) {
+          const [current] = await db.select().from(exportSchedules).where(eq(exportSchedules.scheduleId, id)).limit(1);
+          if (current) {
+            updates.nextRunAt = computeInitialNextRunAt(updates.frequency ?? current.frequency);
+          }
+        }
+      }
+      const [updated] = await db
+        .update(exportSchedules)
+        .set(updates)
+        .where(eq(exportSchedules.scheduleId, id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "الجدولة غير موجودة" });
+      res.json({ schedule: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // DELETE /api/admin/export-schedules/:id — delete a schedule
+  app.delete("/api/admin/export-schedules/:id", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const deleted = await db
+        .delete(exportSchedules)
+        .where(eq(exportSchedules.scheduleId, id))
+        .returning();
+      if (deleted.length === 0) return res.status(404).json({ error: "الجدولة غير موجودة" });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // POST /api/admin/export-schedules/:id/run-now — send export immediately
+  app.post("/api/admin/export-schedules/:id/run-now", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const [schedule] = await db
+        .select()
+        .from(exportSchedules)
+        .where(eq(exportSchedules.scheduleId, id))
+        .limit(1);
+      if (!schedule) return res.status(404).json({ error: "الجدولة غير موجودة" });
+
+      const recipients = schedule.recipientEmails as string[];
+      if (!recipients || recipients.length === 0) {
+        return res.status(400).json({ error: "لا توجد عناوين بريد إلكتروني" });
+      }
+
+      const cityRows = await db.select({ cityId: cities.cityId, nameAr: cities.nameAr }).from(cities);
+      const cityMap = new Map(cityRows.map((c) => [c.cityId, c.nameAr]));
+      const rows = await db
+        .select({
+          fullName: customers.fullName,
+          mobileE164: customers.mobileE164,
+          email: customers.email,
+          isAdmin: customers.isAdmin,
+          createdAt: customers.createdAt,
+          cityId: customers.cityId,
+        })
+        .from(customers)
+        .orderBy(customers.createdAt);
+
+      const escape = (v: string | null | undefined) => {
+        const s = v ?? "";
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      };
+      const header = ["الاسم", "رقم الجوال", "البريد الإلكتروني", "المدينة", "مشرف", "تاريخ التسجيل"];
+      const csvRows = [header.join(",")];
+      for (const c of rows) {
+        csvRows.push([
+          escape(c.fullName),
+          escape(c.mobileE164),
+          escape(c.email),
+          escape(c.cityId ? (cityMap.get(c.cityId) ?? "") : ""),
+          c.isAdmin ? "نعم" : "لا",
+          escape(c.createdAt ? new Date(c.createdAt).toISOString().slice(0, 10) : ""),
+        ].join(","));
+      }
+      const csv = "\uFEFF" + csvRows.join("\r\n");
+      const filename = `customers_${new Date().toISOString().slice(0, 10)}.csv`;
+      const result = await sendCustomerExportEmail(recipients, csv, filename);
+      if (!result.success) {
+        return res.status(502).json({ error: result.error ?? "فشل إرسال البريد الإلكتروني" });
+      }
+      const now = new Date();
+      await db
+        .update(exportSchedules)
+        .set({ lastRunAt: now })
+        .where(eq(exportSchedules.scheduleId, id));
+      res.json({ ok: true, messageId: result.messageId });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }

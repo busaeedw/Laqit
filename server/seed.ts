@@ -395,6 +395,17 @@ export async function ensureMigrations() {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS export_schedules (
+          schedule_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          frequency TEXT NOT NULL,
+          recipient_emails JSONB NOT NULL DEFAULT '[]'::jsonb,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          last_run_at TIMESTAMPTZ,
+          next_run_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
     } finally {
       client.release();
     }

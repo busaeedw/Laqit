@@ -808,3 +808,26 @@ export const insertCarMakeAgentSchema = createInsertSchema(carMakeAgents).omit({
 });
 export type InsertCarMakeAgent = z.infer<typeof insertCarMakeAgentSchema>;
 export type CarMakeAgent = typeof carMakeAgents.$inferSelect;
+
+// ─── Export Schedules ──────────────────────────────────────────────────────────
+
+export const exportSchedules = pgTable("export_schedules", {
+  scheduleId: uuid("schedule_id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  frequency: text("frequency").notNull(),
+  recipientEmails: jsonb("recipient_emails").notNull().$type<string[]>(),
+  isActive: boolean("is_active").notNull().default(true),
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertExportScheduleSchema = createInsertSchema(exportSchedules).omit({
+  scheduleId: true,
+  createdAt: true,
+  lastRunAt: true,
+  nextRunAt: true,
+});
+export type InsertExportSchedule = z.infer<typeof insertExportScheduleSchema>;
+export type ExportSchedule = typeof exportSchedules.$inferSelect;
