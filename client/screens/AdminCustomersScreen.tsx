@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -258,6 +259,8 @@ export default function AdminCustomersScreen() {
   const { user } = useUser();
 
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [adminsOnly, setAdminsOnly] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery<CustomersResponse>({
     queryKey: ["/api/customers/all"],
@@ -338,6 +341,16 @@ export default function AdminCustomersScreen() {
 
   const customerList = data?.customers ?? [];
   const adminCount = customerList.filter((c) => !!c.isAdmin).length;
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredList = customerList.filter((c) => {
+    if (adminsOnly && !c.isAdmin) return false;
+    if (normalizedQuery.length === 0) return true;
+    const nameMatch = (c.fullName ?? "").toLowerCase().includes(normalizedQuery);
+    const mobileMatch = c.mobileE164.toLowerCase().includes(normalizedQuery);
+    return nameMatch || mobileMatch;
+  });
+
   const auditEntries = auditData?.entries ?? [];
 
   const auditSection =
@@ -364,7 +377,7 @@ export default function AdminCustomersScreen() {
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
       <FlatList
-        data={customerList}
+        data={filteredList}
         keyExtractor={(item) => item.customerId}
         renderItem={({ item, index }) => (
           <CustomerRow
@@ -376,49 +389,146 @@ export default function AdminCustomersScreen() {
           />
         )}
         ListHeaderComponent={
-          customerList.length > 0 ? (
-            <View style={styles.statsRow}>
-              <View
-                style={[styles.statChip, { backgroundColor: theme.primary + "14" }]}
-              >
-                <Feather name="users" size={13} color={theme.primary} />
-                <ThemedText
-                  style={[
-                    styles.statText,
-                    { color: theme.primary, fontFamily: "Cairo_600SemiBold" },
-                  ]}
-                >
-                  {customerList.length} عميل
-                </ThemedText>
-              </View>
-              <View
+          <View style={styles.listHeader}>
+            <View
+              style={[
+                styles.searchRow,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Feather name="search" size={16} color={theme.textSecondary} />
+              <TextInput
+                testID="input-customer-search"
                 style={[
-                  styles.statChip,
-                  { backgroundColor: theme.primary + "14" },
+                  styles.searchInput,
+                  { color: theme.text, fontFamily: "Cairo_400Regular" },
+                ]}
+                placeholder="بحث بالاسم أو رقم الجوال"
+                placeholderTextColor={theme.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                textAlign="right"
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 ? (
+                <Pressable
+                  onPress={() => setSearchQuery("")}
+                  hitSlop={8}
+                  testID="button-clear-search"
+                >
+                  <Feather name="x" size={15} color={theme.textSecondary} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            <Pressable
+              testID="toggle-admins-only"
+              onPress={() => setAdminsOnly((v) => !v)}
+              style={[
+                styles.adminFilter,
+                {
+                  backgroundColor: adminsOnly
+                    ? theme.primary + "18"
+                    : theme.backgroundDefault,
+                  borderColor: adminsOnly ? theme.primary + "60" : theme.border,
+                },
+              ]}
+            >
+              <Feather
+                name="shield"
+                size={13}
+                color={adminsOnly ? theme.primary : theme.textSecondary}
+              />
+              <ThemedText
+                style={[
+                  styles.adminFilterText,
+                  {
+                    color: adminsOnly ? theme.primary : theme.textSecondary,
+                    fontFamily: "Cairo_600SemiBold",
+                  },
                 ]}
               >
-                <Feather name="shield" size={13} color={theme.primary} />
-                <ThemedText
+                المشرفون فقط
+              </ThemedText>
+            </Pressable>
+
+            {customerList.length > 0 ? (
+              <View style={styles.statsRow}>
+                <View
+                  style={[styles.statChip, { backgroundColor: theme.primary + "14" }]}
+                >
+                  <Feather name="users" size={13} color={theme.primary} />
+                  <ThemedText
+                    style={[
+                      styles.statText,
+                      { color: theme.primary, fontFamily: "Cairo_600SemiBold" },
+                    ]}
+                  >
+                    {filteredList.length !== customerList.length
+                      ? `${filteredList.length} / ${customerList.length} عميل`
+                      : `${customerList.length} عميل`}
+                  </ThemedText>
+                </View>
+                <View
                   style={[
-                    styles.statText,
-                    { color: theme.primary, fontFamily: "Cairo_600SemiBold" },
+                    styles.statChip,
+                    { backgroundColor: theme.primary + "14" },
                   ]}
                 >
-                  {adminCount} مشرف
-                </ThemedText>
+                  <Feather name="shield" size={13} color={theme.primary} />
+                  <ThemedText
+                    style={[
+                      styles.statText,
+                      { color: theme.primary, fontFamily: "Cairo_600SemiBold" },
+                    ]}
+                  >
+                    {adminCount} مشرف
+                  </ThemedText>
+                </View>
               </View>
-            </View>
-          ) : null
+            ) : null}
+          </View>
         }
         ListFooterComponent={auditSection}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Feather name="users" size={48} color={theme.textSecondary} />
+            <Feather
+              name={normalizedQuery.length > 0 || adminsOnly ? "search" : "users"}
+              size={48}
+              color={theme.textSecondary}
+            />
             <ThemedText
               style={[styles.emptyTitle, { fontFamily: "Cairo_700Bold" }]}
             >
-              لا يوجد عملاء
+              {normalizedQuery.length > 0
+                ? "لا توجد نتائج للبحث"
+                : adminsOnly
+                ? "لا يوجد مشرفون"
+                : "لا يوجد عملاء"}
             </ThemedText>
+            {(normalizedQuery.length > 0 || adminsOnly) ? (
+              <Pressable
+                testID="button-clear-filters"
+                onPress={() => {
+                  setSearchQuery("");
+                  setAdminsOnly(false);
+                }}
+              >
+                <ThemedText
+                  style={[
+                    styles.clearFiltersText,
+                    { color: theme.primary, fontFamily: "Cairo_600SemiBold" },
+                  ]}
+                >
+                  مسح الفلاتر
+                </ThemedText>
+              </Pressable>
+            ) : null}
           </View>
         }
         contentContainerStyle={[
@@ -454,6 +564,37 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
+  },
+  listHeader: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  searchRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    padding: 0,
+  },
+  adminFilter: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-end",
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  adminFilterText: {
+    fontSize: 12,
   },
   statsRow: {
     flexDirection: "row-reverse",
@@ -532,6 +673,10 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     textAlign: "center",
+  },
+  clearFiltersText: {
+    fontSize: 14,
+    marginTop: Spacing.xs,
   },
   auditSection: {
     marginTop: Spacing.lg,
