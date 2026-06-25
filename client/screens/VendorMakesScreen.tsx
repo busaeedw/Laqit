@@ -4,6 +4,7 @@ import {
   View,
   SectionList,
   FlatList,
+  ScrollView,
   Pressable,
   Modal,
   Alert,
@@ -57,6 +58,7 @@ export default function VendorMakesScreen() {
 
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [pendingMakeIds, setPendingMakeIds] = useState<string[]>([]);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
   const { data: vendorsData, isLoading: vendorsLoading } = useQuery<VendorsResponse>({
     queryKey: ["/api/vendors/all"],
@@ -110,7 +112,7 @@ export default function VendorMakesScreen() {
   };
 
   // Group vendors by city
-  const sections: VendorSection[] = useMemo(() => {
+  const allSections: VendorSection[] = useMemo(() => {
     const vendors = vendorsData?.vendors ?? [];
     const cityMap = new Map<string, Vendor[]>();
     for (const v of vendors) {
@@ -120,6 +122,13 @@ export default function VendorMakesScreen() {
     }
     return Array.from(cityMap.entries()).map(([title, data]) => ({ title, data }));
   }, [vendorsData]);
+
+  const cities = useMemo(() => allSections.map((s) => s.title), [allSections]);
+
+  const sections: VendorSection[] = useMemo(
+    () => (selectedCity ? allSections.filter((s) => s.title === selectedCity) : allSections),
+    [allSections, selectedCity]
+  );
 
   const renderVendorRow = ({ item }: { item: Vendor }) => (
     <Pressable
@@ -228,6 +237,65 @@ export default function VendorMakesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      {cities.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.chipBar, { paddingTop: headerHeight }]}
+          contentContainerStyle={styles.chipBarContent}
+        >
+          <Pressable
+            testID="chip-city-all"
+            onPress={() => setSelectedCity(null)}
+            style={[
+              styles.chip,
+              {
+                backgroundColor: selectedCity === null ? theme.primary : theme.backgroundDefault,
+                borderColor: selectedCity === null ? theme.primary : (theme.border ?? "#E5E7EB"),
+              },
+            ]}
+          >
+            <ThemedText
+              style={[
+                styles.chipText,
+                {
+                  color: selectedCity === null ? "#fff" : theme.textPrimary,
+                  fontFamily: "Cairo_700Bold",
+                },
+              ]}
+            >
+              الكل
+            </ThemedText>
+          </Pressable>
+          {cities.map((city) => (
+            <Pressable
+              key={city}
+              testID={`chip-city-${city}`}
+              onPress={() => setSelectedCity(city)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: selectedCity === city ? theme.primary : theme.backgroundDefault,
+                  borderColor: selectedCity === city ? theme.primary : (theme.border ?? "#E5E7EB"),
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.chipText,
+                  {
+                    color: selectedCity === city ? "#fff" : theme.textPrimary,
+                    fontFamily: "Cairo_700Bold",
+                  },
+                ]}
+              >
+                {city}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
+
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.vendorId}
@@ -235,7 +303,7 @@ export default function VendorMakesScreen() {
         renderSectionHeader={renderSectionHeader}
         stickySectionHeadersEnabled
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.md,
+          paddingTop: cities.length > 1 ? Spacing.md : headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
           paddingHorizontal: Spacing.lg,
         }}
@@ -500,5 +568,24 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: "#fff",
     fontSize: 15,
+  },
+  chipBar: {
+    flexGrow: 0,
+  },
+  chipBarContent: {
+    flexDirection: "row",
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    paddingTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 13,
   },
 });
