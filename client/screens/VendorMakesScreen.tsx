@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -57,6 +57,7 @@ export default function VendorMakesScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
+  const sectionListRef = useRef<SectionList<Vendor, VendorSection>>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [pendingMakeIds, setPendingMakeIds] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
@@ -126,10 +127,18 @@ export default function VendorMakesScreen() {
 
   const cities = useMemo(() => allSections.map((s) => s.title), [allSections]);
 
-  const sections: VendorSection[] = useMemo(
-    () => (selectedCity ? allSections.filter((s) => s.title === selectedCity) : allSections),
-    [allSections, selectedCity]
-  );
+  const sections: VendorSection[] = allSections;
+
+  const scrollToCity = (city: string | null) => {
+    setSelectedCity(city);
+    if (city === null) {
+      sectionListRef.current?.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: true, viewOffset: 0 });
+      return;
+    }
+    const idx = allSections.findIndex((s) => s.title === city);
+    if (idx < 0) return;
+    sectionListRef.current?.scrollToLocation({ sectionIndex: idx, itemIndex: 0, animated: true, viewOffset: 0 });
+  };
 
   const renderVendorRow = ({ item }: { item: Vendor }) => (
     <Pressable
@@ -256,7 +265,7 @@ export default function VendorMakesScreen() {
         >
           <Pressable
             testID="chip-city-all"
-            onPress={() => setSelectedCity(null)}
+            onPress={() => scrollToCity(null)}
             style={[
               styles.chip,
               {
@@ -281,7 +290,7 @@ export default function VendorMakesScreen() {
             <Pressable
               key={city}
               testID={`chip-city-${city}`}
-              onPress={() => setSelectedCity(city)}
+              onPress={() => scrollToCity(city)}
               style={[
                 styles.chip,
                 {
@@ -307,6 +316,7 @@ export default function VendorMakesScreen() {
       ) : null}
 
       <SectionList
+        ref={sectionListRef}
         sections={sections}
         keyExtractor={(item) => item.vendorId}
         renderItem={renderVendorRow}
