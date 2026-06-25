@@ -79,6 +79,22 @@ function formatRelativeTime(isoDate: string): string {
   return `منذ ${days} يوم`;
 }
 
+function formatExactDateTime(isoDate: string): string {
+  try {
+    const date = new Date(isoDate);
+    return new Intl.DateTimeFormat("ar-SA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(date);
+  } catch {
+    return isoDate;
+  }
+}
+
 type AuditActionConfig = {
   label: string;
   icon: React.ComponentProps<typeof Feather>["name"];
@@ -194,6 +210,12 @@ function AuditEntryRow({ entry, index }: { entry: AuditEntry; index: number }) {
             style={[styles.auditMeta, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
           >
             {`بواسطة ${actorLabel}  •  ${formatRelativeTime(entry.createdAt)}`}
+          </ThemedText>
+          <ThemedText
+            style={[styles.auditTimestamp, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
+            testID={`text-audit-timestamp-${entry.auditId}`}
+          >
+            {formatExactDateTime(entry.createdAt)}
           </ThemedText>
         </View>
       </View>
@@ -1140,6 +1162,12 @@ const styles = StyleSheet.create({
   auditMeta: {
     fontSize: 11,
     textAlign: "right",
+  },
+  auditTimestamp: {
+    fontSize: 10,
+    textAlign: "right",
+    opacity: 0.65,
+    marginTop: 1,
   },
   auditFilterBar: {
     gap: Spacing.xs,
