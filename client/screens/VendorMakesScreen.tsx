@@ -107,6 +107,38 @@ export default function VendorMakesScreen() {
     },
   });
 
+  const statusMutation = useMutation({
+    mutationFn: async ({ vendorId, status }: { vendorId: string; status: "active" | "inactive" }) => {
+      const res = await apiRequest("PATCH", `/api/vendors/${vendorId}/status`, { status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendors/public"] });
+    },
+    onError: () => {
+      Alert.alert("خطأ", "حدث خطأ أثناء تغيير حالة المورد، يرجى المحاولة مجدداً");
+    },
+  });
+
+  const handleToggleStatus = (vendor: Vendor) => {
+    const isActive = vendor.status === "active";
+    const newStatus: "active" | "inactive" = isActive ? "inactive" : "active";
+    const actionLabel = isActive ? "تعطيل" : "تفعيل";
+    Alert.alert(
+      `${actionLabel} المورد`,
+      `هل تريد ${actionLabel} "${vendor.vendorName}"؟`,
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: actionLabel,
+          style: isActive ? "destructive" : "default",
+          onPress: () => statusMutation.mutate({ vendorId: vendor.vendorId, status: newStatus }),
+        },
+      ]
+    );
+  };
+
   const toggleMake = (makeId: string) => {
     setPendingMakeIds((prev) =>
       prev.includes(makeId) ? prev.filter((id) => id !== makeId) : [...prev, makeId]
@@ -173,77 +205,128 @@ export default function VendorMakesScreen() {
     chipScrollRef.current?.scrollTo({ x: Math.max(0, targetX), animated: true });
   }, [selectedCity]);
 
-  const renderVendorRow = ({ item }: { item: Vendor }) => (
-    <Pressable
-      testID={`vendor-row-${item.vendorId}`}
-      onPress={() => openVendor(item)}
-      style={({ pressed }) => [
-        styles.vendorRow,
-        { backgroundColor: theme.backgroundDefault, opacity: pressed ? 0.85 : 1 },
-      ]}
-    >
-      <View style={[styles.vendorIcon, { backgroundColor: theme.primary + "15" }]}>
-        <Feather name="tool" size={18} color={theme.primary} />
-      </View>
-      <View style={styles.vendorInfo}>
-        <ThemedText style={[styles.vendorName, { fontFamily: "Cairo_700Bold" }]}>
-          {item.vendorName}
-        </ThemedText>
-        {item.district ? (
+  const renderVendorRow = ({ item }: { item: Vendor }) => {
+    const isActive = item.status === "active";
+    const isPending = statusMutation.isPending && statusMutation.variables?.vendorId === item.vendorId;
+    return (
+      <Pressable
+        testID={`vendor-row-${item.vendorId}`}
+        onPress={() => openVendor(item)}
+        style={({ pressed }) => [
+          styles.vendorRow,
+          {
+            backgroundColor: theme.backgroundDefault,
+            opacity: pressed ? 0.85 : 1,
+            borderWidth: 1,
+            borderColor: isActive ? "transparent" : (theme.border ?? "#E5E7EB"),
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.vendorIcon,
+            { backgroundColor: isActive ? theme.primary + "15" : (theme.border ?? "#E5E7EB") + "50" },
+          ]}
+        >
+          <Feather name="tool" size={18} color={isActive ? theme.primary : theme.textSecondary} />
+        </View>
+        <View style={styles.vendorInfo}>
           <ThemedText
             style={[
-              styles.vendorDistrict,
-              { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+              styles.vendorName,
+              { fontFamily: "Cairo_700Bold", color: isActive ? theme.textPrimary : theme.textSecondary },
             ]}
           >
-            {item.district}
+            {item.vendorName}
           </ThemedText>
-        ) : null}
-        {item.phone ? (
-          <Pressable
-            testID={`button-call-${item.vendorId}`}
-            onPress={(e) => {
-              e.stopPropagation();
-              Linking.openURL(`tel:${item.phone}`);
-            }}
-            hitSlop={8}
-          >
+          {item.district ? (
             <ThemedText
               style={[
-                styles.vendorPhone,
-                { color: theme.primary, fontFamily: "Cairo_400Regular" },
+                styles.vendorDistrict,
+                { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
               ]}
             >
-              {item.phone}
+              {item.district}
             </ThemedText>
-          </Pressable>
-        ) : null}
-        {item.whatsappNumber ? (
+          ) : null}
+          {item.phone ? (
+            <Pressable
+              testID={`button-call-${item.vendorId}`}
+              onPress={(e) => {
+                e.stopPropagation();
+                Linking.openURL(`tel:${item.phone}`);
+              }}
+              hitSlop={8}
+            >
+              <ThemedText
+                style={[
+                  styles.vendorPhone,
+                  { color: theme.primary, fontFamily: "Cairo_400Regular" },
+                ]}
+              >
+                {item.phone}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+          {item.whatsappNumber ? (
+            <Pressable
+              testID={`button-whatsapp-${item.vendorId}`}
+              onPress={(e) => {
+                e.stopPropagation();
+                const num = item.whatsappNumber!.replace(/\D/g, "");
+                Linking.openURL(`https://wa.me/${num}`);
+              }}
+              hitSlop={8}
+              style={styles.whatsappRow}
+            >
+              <Feather name="message-circle" size={13} color="#25D366" />
+              <ThemedText
+                style={[
+                  styles.vendorPhone,
+                  { color: "#25D366", fontFamily: "Cairo_400Regular" },
+                ]}
+              >
+                {item.whatsappNumber}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
+        <View style={styles.rowActions}>
           <Pressable
-            testID={`button-whatsapp-${item.vendorId}`}
+            testID={`button-toggle-status-${item.vendorId}`}
             onPress={(e) => {
               e.stopPropagation();
-              const num = item.whatsappNumber!.replace(/\D/g, "");
-              Linking.openURL(`https://wa.me/${num}`);
+              handleToggleStatus(item);
             }}
             hitSlop={8}
-            style={styles.whatsappRow}
+            disabled={isPending}
+            style={({ pressed }) => [
+              styles.statusBadge,
+              {
+                backgroundColor: isActive ? "#E8F5E9" : "#FFF3E0",
+                borderColor: isActive ? "#4CAF50" : "#FF9800",
+                opacity: pressed || isPending ? 0.6 : 1,
+              },
+            ]}
           >
-            <Feather name="message-circle" size={13} color="#25D366" />
-            <ThemedText
-              style={[
-                styles.vendorPhone,
-                { color: "#25D366", fontFamily: "Cairo_400Regular" },
-              ]}
-            >
-              {item.whatsappNumber}
-            </ThemedText>
+            {isPending ? (
+              <ActivityIndicator size="small" color={isActive ? "#4CAF50" : "#FF9800"} style={{ width: 40 }} />
+            ) : (
+              <ThemedText
+                style={[
+                  styles.statusBadgeText,
+                  { color: isActive ? "#388E3C" : "#E65100", fontFamily: "Cairo_700Bold" },
+                ]}
+              >
+                {isActive ? "نشط" : "معطل"}
+              </ThemedText>
+            )}
           </Pressable>
-        ) : null}
-      </View>
-      <Feather name="chevron-left" size={20} color={theme.textSecondary} />
-    </Pressable>
-  );
+          <Feather name="chevron-left" size={20} color={theme.textSecondary} />
+        </View>
+      </Pressable>
+    );
+  };
 
   const renderSectionHeader = ({ section }: { section: VendorSection }) => (
     <View style={[styles.sectionHeader, { backgroundColor: theme.backgroundRoot }]}>
@@ -574,6 +657,23 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 4,
+  },
+  rowActions: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 52,
+  },
+  statusBadgeText: {
+    fontSize: 12,
   },
   emptyContainer: {
     alignItems: "center",
