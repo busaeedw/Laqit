@@ -11,16 +11,19 @@ import {
   ActivityIndicator,
   Linking,
   ViewToken,
+  Platform,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl, authHeaders } from "@/lib/query-client";
 
 interface Vendor {
   vendorId: string;
@@ -66,6 +69,7 @@ export default function VendorMakesScreen() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [pendingMakeIds, setPendingMakeIds] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data: vendorsData, isLoading: vendorsLoading } = useQuery<VendorsResponse>({
     queryKey: ["/api/vendors/all"],
@@ -148,6 +152,50 @@ export default function VendorMakesScreen() {
   const handleSave = () => {
     if (!selectedVendor || makesLoading || saveMutation.isPending) return;
     saveMutation.mutate({ vendorId: selectedVendor.vendorId, makeIds: pendingMakeIds });
+  };
+
+  const handleExport = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const path = `/api/vendors/export`;
+      const url = new URL(path, getApiUrl()).toString();
+      const today = new Date().toISOString().slice(0, 10);
+
+      if (Platform.OS === "web") {
+        const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = `vendors_${today}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      } else {
+        const fileUri = FileSystem.cacheDirectory + `vendors_${today}.csv`;
+        const result = await FileSystem.downloadAsync(url, fileUri, {
+          headers: authHeaders(),
+        });
+        if (result.status !== 200) throw new Error(`${result.status}`);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(result.uri, {
+            mimeType: "text/csv",
+            dialogTitle: "تصدير قائمة التجار",
+            UTI: "public.comma-separated-values-text",
+          });
+        } else {
+          Alert.alert("تصدير", `تم حفظ الملف في:\n${result.uri}`);
+        }
+      }
+    } catch {
+      Alert.alert("خطأ", "تعذر تصدير البيانات، يرجى المحاولة مجدداً");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Group vendors by city
@@ -468,6 +516,35 @@ export default function VendorMakesScreen() {
         renderItem={renderVendorRow}
         renderSectionHeader={renderSectionHeader}
         stickySectionHeadersEnabled
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <ThemedText style={[styles.listHeaderCount, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              {(vendorsData?.vendors ?? []).length} تاجر مسجل
+            </ThemedText>
+            <Pressable
+              testID="button-export-vendors-csv"
+              onPress={handleExport}
+              disabled={isExporting || (vendorsData?.vendors ?? []).length === 0}
+              style={({ pressed }) => [
+                styles.exportBtn,
+                {
+                  backgroundColor: theme.primary + "14",
+                  borderColor: theme.primary + "40",
+                  opacity: pressed || isExporting || (vendorsData?.vendors ?? []).length === 0 ? 0.5 : 1,
+                },
+              ]}
+            >
+              {isExporting ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Feather name="download" size={13} color={theme.primary} />
+              )}
+              <ThemedText style={[styles.exportBtnText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                تصدير CSV
+              </ThemedText>
+            </Pressable>
+          </View>
+        }
         contentContainerStyle={{
           paddingTop: cities.length > 1 ? Spacing.md : headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
@@ -616,6 +693,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "right",
     letterSpacing: 0.3,
+  },
+  listHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  listHeaderCount: {
+    fontSize: 13,
+  },
+  exportBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  exportBtnText: {
+    fontSize: 13,
   },
   sectionSeparator: {
     height: Spacing.md,

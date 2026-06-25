@@ -1256,6 +1256,91 @@ Rules:
     }
   });
 
+  // GET /api/vendors/export — download filtered vendor list as CSV (admin only)
+  app.get("/api/vendors/export", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const { search, cityId, status } = req.query as Record<string, string | undefined>;
+
+      const rows = await db
+        .select({
+          vendorId: vendors.vendorId,
+          vendorName: vendors.vendorName,
+          phone: vendors.phone,
+          status: vendors.status,
+          cityId: cities.cityId,
+          cityNameAr: cities.nameAr,
+          whatsappNumber: vendorUsers.whatsappE164,
+        })
+        .from(vendors)
+        .leftJoin(vendorLocations, eq(vendorLocations.vendorId, vendors.vendorId))
+        .leftJoin(cities, eq(cities.cityId, vendorLocations.cityId))
+        .leftJoin(vendorUsers, eq(vendorUsers.vendorId, vendors.vendorId))
+        .orderBy(cities.nameAr, vendors.vendorName);
+
+      const seen = new Set<string>();
+      const deduped = rows.filter((r) => {
+        if (seen.has(r.vendorId)) return false;
+        seen.add(r.vendorId);
+        return true;
+      });
+
+      const makesRows = await db
+        .select({
+          vendorId: vendorSupportedModels.vendorId,
+          makeNameAr: carMakes.nameAr,
+          makeName: carMakes.makeName,
+        })
+        .from(vendorSupportedModels)
+        .innerJoin(carModels, eq(carModels.carModelId, vendorSupportedModels.carModelId))
+        .innerJoin(carMakes, eq(carMakes.makeId, carModels.makeId));
+
+      const makesMap = new Map<string, Set<string>>();
+      for (const r of makesRows) {
+        if (!makesMap.has(r.vendorId)) makesMap.set(r.vendorId, new Set());
+        makesMap.get(r.vendorId)!.add(r.makeNameAr ?? r.makeName);
+      }
+
+      const normalizedQuery = (search ?? "").trim().toLowerCase();
+      const filtered = deduped.filter((v) => {
+        if (status && v.status !== status) return false;
+        if (cityId && v.cityId !== cityId) return false;
+        if (normalizedQuery.length === 0) return true;
+        return (v.vendorName ?? "").toLowerCase().includes(normalizedQuery);
+      });
+
+      const escape = (val: string | null | undefined) => {
+        const s = val ?? "";
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const header = ["اسم التاجر", "المدينة", "واتساب", "الهاتف", "الحالة", "الماركات المدعومة"];
+      const csvRows = [header.join(",")];
+      for (const v of filtered) {
+        const makes = Array.from(makesMap.get(v.vendorId) ?? []).join(" | ");
+        const row = [
+          escape(v.vendorName),
+          escape(v.cityNameAr),
+          escape(v.whatsappNumber),
+          escape(v.phone),
+          v.status === "active" ? "نشط" : "معطل",
+          escape(makes),
+        ];
+        csvRows.push(row.join(","));
+      }
+
+      const csv = "\uFEFF" + csvRows.join("\r\n");
+      const filename = `vendors_${new Date().toISOString().slice(0, 10)}.csv`;
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(csv);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // GET /api/vendors/:vendorId/car-makes — all makes with selected flag for this vendor
   app.get("/api/vendors/:vendorId/car-makes", ...requireAdminCustomer, async (req, res) => {
     try {
