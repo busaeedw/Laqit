@@ -397,6 +397,7 @@ export default function AdminCustomersScreen() {
   const [auditPerson, setAuditPerson] = useState("");
   const [auditDatePreset, setAuditDatePreset] = useState<DatePreset>(null);
   const [auditEntityType, setAuditEntityType] = useState<string | null>(null);
+  const [auditAction, setAuditAction] = useState<string | null>(null);
   const [auditPage, setAuditPage] = useState(1);
   const [accumulatedAuditEntries, setAccumulatedAuditEntries] = useState<AuditEntry[]>([]);
   const isFirstAuditMount = useRef(true);
@@ -410,9 +411,10 @@ export default function AdminCustomersScreen() {
       params.set("until", range.until);
     }
     if (auditEntityType) params.set("entityType", auditEntityType);
+    if (auditAction) params.set("action", auditAction);
     const qs = params.toString();
     return qs ? `/api/admin/audit-log?${qs}` : "/api/admin/audit-log";
-  }, [auditPerson, auditDatePreset, auditEntityType]);
+  }, [auditPerson, auditDatePreset, auditEntityType, auditAction]);
 
   const auditQueryUrlWithPage = useMemo(() => {
     const sep = auditQueryUrl.includes("?") ? "&" : "?";
@@ -420,7 +422,7 @@ export default function AdminCustomersScreen() {
   }, [auditQueryUrl, auditPage]);
 
   const hasAuditFilters =
-    auditPerson.trim().length > 0 || auditDatePreset !== null || auditEntityType !== null;
+    auditPerson.trim().length > 0 || auditDatePreset !== null || auditEntityType !== null || auditAction !== null;
 
   // Reset pagination when filters change (but not on first mount)
   useEffect(() => {
@@ -674,6 +676,42 @@ export default function AdminCustomersScreen() {
         })}
       </View>
 
+      {/* Action type filter chips */}
+      <View style={styles.auditDateRow}>
+        {[
+          { key: "admin_granted", label: "منح" },
+          { key: "admin_revoked", label: "سحب" },
+        ].map(({ key, label }) => {
+          const active = auditAction === key;
+          return (
+            <Pressable
+              key={key}
+              testID={`button-audit-action-${key}`}
+              onPress={() => setAuditAction(active ? null : key)}
+              style={[
+                styles.auditPresetChip,
+                {
+                  backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
+                  borderColor: active ? theme.primary + "60" : theme.border,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.auditPresetChipText,
+                  {
+                    color: active ? theme.primary : theme.textSecondary,
+                    fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
+                  },
+                ]}
+              >
+                {label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* Date preset chips */}
       <View style={styles.auditDateRow}>
         {DATE_PRESETS.map(({ key, label }) => {
@@ -713,6 +751,7 @@ export default function AdminCustomersScreen() {
               setAuditPerson("");
               setAuditDatePreset(null);
               setAuditEntityType(null);
+              setAuditAction(null);
             }}
             style={[styles.auditClearBtn, { borderColor: theme.border }]}
           >

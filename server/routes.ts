@@ -1454,19 +1454,26 @@ Rules:
   // GET /api/admin/audit-log — admin action history
   // Query params: since (ISO), until (ISO), person (name/mobile text search),
   //               actorId (UUID), targetId (UUID), entityType (customer|vendor|vendor_user|inspection),
+  //               action (admin_granted|admin_revoked),
   //               page (1-based, default 1, page size = 50)
   app.get("/api/admin/audit-log", ...requireAdminCustomer, async (req: Request, res: Response) => {
     const AUDIT_PAGE_SIZE = 50;
+    const ALLOWED_ACTIONS = ["admin_granted", "admin_revoked"];
     try {
-      const { since, until, person, actorId, targetId, entityType, page: pageParam } = req.query as Record<string, string | undefined>;
+      const { since, until, person, actorId, targetId, entityType, action, page: pageParam } = req.query as Record<string, string | undefined>;
       const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
       const offset = (page - 1) * AUDIT_PAGE_SIZE;
 
       const conditions: ReturnType<typeof sql>[] = [];
 
-      // Filter by entity type when requested; otherwise all action types are shown.
+      // Filter by entity type when requested; otherwise all entity types are shown.
       if (entityType && entityType.trim().length > 0) {
         conditions.push(sql`${auditLog.entityType} = ${entityType.trim()}`);
+      }
+
+      // Filter by action type (admin_granted / admin_revoked).
+      if (action && ALLOWED_ACTIONS.includes(action.trim())) {
+        conditions.push(sql`${auditLog.action} = ${action.trim()}`);
       }
 
       if (since) {
