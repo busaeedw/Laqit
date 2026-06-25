@@ -1451,10 +1451,14 @@ Rules:
 
   // GET /api/admin/audit-log — admin action history
   // Query params: since (ISO), until (ISO), person (name/mobile text search),
-  //               actorId (UUID), targetId (UUID), entityType (customer|vendor|vendor_user|inspection)
+  //               actorId (UUID), targetId (UUID), entityType (customer|vendor|vendor_user|inspection),
+  //               page (1-based, default 1, page size = 50)
   app.get("/api/admin/audit-log", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    const AUDIT_PAGE_SIZE = 50;
     try {
-      const { since, until, person, actorId, targetId, entityType } = req.query as Record<string, string | undefined>;
+      const { since, until, person, actorId, targetId, entityType, page: pageParam } = req.query as Record<string, string | undefined>;
+      const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
+      const offset = (page - 1) * AUDIT_PAGE_SIZE;
 
       const conditions: ReturnType<typeof sql>[] = [];
 
@@ -1501,8 +1505,10 @@ Rules:
         .from(auditLog)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(auditLog.createdAt))
-        .limit(200);
-      res.json({ entries: rows });
+        .limit(AUDIT_PAGE_SIZE + 1)
+        .offset(offset);
+      const hasMore = rows.length > AUDIT_PAGE_SIZE;
+      res.json({ entries: rows.slice(0, AUDIT_PAGE_SIZE), hasMore, page });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }

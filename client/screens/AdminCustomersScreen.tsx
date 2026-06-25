@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -66,6 +66,8 @@ interface AuditEntry {
 
 interface AuditLogResponse {
   entries: AuditEntry[];
+  hasMore: boolean;
+  page: number;
 }
 
 function formatRelativeTime(isoDate: string): string {
@@ -395,6 +397,9 @@ export default function AdminCustomersScreen() {
   const [auditPerson, setAuditPerson] = useState("");
   const [auditDatePreset, setAuditDatePreset] = useState<DatePreset>(null);
   const [auditEntityType, setAuditEntityType] = useState<string | null>(null);
+  const [auditPage, setAuditPage] = useState(1);
+  const [accumulatedAuditEntries, setAccumulatedAuditEntries] = useState<AuditEntry[]>([]);
+  const isFirstAuditMount = useRef(true);
 
   const auditQueryUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -409,8 +414,23 @@ export default function AdminCustomersScreen() {
     return qs ? `/api/admin/audit-log?${qs}` : "/api/admin/audit-log";
   }, [auditPerson, auditDatePreset, auditEntityType]);
 
+  const auditQueryUrlWithPage = useMemo(() => {
+    const sep = auditQueryUrl.includes("?") ? "&" : "?";
+    return auditPage > 1 ? `${auditQueryUrl}${sep}page=${auditPage}` : auditQueryUrl;
+  }, [auditQueryUrl, auditPage]);
+
   const hasAuditFilters =
     auditPerson.trim().length > 0 || auditDatePreset !== null || auditEntityType !== null;
+
+  // Reset pagination when filters change (but not on first mount)
+  useEffect(() => {
+    if (isFirstAuditMount.current) {
+      isFirstAuditMount.current = false;
+      return;
+    }
+    setAuditPage(1);
+    setAccumulatedAuditEntries([]);
+  }, [auditQueryUrl]);
 
   const { data, isLoading, isError, refetch } = useQuery<CustomersResponse>({
     queryKey: ["/api/customers/all"],
@@ -422,10 +442,20 @@ export default function AdminCustomersScreen() {
     staleTime: 60000,
   });
 
-  const { data: auditData, isLoading: auditLoading } = useQuery<AuditLogResponse>({
-    queryKey: [auditQueryUrl],
+  const { data: auditData, isLoading: auditLoading, isFetching: auditFetching } = useQuery<AuditLogResponse>({
+    queryKey: [auditQueryUrlWithPage],
     staleTime: 0,
   });
+
+  // Accumulate entries across pages
+  useEffect(() => {
+    if (!auditData) return;
+    if (auditData.page === 1) {
+      setAccumulatedAuditEntries(auditData.entries);
+    } else {
+      setAccumulatedAuditEntries((prev) => [...prev, ...auditData.entries]);
+    }
+  }, [auditData]);
 
   const toggleMutation = useMutation({
     mutationFn: async ({
@@ -445,7 +475,14 @@ export default function AdminCustomersScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers/all"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/audit-log"] });
+      // Reset audit pagination and refetch from page 1
+      setAuditPage(1);
+      setAccumulatedAuditEntries([]);
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          (query.queryKey[0] as string).startsWith("/api/admin/audit-log"),
+      });
     },
     onError: () => {
       Alert.alert("خطأ", "حدث خطأ أثناء تعديل الصلاحيات، يرجى المحاولة مجدداً");
@@ -559,7 +596,8 @@ export default function AdminCustomersScreen() {
     return nameMatch || mobileMatch;
   });
 
-  const auditEntries = auditData?.entries ?? [];
+  const auditEntries = accumulatedAuditEntries;
+  const auditHasMore = auditData?.hasMore ?? false;
 
   const DATE_PRESETS: { key: DatePreset; label: string }[] = [
     { key: "today", label: "اليوم" },
@@ -698,14 +736,44 @@ export default function AdminCustomersScreen() {
 
       {auditFilterBar}
 
-      {auditLoading ? (
+      {auditLoading && auditPage === 1 ? (
         <View style={styles.auditLoading}>
           <ActivityIndicator size="small" color={theme.primary} />
         </View>
       ) : auditEntries.length > 0 ? (
-        auditEntries.map((entry, idx) => (
-          <AuditEntryRow key={entry.auditId} entry={entry} index={idx} />
-        ))
+        <>
+          {auditEntries.map((entry, idx) => (
+            <AuditEntryRow key={entry.auditId} entry={entry} index={idx} />
+          ))}
+          {auditHasMore ? (
+            <Pressable
+              testID="button-audit-load-more"
+              onPress={() => setAuditPage((p) => p + 1)}
+              disabled={auditFetching}
+              style={[
+                styles.auditLoadMoreBtn,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.border,
+                  opacity: auditFetching ? 0.6 : 1,
+                },
+              ]}
+            >
+              {auditFetching ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <>
+                  <Feather name="chevron-down" size={14} color={theme.primary} />
+                  <ThemedText
+                    style={[styles.auditLoadMoreText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}
+                  >
+                    تحميل المزيد
+                  </ThemedText>
+                </>
+              )}
+            </Pressable>
+          ) : null}
+        </>
       ) : (
         <View style={styles.auditEmpty}>
           <Feather name="inbox" size={28} color={theme.textSecondary} />
@@ -1217,6 +1285,21 @@ const styles = StyleSheet.create({
   auditEmptyText: {
     fontSize: 13,
     textAlign: "center",
+  },
+  auditLoadMoreBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    minHeight: 40,
+  },
+  auditLoadMoreText: {
+    fontSize: 13,
   },
   cityFilterRow: {
     flexDirection: "row-reverse",
