@@ -136,10 +136,12 @@ function getActionConfig(action: string, payload: AuditEntry["payload"]): AuditA
         label: `تغيير حالة الطلب ${payload?.inspectionNo ?? ""}`.trim(),
         icon: "edit-2",
         color: "#F97316",
-        getDetail: (p) =>
-          p?.previousStatus && p?.newStatus
-            ? `${p.previousStatus} ← ${p.newStatus}`
-            : null,
+        getDetail: (p) => {
+          if (!p?.previousStatus || !p?.newStatus) return null;
+          const statusLine = `${p.previousStatus} ← ${p.newStatus}`;
+          if (p.reason) return `${statusLine}\nالسبب: ${p.reason}`;
+          return statusLine;
+        },
       };
     default:
       return {
