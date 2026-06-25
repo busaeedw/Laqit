@@ -117,6 +117,7 @@ export default function VendorMakesScreen() {
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [pendingMakeIds, setPendingMakeIds] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<"all" | "active" | "inactive">("all");
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"makes" | "history">("makes");
 
@@ -258,9 +259,14 @@ export default function VendorMakesScreen() {
     }
   };
 
-  // Group vendors by city
+  // Group vendors by city (after applying status filter)
   const allSections: VendorSection[] = useMemo(() => {
-    const vendors = vendorsData?.vendors ?? [];
+    const allVendors = vendorsData?.vendors ?? [];
+    const vendors = selectedStatus === "all"
+      ? allVendors
+      : allVendors.filter((v) =>
+          selectedStatus === "active" ? v.status === "active" : v.status !== "active"
+        );
     const cityMap = new Map<string, Vendor[]>();
     for (const v of vendors) {
       const key = v.cityNameAr ?? "غير محدد";
@@ -268,15 +274,13 @@ export default function VendorMakesScreen() {
       cityMap.get(key)!.push(v);
     }
     return Array.from(cityMap.entries()).map(([title, data]) => ({ title, data }));
-  }, [vendorsData]);
+  }, [vendorsData, selectedStatus]);
 
   const cities = useMemo(() => allSections.map((s) => s.title), [allSections]);
 
-  // Highlight the first city chip as soon as data loads
+  // Highlight the first city chip as soon as data loads (or when status filter changes)
   useEffect(() => {
-    if (allSections.length > 0 && selectedCity === null) {
-      setSelectedCity(allSections[0].title);
-    }
+    setSelectedCity(allSections.length > 0 ? allSections[0].title : null);
   }, [allSections]);
 
   const sections: VendorSection[] = allSections;
@@ -507,14 +511,62 @@ export default function VendorMakesScreen() {
 
   const canSave = !makesLoading && !saveMutation.isPending;
 
+  const STATUS_CHIPS: { key: "all" | "active" | "inactive"; label: string }[] = [
+    { key: "all", label: "الكل" },
+    { key: "active", label: "نشط" },
+    { key: "inactive", label: "معطل" },
+  ];
+
+  const totalCount = (vendorsData?.vendors ?? []).length;
+  const filteredCount = allSections.reduce((acc, s) => acc + s.data.length, 0);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      {/* Status filter chips — always visible */}
+      <View
+        style={[
+          styles.statusChipBar,
+          { paddingTop: headerHeight + Spacing.sm, backgroundColor: theme.backgroundRoot },
+        ]}
+      >
+        {STATUS_CHIPS.map(({ key, label }) => {
+          const isSelected = selectedStatus === key;
+          return (
+            <Pressable
+              key={key}
+              testID={`chip-status-${key}`}
+              onPress={() => setSelectedStatus(key)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: isSelected ? theme.primary : theme.backgroundDefault,
+                  borderColor: isSelected ? theme.primary : (theme.border ?? "#E5E7EB"),
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.chipText,
+                  {
+                    color: isSelected ? "#fff" : theme.textPrimary,
+                    fontFamily: "Cairo_700Bold",
+                  },
+                ]}
+              >
+                {label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* City chips — horizontal scrollable, shown only when multiple cities */}
       {cities.length > 1 ? (
         <ScrollView
           ref={chipScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={[styles.chipBar, { paddingTop: headerHeight }]}
+          style={styles.chipBar}
           contentContainerStyle={styles.chipBarContent}
           onLayout={(e) => { chipBarWidthRef.current = e.nativeEvent.layout.width; }}
         >
@@ -586,7 +638,9 @@ export default function VendorMakesScreen() {
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <ThemedText style={[styles.listHeaderCount, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-              {(vendorsData?.vendors ?? []).length} تاجر مسجل
+              {selectedStatus === "all"
+                ? `${totalCount} تاجر مسجل`
+                : `${filteredCount} من ${totalCount}`}
             </ThemedText>
             <Pressable
               testID="button-export-vendors-csv"
@@ -613,7 +667,7 @@ export default function VendorMakesScreen() {
           </View>
         }
         contentContainerStyle={{
-          paddingTop: cities.length > 1 ? Spacing.md : headerHeight + Spacing.md,
+          paddingTop: Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
           paddingHorizontal: Spacing.lg,
         }}
@@ -1025,6 +1079,12 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: "#fff",
     fontSize: 15,
+  },
+  statusChipBar: {
+    flexDirection: "row-reverse",
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
   chipBar: {
     flexGrow: 0,
