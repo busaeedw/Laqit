@@ -16,37 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
-
-const ADMIN_KEY = process.env.EXPO_PUBLIC_ADMIN_API_KEY ?? "";
-
-function adminHeaders(): Record<string, string> {
-  return { "x-admin-api-key": ADMIN_KEY };
-}
-
-async function adminFetch<T>(path: string): Promise<T> {
-  const url = new URL(path, getApiUrl());
-  const res = await fetch(url.href, { headers: adminHeaders() });
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-async function adminPut<T>(path: string, body: unknown): Promise<T> {
-  const url = new URL(path, getApiUrl());
-  const res = await fetch(url.href, {
-    method: "PUT",
-    headers: { ...adminHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-  return res.json();
-}
+import { apiRequest } from "@/lib/query-client";
 
 interface Vendor {
   vendorId: string;
@@ -82,28 +52,33 @@ export default function VendorMakesScreen() {
 
   const { data: vendorsData, isLoading: vendorsLoading } = useQuery<VendorsResponse>({
     queryKey: ["/api/vendors/all"],
-    queryFn: () => adminFetch<VendorsResponse>("/api/vendors/all"),
   });
 
   const { data: makesData, isLoading: makesLoading } = useQuery<MakesResponse>({
     queryKey: ["/api/vendors", selectedVendor?.vendorId, "car-makes"],
-    queryFn: () =>
-      adminFetch<MakesResponse>(`/api/vendors/${selectedVendor!.vendorId}/car-makes`),
     enabled: !!selectedVendor,
   });
 
+  // Sync checkboxes whenever the makes data changes (or vendor changes)
   useEffect(() => {
     if (makesData?.makes) {
       setPendingMakeIds(makesData.makes.filter((m) => m.selected).map((m) => m.makeId));
+    } else {
+      setPendingMakeIds([]);
     }
   }, [makesData]);
 
+  // Reset pending state immediately when switching vendors (before new data arrives)
+  const openVendor = (vendor: Vendor) => {
+    setPendingMakeIds([]);
+    setSelectedVendor(vendor);
+  };
+
   const saveMutation = useMutation({
-    mutationFn: ({ vendorId, makeIds }: { vendorId: string; makeIds: string[] }) =>
-      adminPut<{ success: boolean; modelsCount: number }>(
-        `/api/vendors/${vendorId}/car-makes`,
-        { makeIds }
-      ),
+    mutationFn: async ({ vendorId, makeIds }: { vendorId: string; makeIds: string[] }) => {
+      const res = await apiRequest("PUT", `/api/vendors/${vendorId}/car-makes`, { makeIds });
+      return res.json();
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendors/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vendors/public"] });
@@ -122,14 +97,14 @@ export default function VendorMakesScreen() {
   };
 
   const handleSave = () => {
-    if (!selectedVendor) return;
+    if (!selectedVendor || makesLoading || saveMutation.isPending) return;
     saveMutation.mutate({ vendorId: selectedVendor.vendorId, makeIds: pendingMakeIds });
   };
 
   const renderVendorRow = ({ item }: { item: Vendor }) => (
     <Pressable
       testID={`vendor-row-${item.vendorId}`}
-      onPress={() => setSelectedVendor(item)}
+      onPress={() => openVendor(item)}
       style={({ pressed }) => [
         styles.vendorRow,
         { backgroundColor: theme.backgroundDefault, opacity: pressed ? 0.85 : 1 },
@@ -205,6 +180,8 @@ export default function VendorMakesScreen() {
       </View>
     );
   }
+
+  const canSave = !makesLoading && !saveMutation.isPending;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -305,19 +282,21 @@ export default function VendorMakesScreen() {
                   { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
                 ]}
               >
-                {pendingMakeIds.length > 0
+                {makesLoading
+                  ? "جارٍ التحميل..."
+                  : pendingMakeIds.length > 0
                   ? `${pendingMakeIds.length} ماركة محددة`
                   : "لم يتم تحديد أي ماركة"}
               </ThemedText>
               <Pressable
                 testID="button-save-makes"
                 onPress={handleSave}
-                disabled={saveMutation.isPending}
+                disabled={!canSave}
                 style={({ pressed }) => [
                   styles.saveBtn,
                   {
                     backgroundColor: theme.primary,
-                    opacity: pressed || saveMutation.isPending ? 0.7 : 1,
+                    opacity: pressed || !canSave ? 0.5 : 1,
                   },
                 ]}
               >

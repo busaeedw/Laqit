@@ -1097,8 +1097,33 @@ Rules:
     }
   });
 
+  // ─── Admin customer middleware ─────────────────────────────────────────────
+  // Validates JWT then does a DB lookup to confirm the caller has is_admin=true.
+  // The is_admin flag can only be set server-side (not via any customer API),
+  // so this is non-spoofable even if a customer changes their own profile data.
+  const requireAdminCustomer: import("express").RequestHandler[] = [
+    requireCustomer,
+    async (_req: Request, res: Response, next: import("express").NextFunction): Promise<void> => {
+      try {
+        const customerId: string = res.locals.customerId;
+        const [row] = await db
+          .select({ isAdmin: customers.isAdmin })
+          .from(customers)
+          .where(eq(customers.customerId, customerId))
+          .limit(1);
+        if (!row?.isAdmin) {
+          res.status(403).json({ error: "غير مسموح" });
+          return;
+        }
+        next();
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message });
+      }
+    },
+  ];
+
   // GET /api/vendors/all — returns ALL vendors (active + inactive) for admin use
-  app.get("/api/vendors/all", requireAdmin, async (_req, res) => {
+  app.get("/api/vendors/all", ...requireAdminCustomer, async (_req, res) => {
     try {
       const rows = await db
         .select({
@@ -1117,7 +1142,7 @@ Rules:
   });
 
   // GET /api/vendors/:vendorId/car-makes — all makes with selected flag for this vendor
-  app.get("/api/vendors/:vendorId/car-makes", requireAdmin, async (req, res) => {
+  app.get("/api/vendors/:vendorId/car-makes", ...requireAdminCustomer, async (req, res) => {
     try {
       const { vendorId } = req.params;
       const allMakes = await db.select().from(carMakes).orderBy(carMakes.makeName);
@@ -1144,7 +1169,7 @@ Rules:
   });
 
   // PUT /api/vendors/:vendorId/car-makes — replace all supported makes for this vendor
-  app.put("/api/vendors/:vendorId/car-makes", requireAdmin, async (req, res) => {
+  app.put("/api/vendors/:vendorId/car-makes", ...requireAdminCustomer, async (req, res) => {
     try {
       const { vendorId } = req.params;
       const { makeIds } = req.body;
