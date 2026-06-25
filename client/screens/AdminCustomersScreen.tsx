@@ -386,6 +386,29 @@ export default function AdminCustomersScreen() {
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (adminsOnly) params.set("adminsOnly", "true");
       if (selectedCityId) params.set("cityId", selectedCityId);
+
+      const exportDateRange = presetToDateRange(datePreset);
+
+      const toLocalDateStr = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      };
+
+      const sinceLocalStr = exportDateRange ? toLocalDateStr(exportDateRange.since) : null;
+      const untilLocalStr = exportDateRange ? toLocalDateStr(exportDateRange.until) : null;
+
+      if (exportDateRange) {
+        params.set("since", exportDateRange.since.toISOString());
+        params.set("until", exportDateRange.until.toISOString());
+      }
+
+      const dateTag =
+        sinceLocalStr && untilLocalStr
+          ? `${sinceLocalStr}_${untilLocalStr}`
+          : toLocalDateStr(new Date());
+
       const qs = params.toString();
       const path = `/api/customers/export${qs ? `?${qs}` : ""}`;
       const baseUrl = getApiUrl();
@@ -398,15 +421,13 @@ export default function AdminCustomersScreen() {
         const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = objectUrl;
-        const today = new Date().toISOString().slice(0, 10);
-        a.download = `customers_${today}.csv`;
+        a.download = `customers_${dateTag}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(objectUrl);
       } else {
-        const today = new Date().toISOString().slice(0, 10);
-        const fileUri = FileSystem.cacheDirectory + `customers_${today}.csv`;
+        const fileUri = FileSystem.cacheDirectory + `customers_${dateTag}.csv`;
         const result = await FileSystem.downloadAsync(url, fileUri, {
           headers: authHeaders(),
         });

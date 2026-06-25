@@ -1425,7 +1425,10 @@ Rules:
   // GET /api/customers/export — download filtered customer list as CSV (admin only)
   app.get("/api/customers/export", ...requireAdminCustomer, async (req: Request, res: Response) => {
     try {
-      const { search, adminsOnly, cityId } = req.query as Record<string, string | undefined>;
+      const { search, adminsOnly, cityId, since, until } = req.query as Record<string, string | undefined>;
+
+      const sinceDate = since ? new Date(since) : null;
+      const untilDate = until ? new Date(until) : null;
 
       const cityMap = new Map<string, string>();
       const cityRows = await db
@@ -1450,6 +1453,12 @@ Rules:
       const filtered = rows.filter((c) => {
         if (adminsOnly === "true" && !c.isAdmin) return false;
         if (cityId && c.cityId !== cityId) return false;
+        if (sinceDate || untilDate) {
+          const created = c.createdAt ? new Date(c.createdAt) : null;
+          if (!created) return false;
+          if (sinceDate && created < sinceDate) return false;
+          if (untilDate && created > untilDate) return false;
+        }
         if (normalizedQuery.length === 0) return true;
         const nameMatch = (c.fullName ?? "").toLowerCase().includes(normalizedQuery);
         const mobileMatch = c.mobileE164.toLowerCase().includes(normalizedQuery);
@@ -1479,7 +1488,16 @@ Rules:
       }
 
       const csv = "\uFEFF" + csvRows.join("\r\n");
-      const filename = `customers_${new Date().toISOString().slice(0, 10)}.csv`;
+      const sinceLabel = sinceDate ? sinceDate.toISOString().slice(0, 10) : null;
+      const untilLabel = untilDate ? untilDate.toISOString().slice(0, 10) : null;
+      const dateTag = sinceLabel && untilLabel
+        ? `${sinceLabel}_${untilLabel}`
+        : sinceLabel
+        ? `from_${sinceLabel}`
+        : untilLabel
+        ? `until_${untilLabel}`
+        : new Date().toISOString().slice(0, 10);
+      const filename = `customers_${dateTag}.csv`;
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(csv);
