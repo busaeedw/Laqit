@@ -200,6 +200,39 @@ function CustomerRow({
   );
 }
 
+type DatePreset = "today" | "week" | "month" | null;
+
+function presetToDateRange(preset: DatePreset): { since: Date; until: Date } | null {
+  if (!preset) return null;
+  const now = new Date();
+  const until = new Date(now);
+  until.setHours(23, 59, 59, 999);
+  if (preset === "today") {
+    const since = new Date(now);
+    since.setHours(0, 0, 0, 0);
+    return { since, until };
+  }
+  if (preset === "week") {
+    const since = new Date(now);
+    since.setDate(since.getDate() - 6);
+    since.setHours(0, 0, 0, 0);
+    return { since, until };
+  }
+  if (preset === "month") {
+    const since = new Date(now);
+    since.setDate(since.getDate() - 29);
+    since.setHours(0, 0, 0, 0);
+    return { since, until };
+  }
+  return null;
+}
+
+const DATE_PRESETS: { key: DatePreset; label: string }[] = [
+  { key: "today", label: "اليوم" },
+  { key: "week", label: "آخر 7 أيام" },
+  { key: "month", label: "آخر 30 يوم" },
+];
+
 export default function AdminCustomersScreen() {
   const { theme } = useTheme();
   const headerHeight = useHeaderHeight();
@@ -212,6 +245,7 @@ export default function AdminCustomersScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [adminsOnly, setAdminsOnly] = useState(false);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<DatePreset>(null);
   const [isExporting, setIsExporting] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery<CustomersResponse>({
@@ -351,9 +385,14 @@ export default function AdminCustomersScreen() {
 
   const cityList = citiesData?.cities ?? [];
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const dateRange = presetToDateRange(datePreset);
   const filteredList = customerList.filter((c) => {
     if (adminsOnly && !c.isAdmin) return false;
     if (selectedCityId && c.cityId !== selectedCityId) return false;
+    if (dateRange) {
+      const created = new Date(c.createdAt);
+      if (created < dateRange.since || created > dateRange.until) return false;
+    }
     if (normalizedQuery.length === 0) return true;
     const nameMatch = (c.fullName ?? "").toLowerCase().includes(normalizedQuery);
     const mobileMatch = c.mobileE164.toLowerCase().includes(normalizedQuery);
@@ -469,6 +508,38 @@ export default function AdminCustomersScreen() {
                 })}
               </View>
             ) : null}
+
+            <View style={styles.cityFilterRow}>
+              {DATE_PRESETS.map(({ key, label }) => {
+                const active = datePreset === key;
+                return (
+                  <Pressable
+                    key={key ?? "all"}
+                    testID={`button-date-preset-${key}`}
+                    onPress={() => setDatePreset(active ? null : key)}
+                    style={[
+                      styles.cityChip,
+                      {
+                        backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
+                        borderColor: active ? theme.primary + "60" : theme.border,
+                      },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.cityChipText,
+                        {
+                          color: active ? theme.primary : theme.textSecondary,
+                          fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
+                        },
+                      ]}
+                    >
+                      {label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             <Pressable
               testID="toggle-admins-only"
@@ -589,7 +660,7 @@ export default function AdminCustomersScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather
-              name={normalizedQuery.length > 0 || adminsOnly || selectedCityId !== null ? "search" : "users"}
+              name={normalizedQuery.length > 0 || adminsOnly || selectedCityId !== null || datePreset !== null ? "search" : "users"}
               size={48}
               color={theme.textSecondary}
             />
@@ -602,15 +673,18 @@ export default function AdminCustomersScreen() {
                 ? "لا يوجد مشرفون"
                 : selectedCityId !== null
                 ? "لا يوجد عملاء في هذه المدينة"
+                : datePreset !== null
+                ? "لا يوجد عملاء في هذه الفترة"
                 : "لا يوجد عملاء"}
             </ThemedText>
-            {(normalizedQuery.length > 0 || adminsOnly || selectedCityId !== null) ? (
+            {(normalizedQuery.length > 0 || adminsOnly || selectedCityId !== null || datePreset !== null) ? (
               <Pressable
                 testID="button-clear-filters"
                 onPress={() => {
                   setSearchQuery("");
                   setAdminsOnly(false);
                   setSelectedCityId(null);
+                  setDatePreset(null);
                 }}
               >
                 <ThemedText
