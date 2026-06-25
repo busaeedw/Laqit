@@ -1120,6 +1120,12 @@ Rules:
   // Validates JWT then does a DB lookup to confirm the caller has is_admin=true.
   // The is_admin flag can only be set server-side (not via any customer API),
   // so this is non-spoofable even if a customer changes their own profile data.
+
+  async function callerIsAdmin(customerId: string): Promise<boolean> {
+    const [row] = await db.select({ isAdmin: customers.isAdmin }).from(customers).where(eq(customers.customerId, customerId)).limit(1);
+    return !!row?.isAdmin;
+  }
+
   const requireAdminCustomer: import("express").RequestHandler[] = [
     requireCustomer,
     async (_req: Request, res: Response, next: import("express").NextFunction): Promise<void> => {
@@ -1954,6 +1960,59 @@ Rules:
     }
   });
 
+  // GET /api/admin/laqit-inspections — paginated list of ALL inspections (admin only)
+  // Query params: page (1-based), search (inspectionNo or customer name/mobile), status
+  app.get("/api/admin/laqit-inspections", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    const PAGE_SIZE = 30;
+    try {
+      const { page: pageRaw, search, status: statusFilter } = req.query as Record<string, string | undefined>;
+      const page = Math.max(1, parseInt(pageRaw ?? "1", 10) || 1);
+      const offset = (page - 1) * PAGE_SIZE;
+
+      const conditions: ReturnType<typeof sql>[] = [];
+
+      if (statusFilter && statusFilter.trim().length > 0) {
+        conditions.push(sql`${laqitInspections.status} = ${statusFilter.trim()}`);
+      }
+
+      if (search && search.trim().length > 0) {
+        const term = `%${search.trim().toLowerCase()}%`;
+        conditions.push(sql`(
+          lower(${laqitInspections.inspectionNo}) LIKE ${term}
+          OR lower(${customers.fullName}) LIKE ${term}
+          OR lower(${customers.mobileE164}) LIKE ${term}
+        )`);
+      }
+
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const rows = await db
+        .select({
+          inspectionId: laqitInspections.inspectionId,
+          inspectionNo: laqitInspections.inspectionNo,
+          status: laqitInspections.status,
+          carModelId: laqitInspections.carModelId,
+          carYear: laqitInspections.carYear,
+          createdAt: laqitInspections.createdAt,
+          updatedAt: laqitInspections.updatedAt,
+          customerId: customers.customerId,
+          customerName: customers.fullName,
+          customerMobile: customers.mobileE164,
+        })
+        .from(laqitInspections)
+        .innerJoin(customers, eq(laqitInspections.customerId, customers.customerId))
+        .where(whereClause)
+        .orderBy(desc(laqitInspections.createdAt))
+        .limit(PAGE_SIZE + 1)
+        .offset(offset);
+
+      const hasMore = rows.length > PAGE_SIZE;
+      res.json({ inspections: rows.slice(0, PAGE_SIZE), hasMore, page });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // ─── Laqit Inspections ────────────────────────────────────────────────────
 
   function generateInspectionNo(): string {
@@ -2062,7 +2121,8 @@ Rules:
         .limit(1);
       if (!inspection) return res.status(404).json({ error: "غير موجود" });
       if (inspection.customerId !== callerCustomerId) {
-        return res.status(403).json({ error: "غير مسموح" });
+        const adminOk = await callerIsAdmin(callerCustomerId);
+        if (!adminOk) return res.status(403).json({ error: "غير مسموح" });
       }
 
       const media = await db
@@ -2123,7 +2183,8 @@ Rules:
         .limit(1);
       if (!inspection) return res.status(404).json({ error: "غير موجود" });
       if (inspection.customerId !== callerCustomerId) {
-        return res.status(403).json({ error: "غير مسموح" });
+        const adminOk = await callerIsAdmin(callerCustomerId);
+        if (!adminOk) return res.status(403).json({ error: "غير مسموح" });
       }
 
       const built = await buildInspectionPdfBuffer(inspection, req.query.locale);
