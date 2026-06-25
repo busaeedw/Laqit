@@ -16,6 +16,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -241,12 +243,22 @@ function AuditEntryRow({ entry, index }: { entry: AuditEntry; index: number }) {
           >
             {`بواسطة ${actorLabel}  •  ${formatRelativeTime(entry.createdAt)}`}
           </ThemedText>
-          <ThemedText
-            style={[styles.auditTimestamp, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
-            testID={`text-audit-timestamp-${entry.auditId}`}
+          <Pressable
+            onLongPress={async () => {
+              const formatted = formatExactDateTime(entry.createdAt);
+              await Clipboard.setStringAsync(formatted);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }}
+            delayLongPress={400}
+            testID={`pressable-audit-timestamp-${entry.auditId}`}
           >
-            {formatExactDateTime(entry.createdAt)}
-          </ThemedText>
+            <ThemedText
+              style={[styles.auditTimestamp, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
+              testID={`text-audit-timestamp-${entry.auditId}`}
+            >
+              {formatExactDateTime(entry.createdAt)}
+            </ThemedText>
+          </Pressable>
 
           {expanded && payloadLines.length > 0 ? (
             <View
