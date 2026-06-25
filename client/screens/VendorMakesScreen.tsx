@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   StyleSheet,
   View,
+  SectionList,
   FlatList,
   Pressable,
   Modal,
@@ -24,6 +25,8 @@ interface Vendor {
   vendorNameEn: string | null;
   phone: string | null;
   status: string | null;
+  district: string | null;
+  cityNameAr: string | null;
 }
 
 interface MakeItem {
@@ -39,6 +42,11 @@ interface VendorsResponse {
 
 interface MakesResponse {
   makes: MakeItem[];
+}
+
+interface VendorSection {
+  title: string;
+  data: Vendor[];
 }
 
 export default function VendorMakesScreen() {
@@ -101,6 +109,18 @@ export default function VendorMakesScreen() {
     saveMutation.mutate({ vendorId: selectedVendor.vendorId, makeIds: pendingMakeIds });
   };
 
+  // Group vendors by city
+  const sections: VendorSection[] = useMemo(() => {
+    const vendors = vendorsData?.vendors ?? [];
+    const cityMap = new Map<string, Vendor[]>();
+    for (const v of vendors) {
+      const key = v.cityNameAr ?? "غير محدد";
+      if (!cityMap.has(key)) cityMap.set(key, []);
+      cityMap.get(key)!.push(v);
+    }
+    return Array.from(cityMap.entries()).map(([title, data]) => ({ title, data }));
+  }, [vendorsData]);
+
   const renderVendorRow = ({ item }: { item: Vendor }) => (
     <Pressable
       testID={`vendor-row-${item.vendorId}`}
@@ -117,10 +137,19 @@ export default function VendorMakesScreen() {
         <ThemedText style={[styles.vendorName, { fontFamily: "Cairo_700Bold" }]}>
           {item.vendorName}
         </ThemedText>
-        {item.phone ? (
+        {item.district ? (
           <ThemedText
             style={[
-              styles.vendorPhone,
+              styles.vendorDistrict,
+              { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+            ]}
+          >
+            {item.district}
+          </ThemedText>
+        ) : item.phone ? (
+          <ThemedText
+            style={[
+              styles.vendorDistrict,
               { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
             ]}
           >
@@ -130,6 +159,19 @@ export default function VendorMakesScreen() {
       </View>
       <Feather name="chevron-left" size={20} color={theme.textSecondary} />
     </Pressable>
+  );
+
+  const renderSectionHeader = ({ section }: { section: VendorSection }) => (
+    <View style={[styles.sectionHeader, { backgroundColor: theme.backgroundRoot }]}>
+      <ThemedText
+        style={[
+          styles.sectionHeaderText,
+          { color: theme.primary, fontFamily: "Cairo_700Bold" },
+        ]}
+      >
+        {section.title}
+      </ThemedText>
+    </View>
   );
 
   const renderMakeRow = ({ item }: { item: MakeItem }) => {
@@ -185,16 +227,19 @@ export default function VendorMakesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-      <FlatList
-        data={vendorsData?.vendors ?? []}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.vendorId}
         renderItem={renderVendorRow}
+        renderSectionHeader={renderSectionHeader}
+        stickySectionHeadersEnabled
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
           paddingHorizontal: Spacing.lg,
-          gap: Spacing.sm,
         }}
+        SectionSeparatorComponent={() => <View style={styles.sectionSeparator} />}
+        ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Feather name="inbox" size={48} color={theme.textSecondary} />
@@ -325,6 +370,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  sectionHeader: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    textAlign: "right",
+    letterSpacing: 0.3,
+  },
+  sectionSeparator: {
+    height: Spacing.md,
+  },
+  itemSeparator: {
+    height: Spacing.sm,
+  },
   vendorRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -347,7 +408,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "right",
   },
-  vendorPhone: {
+  vendorDistrict: {
     fontSize: 12,
     textAlign: "right",
   },

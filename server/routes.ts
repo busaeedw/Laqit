@@ -1132,10 +1132,21 @@ Rules:
           vendorNameEn: vendors.vendorNameEn,
           phone: vendors.phone,
           status: vendors.status,
+          district: vendors.district,
+          cityNameAr: cities.nameAr,
         })
         .from(vendors)
-        .orderBy(vendors.vendorName);
-      res.json({ vendors: rows });
+        .leftJoin(vendorLocations, eq(vendorLocations.vendorId, vendors.vendorId))
+        .leftJoin(cities, eq(cities.cityId, vendorLocations.cityId))
+        .orderBy(cities.nameAr, vendors.vendorName);
+      // Deduplicate by vendorId (a vendor may have multiple city rows)
+      const seen = new Set<string>();
+      const deduped = rows.filter((r) => {
+        if (seen.has(r.vendorId)) return false;
+        seen.add(r.vendorId);
+        return true;
+      });
+      res.json({ vendors: deduped });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }
