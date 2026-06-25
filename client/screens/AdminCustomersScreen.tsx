@@ -53,16 +53,21 @@ function CustomerRow({
   currentUserId,
   onToggle,
   isPending,
+  cityList,
 }: {
   item: CustomerItem;
   index: number;
   currentUserId: string | undefined;
   onToggle: (customerId: string, isAdmin: boolean) => void;
   isPending: boolean;
+  cityList: CityItem[];
 }) {
   const { theme } = useTheme();
   const isCurrentUser = item.customerId === currentUserId;
   const adminStatus = !!item.isAdmin;
+  const cityName = item.cityId
+    ? (cityList.find((c) => c.cityId === item.cityId)?.nameAr ?? null)
+    : null;
 
   const handleToggle = () => {
     if (isCurrentUser) return;
@@ -150,6 +155,19 @@ function CustomerRow({
                   ]}
                 >
                   مشرف
+                </ThemedText>
+              </View>
+            ) : null}
+            {cityName ? (
+              <View style={styles.cityLabel}>
+                <Feather name="map-pin" size={10} color={theme.textSecondary} />
+                <ThemedText
+                  style={[
+                    styles.cityLabelText,
+                    { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+                  ]}
+                >
+                  {cityName}
                 </ThemedText>
               </View>
             ) : null}
@@ -354,6 +372,7 @@ export default function AdminCustomersScreen() {
             currentUserId={user?.customerId}
             onToggle={handleToggle}
             isPending={pendingId === item.customerId}
+            cityList={cityList}
           />
         )}
         ListHeaderComponent={
@@ -740,6 +759,16 @@ const styles = StyleSheet.create({
   },
   adminBadgeText: {
     fontSize: 11,
+  },
+  cityLabel: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 2,
+  },
+  cityLabelText: {
+    fontSize: 11,
+    textAlign: "right",
   },
   selfTag: {
     paddingHorizontal: Spacing.sm,
