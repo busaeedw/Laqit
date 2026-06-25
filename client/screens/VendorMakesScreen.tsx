@@ -179,7 +179,7 @@ export default function VendorMakesScreen() {
 
   // Stable viewability config — must not be recreated on each render
   const viewabilityConfig = useRef({
-    itemVisibilityPercentThreshold: 10,
+    itemVisiblePercentThreshold: 10,
     minimumViewTime: 50,
   }).current;
 
