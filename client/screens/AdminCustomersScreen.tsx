@@ -28,6 +28,13 @@ interface CustomerItem {
   email: string | null;
   isAdmin: boolean | null;
   createdAt: string;
+  cityId: string | null;
+}
+
+interface CityItem {
+  cityId: string;
+  nameAr: string;
+  nameEn: string;
 }
 
 interface CustomersResponse {
@@ -356,6 +363,7 @@ export default function AdminCustomersScreen() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [adminsOnly, setAdminsOnly] = useState(false);
+  const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
 
   // Audit log filters
   const [auditPerson, setAuditPerson] = useState("");
@@ -381,6 +389,11 @@ export default function AdminCustomersScreen() {
   const { data, isLoading, isError, refetch } = useQuery<CustomersResponse>({
     queryKey: ["/api/customers/all"],
     staleTime: 0,
+  });
+
+  const { data: citiesData } = useQuery<{ cities: CityItem[] }>({
+    queryKey: ["/api/cities"],
+    staleTime: 60000,
   });
 
   const { data: auditData, isLoading: auditLoading } = useQuery<AuditLogResponse>({
@@ -458,9 +471,11 @@ export default function AdminCustomersScreen() {
   const customerList = data?.customers ?? [];
   const adminCount = customerList.filter((c) => !!c.isAdmin).length;
 
+  const cityList = citiesData?.cities ?? [];
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredList = customerList.filter((c) => {
     if (adminsOnly && !c.isAdmin) return false;
+    if (selectedCityId && c.cityId !== selectedCityId) return false;
     if (normalizedQuery.length === 0) return true;
     const nameMatch = (c.fullName ?? "").toLowerCase().includes(normalizedQuery);
     const mobileMatch = c.mobileE164.toLowerCase().includes(normalizedQuery);
@@ -677,6 +692,63 @@ export default function AdminCustomersScreen() {
               ) : null}
             </View>
 
+            {cityList.length > 0 ? (
+              <View style={styles.cityFilterRow}>
+                <Pressable
+                  testID="button-city-all"
+                  onPress={() => setSelectedCityId(null)}
+                  style={[
+                    styles.cityChip,
+                    {
+                      backgroundColor: selectedCityId === null ? theme.primary + "18" : theme.backgroundDefault,
+                      borderColor: selectedCityId === null ? theme.primary + "60" : theme.border,
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.cityChipText,
+                      {
+                        color: selectedCityId === null ? theme.primary : theme.textSecondary,
+                        fontFamily: selectedCityId === null ? "Cairo_600SemiBold" : "Cairo_400Regular",
+                      },
+                    ]}
+                  >
+                    كل المدن
+                  </ThemedText>
+                </Pressable>
+                {cityList.map((city) => {
+                  const active = selectedCityId === city.cityId;
+                  return (
+                    <Pressable
+                      key={city.cityId}
+                      testID={`button-city-${city.cityId}`}
+                      onPress={() => setSelectedCityId(active ? null : city.cityId)}
+                      style={[
+                        styles.cityChip,
+                        {
+                          backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
+                          borderColor: active ? theme.primary + "60" : theme.border,
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.cityChipText,
+                          {
+                            color: active ? theme.primary : theme.textSecondary,
+                            fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
+                          },
+                        ]}
+                      >
+                        {city.nameAr}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+
             <Pressable
               testID="toggle-admins-only"
               onPress={() => setAdminsOnly((v) => !v)}
@@ -749,7 +821,7 @@ export default function AdminCustomersScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather
-              name={normalizedQuery.length > 0 || adminsOnly ? "search" : "users"}
+              name={normalizedQuery.length > 0 || adminsOnly || selectedCityId !== null ? "search" : "users"}
               size={48}
               color={theme.textSecondary}
             />
@@ -760,14 +832,17 @@ export default function AdminCustomersScreen() {
                 ? "لا توجد نتائج للبحث"
                 : adminsOnly
                 ? "لا يوجد مشرفون"
+                : selectedCityId !== null
+                ? "لا يوجد عملاء في هذه المدينة"
                 : "لا يوجد عملاء"}
             </ThemedText>
-            {(normalizedQuery.length > 0 || adminsOnly) ? (
+            {(normalizedQuery.length > 0 || adminsOnly || selectedCityId !== null) ? (
               <Pressable
                 testID="button-clear-filters"
                 onPress={() => {
                   setSearchQuery("");
                   setAdminsOnly(false);
+                  setSelectedCityId(null);
                 }}
               >
                 <ThemedText
@@ -1023,5 +1098,19 @@ const styles = StyleSheet.create({
   auditEmptyText: {
     fontSize: 13,
     textAlign: "center",
+  },
+  cityFilterRow: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  cityChip: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  cityChipText: {
+    fontSize: 12,
   },
 });

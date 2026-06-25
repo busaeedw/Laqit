@@ -1323,6 +1323,7 @@ Rules:
           email: customers.email,
           isAdmin: customers.isAdmin,
           createdAt: customers.createdAt,
+          cityId: customers.cityId,
         })
         .from(customers)
         .orderBy(customers.createdAt);
