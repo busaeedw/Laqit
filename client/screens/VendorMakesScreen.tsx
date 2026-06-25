@@ -212,6 +212,13 @@ export default function VendorMakesScreen() {
 
   const cities = useMemo(() => allSections.map((s) => s.title), [allSections]);
 
+  // Highlight the first city chip as soon as data loads
+  useEffect(() => {
+    if (allSections.length > 0 && selectedCity === null) {
+      setSelectedCity(allSections[0].title);
+    }
+  }, [allSections]);
+
   const sections: VendorSection[] = allSections;
 
   const scrollToCity = (city: string | null) => {
