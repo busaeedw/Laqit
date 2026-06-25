@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  ReactNode,
+} from "react";
+import { AppState, AppStateStatus, Alert } from "react-native";
 import { storeItem, loadItem, deleteItem } from "@/lib/secureStorage";
 import { setAuthToken, getApiUrl } from "@/lib/query-client";
 
@@ -14,6 +22,7 @@ export interface UserData {
 
 const USER_STORE_KEY = "laqit_user";
 const TOKEN_STORE_KEY = "laqit_token";
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface UserContextType {
   user: UserData | null;
@@ -32,11 +41,74 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
+  // Refs so the refresh helper always sees the latest values without
+  // needing to be re-created (avoids stale closures in listeners/intervals).
+  const userRef = useRef<UserData | null>(null);
+  const tokenRef = useRef<string | null>(null);
+  userRef.current = user;
+  tokenRef.current = token;
+
   // Keep the module-level _authToken always in sync with React state
   useEffect(() => {
     setAuthToken(token);
   }, [token]);
 
+  /**
+   * Fetch the latest profile from the server and merge it into state.
+   * - 401 → session expired; clear session and alert the user.
+   * - Network error → silent; keep the cached session.
+   * - Returns true if the session is still valid after the call.
+   */
+  const refreshProfile = async (
+    currentUser: UserData,
+    currentToken: string,
+    silent: boolean
+  ): Promise<boolean> => {
+    try {
+      const customerId = currentUser.customerId ?? currentUser.id;
+      const res = await fetch(
+        new URL(`/api/customers/${customerId}`, getApiUrl()).toString(),
+        { headers: { Authorization: `Bearer ${currentToken}` } }
+      );
+
+      if (res.status === 401) {
+        setUserState(null);
+        setTokenState(null);
+        setAuthToken(null);
+        deleteItem(USER_STORE_KEY).catch(() => {});
+        deleteItem(TOKEN_STORE_KEY).catch(() => {});
+        if (!silent) {
+          Alert.alert(
+            "انتهت الجلسة",
+            "انتهت صلاحية جلستك. يرجى تسجيل الدخول مجددًا.",
+            [{ text: "حسنًا" }]
+          );
+        }
+        return false;
+      }
+
+      if (res.ok) {
+        const body = await res.json();
+        const fresh = body.customer ?? body;
+        const updated: UserData = {
+          ...currentUser,
+          name: fresh.full_name ?? fresh.fullName ?? currentUser.name,
+          email: fresh.email ?? currentUser.email,
+          cityId: fresh.city_id ?? fresh.cityId ?? currentUser.cityId,
+          isAdmin: fresh.is_admin ?? fresh.isAdmin ?? false,
+        };
+        setUserState(updated);
+        storeItem(USER_STORE_KEY, JSON.stringify(updated)).catch(() => {});
+      }
+
+      return true;
+    } catch {
+      // Network error — keep existing session
+      return true;
+    }
+  };
+
+  // ── Hydration on mount ─────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -48,42 +120,46 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setTokenState(storedToken);
           setAuthToken(storedToken);
 
-          // Background refresh to pick up any server-side role changes (e.g. isAdmin toggled)
-          try {
-            const customerId = parsed.customerId ?? parsed.id;
-            const res = await fetch(
-              new URL(`/api/customers/${customerId}`, getApiUrl()).toString(),
-              { headers: { Authorization: `Bearer ${storedToken}` } }
-            );
-            if (res.status === 401) {
-              // Session no longer valid — wipe it silently
-              setUserState(null);
-              setTokenState(null);
-              setAuthToken(null);
-              deleteItem(USER_STORE_KEY).catch(() => {});
-              deleteItem(TOKEN_STORE_KEY).catch(() => {});
-            } else if (res.ok) {
-              const body = await res.json();
-              const fresh = body.customer ?? body;
-              const updated: UserData = {
-                ...parsed,
-                name: fresh.full_name ?? fresh.fullName ?? parsed.name,
-                email: fresh.email ?? parsed.email,
-                cityId: fresh.city_id ?? fresh.cityId ?? parsed.cityId,
-                isAdmin: fresh.is_admin ?? fresh.isAdmin ?? false,
-              };
-              setUserState(updated);
-              storeItem(USER_STORE_KEY, JSON.stringify(updated)).catch(() => {});
-            }
-          } catch {
-            // Network error — keep the cached session as-is
-          }
+          // Background refresh at launch (silent — don't alert on startup 401)
+          await refreshProfile(parsed, storedToken, true);
         }
       } catch {}
       setIsHydrated(true);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Periodic refresh: AppState listener + interval ─────────────────────────
+  useEffect(() => {
+    const runRefresh = () => {
+      const u = userRef.current;
+      const t = tokenRef.current;
+      if (u && t) {
+        refreshProfile(u, t, false);
+      }
+    };
+
+    // Trigger refresh whenever the app comes back to the foreground
+    const subscription = AppState.addEventListener(
+      "change",
+      (nextState: AppStateStatus) => {
+        if (nextState === "active") {
+          runRefresh();
+        }
+      }
+    );
+
+    // Also refresh on a fixed interval while the app is open
+    const interval = setInterval(runRefresh, REFRESH_INTERVAL_MS);
+
+    return () => {
+      subscription.remove();
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Session helpers ────────────────────────────────────────────────────────
   const setSession = (newUser: UserData, newToken: string) => {
     setUserState(newUser);
     setTokenState(newToken);
