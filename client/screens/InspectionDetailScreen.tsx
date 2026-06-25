@@ -1184,9 +1184,19 @@ export default function InspectionDetailScreen() {
           <View style={[styles.modalSheet, { backgroundColor: theme.backgroundDefault }]}>
             <View style={[styles.modalHandle, { backgroundColor: theme.border }]} />
 
-            <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
-              تغيير حالة الطلب
-            </ThemedText>
+            <View style={styles.modalHeaderRow}>
+              <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
+                تغيير حالة الطلب
+              </ThemedText>
+              <Pressable
+                testID="button-override-close"
+                onPress={() => setOverrideModalVisible(false)}
+                hitSlop={10}
+                style={[styles.modalCloseBtn, { backgroundColor: theme.backgroundRoot }]}
+              >
+                <Feather name="x" size={20} color={theme.textSecondary} />
+              </Pressable>
+            </View>
             <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
               اختر الحالة الجديدة وأدخل السبب اختيارياً
             </ThemedText>
@@ -1534,6 +1544,18 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   modalTitle: { fontSize: 18, textAlign: "right" },
+  modalHeaderRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   modalSubtitle: { fontSize: 13, textAlign: "right", marginTop: -Spacing.xs },
   localeBadgeRow: {
     flexDirection: "row-reverse",
