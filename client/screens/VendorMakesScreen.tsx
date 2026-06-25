@@ -146,7 +146,8 @@ export default function VendorMakesScreen() {
           >
             {item.district}
           </ThemedText>
-        ) : item.phone ? (
+        ) : null}
+        {item.phone ? (
           <ThemedText
             style={[
               styles.vendorDistrict,
