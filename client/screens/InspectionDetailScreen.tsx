@@ -29,6 +29,7 @@ import { usePdfLocale, PdfLocale } from "@/hooks/usePdfLocale";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, authHeaders } from "@/lib/query-client";
+import { useUser } from "@/context/UserContext";
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RoutePropType = RouteProp<RootStackParamList, "InspectionDetail">;
@@ -259,6 +260,20 @@ function PdfPreviewModal({
   );
 }
 
+const ALL_STATUSES: { key: string; label: string }[] = [
+  { key: "draft", label: "مسودة" },
+  { key: "rfq_sent", label: "تم الإرسال للموردين" },
+  { key: "waiting_quotes", label: "في انتظار العروض" },
+  { key: "quotes_received", label: "تم استلام العروض" },
+  { key: "quote_accepted", label: "تم قبول عرض" },
+  { key: "payment_pending", label: "في انتظار الدفع" },
+  { key: "paid", label: "تم الدفع" },
+  { key: "vendor_notified", label: "تم إبلاغ المورد" },
+  { key: "ready_for_pickup", label: "جاهز للاستلام" },
+  { key: "cancelled", label: "ملغي" },
+  { key: "closed", label: "مغلق" },
+];
+
 export default function InspectionDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -266,6 +281,7 @@ export default function InspectionDetailScreen() {
   const route = useRoute<RoutePropType>();
   const { inspectionId } = route.params;
   const { theme } = useTheme();
+  const { user } = useUser();
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -519,6 +535,49 @@ export default function InspectionDetailScreen() {
     setSendEmailError(null);
     setSendEmailSuccess(false);
     setEmailModalVisible(true);
+  };
+
+  // Admin override modal
+  const [overrideModalVisible, setOverrideModalVisible] = useState(false);
+  const [overrideStatus, setOverrideStatus] = useState<string>("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overriding, setOverriding] = useState(false);
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+
+  const handleOpenOverride = () => {
+    setOverrideStatus(inspection?.status ?? "draft");
+    setOverrideReason("");
+    setOverrideError(null);
+    setOverrideModalVisible(true);
+  };
+
+  const handleOverrideSubmit = async () => {
+    if (!overrideStatus) {
+      setOverrideError("يرجى اختيار الحالة");
+      return;
+    }
+    setOverriding(true);
+    setOverrideError(null);
+    try {
+      const url = new URL(`/api/admin/laqit-inspections/${inspectionId}/status`, getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ status: overrideStatus, reason: overrideReason.trim() || undefined }),
+      });
+      const json = await resp.json().catch(() => ({} as any));
+      if (!resp.ok) {
+        setOverrideError(json.error ?? "تعذر تحديث الحالة");
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setOverrideModalVisible(false);
+      refetch();
+    } catch {
+      setOverrideError("تعذر الاتصال بالخادم");
+    } finally {
+      setOverriding(false);
+    }
   };
 
   const [sendingToAgent, setSendingToAgent] = useState(false);
@@ -965,6 +1024,23 @@ export default function InspectionDetailScreen() {
           </>
         ) : null}
 
+        {/* Admin override status button */}
+        {user?.isAdmin === true ? (
+          <Pressable
+            testID="button-admin-override-status"
+            onPress={handleOpenOverride}
+            style={({ pressed }) => [
+              styles.overrideBtn,
+              { borderColor: theme.primary, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Feather name="sliders" size={18} color={theme.primary} />
+            <ThemedText style={[styles.overrideBtnText, { color: theme.primary, fontFamily: "Cairo_700Bold" }]}>
+              تغيير الحالة (مشرف)
+            </ThemedText>
+          </Pressable>
+        ) : null}
+
         {/* Delete button */}
         <Pressable
           testID="button-delete-order"
@@ -1084,6 +1160,118 @@ export default function InspectionDetailScreen() {
               )}
               <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold" }]}>
                 {sendingEmail ? "جارٍ الإرسال..." : "إرسال التقرير"}
+              </ThemedText>
+            </Pressable>
+
+            <View style={{ height: insets.bottom + Spacing.md }} />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Admin status override modal */}
+      <Modal
+        visible={overrideModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setOverrideModalVisible(false)}
+        testID="modal-admin-override"
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setOverrideModalVisible(false)} />
+          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={[styles.modalHandle, { backgroundColor: theme.border }]} />
+
+            <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
+              تغيير حالة الطلب
+            </ThemedText>
+            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+              اختر الحالة الجديدة وأدخل السبب اختيارياً
+            </ThemedText>
+
+            {/* Status picker */}
+            <View style={[styles.overridePickerWrap, { borderColor: theme.border, backgroundColor: theme.backgroundRoot }]}>
+              {ALL_STATUSES.map((s) => (
+                <Pressable
+                  key={s.key}
+                  testID={`button-status-option-${s.key}`}
+                  onPress={() => setOverrideStatus(s.key)}
+                  style={[
+                    styles.overridePickerItem,
+                    overrideStatus === s.key && { backgroundColor: theme.primary + "18" },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.overrideRadio,
+                      { borderColor: overrideStatus === s.key ? theme.primary : theme.border },
+                    ]}
+                  >
+                    {overrideStatus === s.key ? (
+                      <View style={[styles.overrideRadioDot, { backgroundColor: theme.primary }]} />
+                    ) : null}
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.overridePickerLabel,
+                      {
+                        fontFamily: overrideStatus === s.key ? "Cairo_700Bold" : "Cairo_400Regular",
+                        color: overrideStatus === s.key ? theme.primary : theme.text,
+                      },
+                    ]}
+                  >
+                    {s.label}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Reason input */}
+            <TextInput
+              testID="input-override-reason"
+              value={overrideReason}
+              onChangeText={(t) => { setOverrideReason(t); setOverrideError(null); }}
+              placeholder="السبب (اختياري)"
+              placeholderTextColor={theme.textSecondary}
+              style={[
+                styles.emailInput,
+                {
+                  backgroundColor: theme.backgroundRoot,
+                  borderColor: theme.border,
+                  color: theme.text,
+                  fontFamily: "Cairo_400Regular",
+                  textAlign: "right",
+                },
+              ]}
+            />
+
+            {overrideError != null ? (
+              <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
+                {overrideError}
+              </ThemedText>
+            ) : null}
+
+            <Pressable
+              testID="button-override-confirm"
+              onPress={handleOverrideSubmit}
+              disabled={overriding}
+              style={({ pressed }) => [
+                styles.sendBtn,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: pressed || overriding ? 0.7 : 1,
+                },
+              ]}
+            >
+              {overriding ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="check" size={18} color="#fff" />
+              )}
+              <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                {overriding ? "جارٍ التحديث..." : "تأكيد التغيير"}
               </ThemedText>
             </Pressable>
 
@@ -1387,4 +1575,41 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   sendBtnText: { color: "#fff", fontSize: 16 },
+  overrideBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    marginBottom: Spacing.md,
+  },
+  overrideBtnText: { fontSize: 15 },
+  overridePickerWrap: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+  },
+  overridePickerItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
+  overrideRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  overrideRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  overridePickerLabel: { fontSize: 14, flex: 1, textAlign: "right" },
 });
