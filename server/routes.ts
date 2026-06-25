@@ -27,7 +27,7 @@ import {
   notifications,
   inspectionStatusEnum,
 } from "../shared/schema";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, ilike } from "drizzle-orm";
 import { sendWhatsAppMessage, sendWhatsAppDocument } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
@@ -1097,8 +1097,53 @@ Rules:
     }
   });
 
+  // ─── Admin customer middleware (server-side name check) ────────────────────
+  // Validates JWT (via requireCustomer chain) then verifies the caller's
+  // full_name in the DB contains "waheed" (case-insensitive). This is a
+  // lightweight server-side guard for Waheed-only admin functionality until a
+  // proper role column is added (see task #92).
+  const requireAdminCustomer: import("express").RequestHandler[] = [
+    requireCustomer,
+    async (req: Request, res: Response, next: import("express").NextFunction): Promise<void> => {
+      try {
+        const customerId: string = res.locals.customerId;
+        const [row] = await db
+          .select({ fullName: customers.fullName })
+          .from(customers)
+          .where(eq(customers.customerId, customerId))
+          .limit(1);
+        if (!row || !row.fullName?.toLowerCase().includes("waheed")) {
+          res.status(403).json({ error: "غير مسموح" });
+          return;
+        }
+        next();
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message });
+      }
+    },
+  ];
+
+  // GET /api/vendors/all — returns ALL vendors (active + inactive) for admin use
+  app.get("/api/vendors/all", ...requireAdminCustomer, async (_req, res) => {
+    try {
+      const rows = await db
+        .select({
+          vendorId: vendors.vendorId,
+          vendorName: vendors.vendorName,
+          vendorNameEn: vendors.vendorNameEn,
+          phone: vendors.phone,
+          status: vendors.status,
+        })
+        .from(vendors)
+        .orderBy(vendors.vendorName);
+      res.json({ vendors: rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // GET /api/vendors/:vendorId/car-makes — all makes with selected flag for this vendor
-  app.get("/api/vendors/:vendorId/car-makes", requireCustomer, async (req, res) => {
+  app.get("/api/vendors/:vendorId/car-makes", ...requireAdminCustomer, async (req, res) => {
     try {
       const { vendorId } = req.params;
       const allMakes = await db.select().from(carMakes).orderBy(carMakes.makeName);
@@ -1125,7 +1170,7 @@ Rules:
   });
 
   // PUT /api/vendors/:vendorId/car-makes — replace all supported makes for this vendor
-  app.put("/api/vendors/:vendorId/car-makes", requireCustomer, async (req, res) => {
+  app.put("/api/vendors/:vendorId/car-makes", ...requireAdminCustomer, async (req, res) => {
     try {
       const { vendorId } = req.params;
       const { makeIds } = req.body;

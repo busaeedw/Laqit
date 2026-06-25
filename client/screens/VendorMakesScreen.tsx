@@ -50,7 +50,7 @@ export default function VendorMakesScreen() {
   const [pendingMakeIds, setPendingMakeIds] = useState<string[]>([]);
 
   const { data: vendorsData, isLoading: vendorsLoading } = useQuery<VendorsResponse>({
-    queryKey: ["/api/vendors/public"],
+    queryKey: ["/api/vendors/all"],
   });
 
   const { data: makesData, isLoading: makesLoading } = useQuery<MakesResponse>({
