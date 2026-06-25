@@ -8,3 +8,4 @@
 - [Inspection PDF must route through one helper](inspection-pdf-helper.md) — all inspection PDF endpoints must call buildInspectionPdfBuffer; inline part mapping skips Arabic→English translation and reintroduces the English-shows-Arabic bug.
 - [gpt-5 reasoning token budget](gpt5-reasoning-token-budget.md) — reasoning tokens eat max_completion_tokens; big prompt + medium effort → empty content (finish_reason=length), looks like "no results". Use low effort, big headroom, branch on length/empty.
 - [WhatsApp report send modes](whatsapp-send-modes.md) — personal WhatsApp can't auto-send/attach; trial uses OS share sheet, business uses Cloud API (flag-toggled).
+- [react-query staleTime Infinity](react-query-staletime-invalidation.md) — global default never refetches on reopen; mutations must invalidate the exact read key or edits look unsaved.

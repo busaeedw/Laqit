@@ -161,9 +161,12 @@ export default function VendorMakesScreen() {
       const res = await apiRequest("PUT", `/api/vendors/${vendorId}/car-makes`, { makeIds });
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/vendors/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vendors/public"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/vendors", variables.vendorId, "car-makes"],
+      });
       setSelectedVendor(null);
       Alert.alert("", `تم الحفظ — ${data.modelsCount} موديل مرتبط`);
     },
