@@ -1097,6 +1097,64 @@ Rules:
     }
   });
 
+  // GET /api/vendors/:vendorId/car-makes — all makes with selected flag for this vendor
+  app.get("/api/vendors/:vendorId/car-makes", requireCustomer, async (req, res) => {
+    try {
+      const { vendorId } = req.params;
+      const allMakes = await db.select().from(carMakes).orderBy(carMakes.makeName);
+      const supported = await db.execute<{ make_id: string }>(sql`
+        SELECT DISTINCT cm.make_id
+        FROM vendor_supported_models vsm
+        INNER JOIN car_models ON car_models.car_model_id = vsm.car_model_id
+        INNER JOIN car_makes cm ON cm.make_id = car_models.make_id
+        WHERE vsm.vendor_id = ${vendorId}
+      `);
+      const supportedIds = new Set(
+        ((supported as any).rows ?? supported).map((r: any) => r.make_id)
+      );
+      const makes = allMakes.map((m) => ({
+        makeId: m.makeId,
+        makeName: m.makeName,
+        nameAr: m.nameAr,
+        selected: supportedIds.has(m.makeId),
+      }));
+      res.json({ makes });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // PUT /api/vendors/:vendorId/car-makes — replace all supported makes for this vendor
+  app.put("/api/vendors/:vendorId/car-makes", requireCustomer, async (req, res) => {
+    try {
+      const { vendorId } = req.params;
+      const { makeIds } = req.body;
+      if (!Array.isArray(makeIds)) {
+        return res.status(400).json({ error: "makeIds يجب أن تكون قائمة" });
+      }
+      const models =
+        makeIds.length > 0
+          ? await db
+              .select({ carModelId: carModels.carModelId })
+              .from(carModels)
+              .where(inArray(carModels.makeId, makeIds))
+          : [];
+      await db
+        .delete(vendorSupportedModels)
+        .where(eq(vendorSupportedModels.vendorId, vendorId));
+      if (models.length > 0) {
+        await db
+          .insert(vendorSupportedModels)
+          .values(models.map((m) => ({ vendorId, carModelId: m.carModelId })))
+          .onConflictDoNothing();
+      }
+      res.json({ success: true, modelsCount: models.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+
   // ─── Laqit Inspections ────────────────────────────────────────────────────
 
   function generateInspectionNo(): string {

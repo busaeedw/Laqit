@@ -22,6 +22,7 @@ import { useNavigation as useRootNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp as RootNavProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
+import { useUser } from "@/context/UserContext";
 
 interface Feature {
   id: string;
@@ -69,6 +70,8 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const rootNavigation = useRootNavigation<RootNavProp<RootStackParamList>>();
+  const { user } = useUser();
+  const isWaheed = !!user?.name?.toLowerCase().includes("waheed");
 
   return (
     <ScrollView
@@ -223,6 +226,38 @@ export default function HomeScreen() {
           </View>
         </Pressable>
       </Animated.View>
+
+      {isWaheed ? (
+        <Animated.View entering={FadeInDown.duration(600).delay(530)}>
+          <Pressable
+            testID="button-vendor-makes"
+            onPress={() => rootNavigation.navigate("VendorMakes")}
+            style={({ pressed }) => [
+              styles.ctaCard,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderWidth: 1,
+                borderColor: theme.primary + "40",
+                opacity: pressed ? 0.9 : 1,
+                transform: [{ scale: pressed ? 0.99 : 1 }],
+                marginBottom: Spacing.md,
+              },
+            ]}
+          >
+            <View style={styles.ctaContent}>
+              <ThemedText style={[styles.ctaTitle, { fontFamily: "Cairo_700Bold" }]}>
+                إدارة ماركات الموردين
+              </ThemedText>
+              <ThemedText style={[styles.ctaSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                حدد ماركات السيارات التي يبيعها كل مورد
+              </ThemedText>
+            </View>
+            <View style={[styles.brandIcon, { backgroundColor: theme.primary + "15" }]}>
+              <Feather name="settings" size={22} color={theme.primary} />
+            </View>
+          </Pressable>
+        </Animated.View>
+      ) : null}
 
       <Animated.View entering={FadeInDown.duration(600).delay(500)}>
         <Pressable

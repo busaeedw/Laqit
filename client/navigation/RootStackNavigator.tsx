@@ -20,6 +20,7 @@ const CarBrandsScreen = lazy(() => import("@/screens/CarBrandsScreen"));
 const CarBrandDetailScreen = lazy(() => import("@/screens/CarBrandDetailScreen"));
 const CarAgentsScreen = lazy(() => import("@/screens/CarAgentsScreen"));
 const VendorsScreen = lazy(() => import("@/screens/VendorsScreen"));
+const VendorMakesScreen = lazy(() => import("@/screens/VendorMakesScreen"));
 const WelcomeScreen = lazy(() => import("@/screens/WelcomeScreen"));
 
 function ScreenFallback() {
@@ -101,6 +102,7 @@ export type RootStackParamList = {
   CarBrandDetail: { make: CarMakeParam };
   CarAgents: undefined;
   Vendors: undefined;
+  VendorMakes: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -224,6 +226,11 @@ export default function RootStackNavigator() {
         name="Vendors"
         component={withSuspense(VendorsScreen)}
         options={{ headerTitle: "تجار قطع الغيار" }}
+      />
+      <Stack.Screen
+        name="VendorMakes"
+        component={withSuspense(VendorMakesScreen)}
+        options={{ headerTitle: "إدارة ماركات الموردين" }}
       />
     </Stack.Navigator>
   );
