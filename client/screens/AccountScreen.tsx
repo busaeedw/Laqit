@@ -514,6 +514,10 @@ export default function AccountScreen() {
     clearSession();
   };
 
+  const handleAdminCustomers = () => {
+    navigation.navigate("AdminCustomers");
+  };
+
   const menuItems: MenuItem[][] = [
     [
       { id: "subscription", icon: "star", label: "اشتراكي", badge: "مجاني", onPress: handleViewPricing },
@@ -635,6 +639,36 @@ export default function AccountScreen() {
         <View style={styles.menuContainer}>
           {menuItems.map((section, index) => renderMenuSection(section, index))}
         </View>
+
+        {isLoggedIn && user?.isAdmin ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(450)}>
+            <View style={[styles.menuSection, { backgroundColor: theme.backgroundDefault }]}>
+              <Pressable
+                testID="button-admin-customers"
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  handleAdminCustomers();
+                }}
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: theme.primary + "15" }]}>
+                    <Feather name="users" size={18} color={theme.primary} />
+                  </View>
+                  <ThemedText style={[styles.menuLabel, { fontFamily: "Cairo_600SemiBold" }]}>
+                    إدارة المستخدمين
+                  </ThemedText>
+                </View>
+                <View style={styles.menuItemRight}>
+                  <Feather name="chevron-left" size={18} color={theme.textSecondary} />
+                </View>
+              </Pressable>
+            </View>
+          </Animated.View>
+        ) : null}
 
         {isLoggedIn ? (
           <Animated.View entering={FadeInDown.duration(400).delay(500)}>

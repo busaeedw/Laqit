@@ -1210,6 +1210,50 @@ Rules:
   });
 
 
+  // GET /api/customers/all — returns all customers for admin use
+  app.get("/api/customers/all", ...requireAdminCustomer, async (_req, res) => {
+    try {
+      const rows = await db
+        .select({
+          customerId: customers.customerId,
+          fullName: customers.fullName,
+          mobileE164: customers.mobileE164,
+          email: customers.email,
+          isAdmin: customers.isAdmin,
+          createdAt: customers.createdAt,
+        })
+        .from(customers)
+        .orderBy(customers.createdAt);
+      res.json({ customers: rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // PATCH /api/customers/:id/admin — promote or revoke admin status
+  app.patch("/api/customers/:id/admin", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      const targetId = req.params.id;
+      if (targetId === callerCustomerId) {
+        return res.status(400).json({ error: "لا يمكن تعديل صلاحياتك الخاصة" });
+      }
+      const { isAdmin } = req.body;
+      if (typeof isAdmin !== "boolean") {
+        return res.status(400).json({ error: "قيمة isAdmin يجب أن تكون true أو false" });
+      }
+      const [updated] = await db
+        .update(customers)
+        .set({ isAdmin })
+        .where(eq(customers.customerId, targetId))
+        .returning({ customerId: customers.customerId, isAdmin: customers.isAdmin });
+      if (!updated) return res.status(404).json({ error: "العميل غير موجود" });
+      res.json({ success: true, customer: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // ─── Laqit Inspections ────────────────────────────────────────────────────
 
   function generateInspectionNo(): string {
