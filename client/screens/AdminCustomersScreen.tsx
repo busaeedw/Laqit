@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   View,
@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -23,6 +25,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { apiRequest, getApiUrl, authHeaders } from "@/lib/query-client";
 import { useUser } from "@/context/UserContext";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 interface CustomerItem {
   customerId: string;
@@ -42,187 +45,6 @@ interface CityItem {
 
 interface CustomersResponse {
   customers: CustomerItem[];
-}
-
-interface AuditEntry {
-  auditId: string;
-  action: string;
-  entityType: string | null;
-  entityId: string | null;
-  createdAt: string;
-  payload: {
-    actorName?: string | null;
-    actorMobile?: string | null;
-    targetName?: string | null;
-    targetMobile?: string | null;
-    vendorName?: string | null;
-    fullName?: string | null;
-    inspectionNo?: string | null;
-    previousStatus?: string | null;
-    newStatus?: string | null;
-    reason?: string | null;
-  } | null;
-}
-
-interface AuditLogResponse {
-  entries: AuditEntry[];
-  hasMore: boolean;
-  page: number;
-}
-
-function formatRelativeTime(isoDate: string): string {
-  const diff = Date.now() - new Date(isoDate).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "الآن";
-  if (mins < 60) return `منذ ${mins} دقيقة`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `منذ ${hrs} ساعة`;
-  const days = Math.floor(hrs / 24);
-  return `منذ ${days} يوم`;
-}
-
-function formatExactDateTime(isoDate: string): string {
-  try {
-    const date = new Date(isoDate);
-    return new Intl.DateTimeFormat("ar-SA", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    }).format(date);
-  } catch {
-    return isoDate;
-  }
-}
-
-type AuditActionConfig = {
-  label: string;
-  icon: React.ComponentProps<typeof Feather>["name"];
-  color: string;
-  getDetail?: (payload: AuditEntry["payload"]) => string | null;
-};
-
-function getActionConfig(action: string, payload: AuditEntry["payload"]): AuditActionConfig {
-  switch (action) {
-    case "admin_granted":
-      return {
-        label: `منح صلاحيات المشرف  ${payload?.targetName ?? payload?.targetMobile ?? ""}`.trim(),
-        icon: "shield",
-        color: "#22C55E",
-      };
-    case "admin_revoked":
-      return {
-        label: `سحب صلاحيات المشرف  ${payload?.targetName ?? payload?.targetMobile ?? ""}`.trim(),
-        icon: "shield-off",
-        color: "#EF4444",
-      };
-    case "vendor_created":
-      return {
-        label: `إضافة مورد: ${payload?.vendorName ?? ""}`.trim(),
-        icon: "plus-circle",
-        color: "#3B82F6",
-      };
-    case "vendor_activated":
-      return {
-        label: `تفعيل المورد: ${payload?.vendorName ?? ""}`.trim(),
-        icon: "check-circle",
-        color: "#22C55E",
-      };
-    case "vendor_deactivated":
-      return {
-        label: `إيقاف المورد: ${payload?.vendorName ?? ""}`.trim(),
-        icon: "x-circle",
-        color: "#EF4444",
-      };
-    case "vendor_user_created":
-      return {
-        label: `إضافة مستخدم مورد: ${payload?.fullName ?? payload?.vendorName ?? ""}`.trim(),
-        icon: "user-plus",
-        color: "#8B5CF6",
-      };
-    case "vendor_user_removed":
-      return {
-        label: `حذف مستخدم مورد: ${payload?.fullName ?? ""}`.trim(),
-        icon: "user-minus",
-        color: "#F59E0B",
-      };
-    case "inspection_status_override":
-      return {
-        label: `تغيير حالة الطلب ${payload?.inspectionNo ?? ""}`.trim(),
-        icon: "edit-2",
-        color: "#F97316",
-        getDetail: (p) =>
-          p?.previousStatus && p?.newStatus
-            ? `${p.previousStatus} ← ${p.newStatus}`
-            : null,
-      };
-    default:
-      return {
-        label: action,
-        icon: "activity",
-        color: "#6B7280",
-      };
-  }
-}
-
-function AuditEntryRow({ entry, index }: { entry: AuditEntry; index: number }) {
-  const { theme } = useTheme();
-  const config = getActionConfig(entry.action, entry.payload);
-  const actorLabel =
-    entry.payload?.actorName ?? entry.payload?.actorMobile ?? "النظام";
-  const detail = config.getDetail?.(entry.payload);
-
-  return (
-    <Animated.View entering={FadeInDown.duration(300).delay(index * 30)}>
-      <View
-        style={[
-          styles.auditCard,
-          {
-            backgroundColor: theme.backgroundDefault,
-            borderColor: config.color + "30",
-          },
-        ]}
-        testID={`audit-entry-${entry.auditId}`}
-      >
-        <View
-          style={[
-            styles.auditDot,
-            { backgroundColor: config.color + "20" },
-          ]}
-        >
-          <Feather name={config.icon} size={14} color={config.color} />
-        </View>
-        <View style={styles.auditInfo}>
-          <ThemedText
-            style={[styles.auditAction, { fontFamily: "Cairo_600SemiBold" }]}
-            numberOfLines={2}
-          >
-            {config.label}
-          </ThemedText>
-          {detail ? (
-            <ThemedText
-              style={[styles.auditMeta, { color: config.color, fontFamily: "Cairo_400Regular" }]}
-            >
-              {detail}
-            </ThemedText>
-          ) : null}
-          <ThemedText
-            style={[styles.auditMeta, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
-          >
-            {`بواسطة ${actorLabel}  •  ${formatRelativeTime(entry.createdAt)}`}
-          </ThemedText>
-          <ThemedText
-            style={[styles.auditTimestamp, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
-            testID={`text-audit-timestamp-${entry.auditId}`}
-          >
-            {formatExactDateTime(entry.createdAt)}
-          </ThemedText>
-        </View>
-      </View>
-    </Animated.View>
-  );
 }
 
 function CustomerRow({
@@ -360,80 +182,19 @@ function CustomerRow({
   );
 }
 
-type DatePreset = "today" | "week" | "month" | null;
-
-function presetToDateRange(preset: DatePreset): { since: string; until: string } | null {
-  if (!preset) return null;
-  const now = new Date();
-  const until = now.toISOString().slice(0, 10);
-  if (preset === "today") return { since: until, until };
-  if (preset === "week") {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 6);
-    return { since: d.toISOString().slice(0, 10), until };
-  }
-  if (preset === "month") {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 29);
-    return { since: d.toISOString().slice(0, 10), until };
-  }
-  return null;
-}
-
 export default function AdminCustomersScreen() {
   const { theme } = useTheme();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [adminsOnly, setAdminsOnly] = useState(false);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [isAuditExporting, setIsAuditExporting] = useState(false);
-
-  // Audit log filters
-  const [auditPerson, setAuditPerson] = useState("");
-  const [auditDatePreset, setAuditDatePreset] = useState<DatePreset>(null);
-  const [auditEntityType, setAuditEntityType] = useState<string | null>(null);
-  const [auditAction, setAuditAction] = useState<string | null>(null);
-  const [auditPage, setAuditPage] = useState(1);
-  const [accumulatedAuditEntries, setAccumulatedAuditEntries] = useState<AuditEntry[]>([]);
-  const isFirstAuditMount = useRef(true);
-
-  const auditQueryUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    if (auditPerson.trim()) params.set("person", auditPerson.trim());
-    const range = presetToDateRange(auditDatePreset);
-    if (range) {
-      params.set("since", range.since);
-      params.set("until", range.until);
-    }
-    if (auditEntityType) params.set("entityType", auditEntityType);
-    if (auditAction) params.set("action", auditAction);
-    const qs = params.toString();
-    return qs ? `/api/admin/audit-log?${qs}` : "/api/admin/audit-log";
-  }, [auditPerson, auditDatePreset, auditEntityType, auditAction]);
-
-  const auditQueryUrlWithPage = useMemo(() => {
-    const sep = auditQueryUrl.includes("?") ? "&" : "?";
-    return auditPage > 1 ? `${auditQueryUrl}${sep}page=${auditPage}` : auditQueryUrl;
-  }, [auditQueryUrl, auditPage]);
-
-  const hasAuditFilters =
-    auditPerson.trim().length > 0 || auditDatePreset !== null || auditEntityType !== null || auditAction !== null;
-
-  // Reset pagination when filters change (but not on first mount)
-  useEffect(() => {
-    if (isFirstAuditMount.current) {
-      isFirstAuditMount.current = false;
-      return;
-    }
-    setAuditPage(1);
-    setAccumulatedAuditEntries([]);
-  }, [auditQueryUrl]);
 
   const { data, isLoading, isError, refetch } = useQuery<CustomersResponse>({
     queryKey: ["/api/customers/all"],
@@ -444,21 +205,6 @@ export default function AdminCustomersScreen() {
     queryKey: ["/api/cities"],
     staleTime: 60000,
   });
-
-  const { data: auditData, isLoading: auditLoading, isFetching: auditFetching } = useQuery<AuditLogResponse>({
-    queryKey: [auditQueryUrlWithPage],
-    staleTime: 0,
-  });
-
-  // Accumulate entries across pages
-  useEffect(() => {
-    if (!auditData) return;
-    if (auditData.page === 1) {
-      setAccumulatedAuditEntries(auditData.entries);
-    } else {
-      setAccumulatedAuditEntries((prev) => [...prev, ...auditData.entries]);
-    }
-  }, [auditData]);
 
   const toggleMutation = useMutation({
     mutationFn: async ({
@@ -478,9 +224,6 @@ export default function AdminCustomersScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers/all"] });
-      // Reset audit pagination and refetch from page 1
-      setAuditPage(1);
-      setAccumulatedAuditEntries([]);
       queryClient.invalidateQueries({
         predicate: (query) =>
           typeof query.queryKey[0] === "string" &&
@@ -497,62 +240,6 @@ export default function AdminCustomersScreen() {
 
   const handleToggle = (customerId: string, isAdmin: boolean) => {
     toggleMutation.mutate({ customerId, isAdmin });
-  };
-
-  const handleAuditExport = async () => {
-    if (isAuditExporting) return;
-    setIsAuditExporting(true);
-    try {
-      const params = new URLSearchParams();
-      if (auditPerson.trim()) params.set("person", auditPerson.trim());
-      const range = presetToDateRange(auditDatePreset);
-      if (range) {
-        params.set("since", range.since);
-        params.set("until", range.until);
-      }
-      if (auditEntityType) params.set("entityType", auditEntityType);
-      if (auditAction) params.set("action", auditAction);
-      const qs = params.toString();
-      const path = `/api/admin/audit-log/export${qs ? `?${qs}` : ""}`;
-      const baseUrl = getApiUrl();
-      const url = new URL(path, baseUrl).toString();
-
-      if (Platform.OS === "web") {
-        const res = await fetch(url, { headers: authHeaders(), credentials: "include" });
-        if (!res.ok) throw new Error(`${res.status}`);
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = objectUrl;
-        const today = new Date().toISOString().slice(0, 10);
-        a.download = `audit_log_${today}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objectUrl);
-      } else {
-        const today = new Date().toISOString().slice(0, 10);
-        const fileUri = FileSystem.cacheDirectory + `audit_log_${today}.csv`;
-        const result = await FileSystem.downloadAsync(url, fileUri, {
-          headers: authHeaders(),
-        });
-        if (result.status !== 200) throw new Error(`${result.status}`);
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(result.uri, {
-            mimeType: "text/csv",
-            dialogTitle: "تصدير سجل التغييرات",
-            UTI: "public.comma-separated-values-text",
-          });
-        } else {
-          Alert.alert("تصدير", `تم حفظ الملف في:\n${result.uri}`);
-        }
-      }
-    } catch {
-      Alert.alert("خطأ", "تعذر تصدير السجل، يرجى المحاولة مجدداً");
-    } finally {
-      setIsAuditExporting(false);
-    }
   };
 
   const handleExport = async () => {
@@ -599,7 +286,7 @@ export default function AdminCustomersScreen() {
           Alert.alert("تصدير", `تم حفظ الملف في:\n${result.uri}`);
         }
       }
-    } catch (err: any) {
+    } catch {
       Alert.alert("خطأ", "تعذر تصدير البيانات، يرجى المحاولة مجدداً");
     } finally {
       setIsExporting(false);
@@ -654,258 +341,6 @@ export default function AdminCustomersScreen() {
     const mobileMatch = c.mobileE164.toLowerCase().includes(normalizedQuery);
     return nameMatch || mobileMatch;
   });
-
-  const auditEntries = accumulatedAuditEntries;
-  const auditHasMore = auditData?.hasMore ?? false;
-
-  const DATE_PRESETS: { key: DatePreset; label: string }[] = [
-    { key: "today", label: "اليوم" },
-    { key: "week", label: "آخر 7 أيام" },
-    { key: "month", label: "آخر 30 يوم" },
-  ];
-
-  const ENTITY_TYPES: { key: string; label: string }[] = [
-    { key: "customer", label: "عملاء" },
-    { key: "vendor", label: "موردون" },
-    { key: "vendor_user", label: "مستخدمو الموردين" },
-    { key: "inspection", label: "طلبات" },
-  ];
-
-  const auditFilterBar = (
-    <View style={styles.auditFilterBar}>
-      {/* Person search */}
-      <View
-        style={[
-          styles.auditSearchRow,
-          { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
-        ]}
-      >
-        <Feather name="user" size={14} color={theme.textSecondary} />
-        <TextInput
-          testID="input-audit-person"
-          style={[styles.auditSearchInput, { color: theme.text, fontFamily: "Cairo_400Regular" }]}
-          placeholder="بحث بالاسم أو الجوال أو المورد"
-          placeholderTextColor={theme.textSecondary}
-          value={auditPerson}
-          onChangeText={setAuditPerson}
-          textAlign="right"
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-          autoCorrect={false}
-        />
-        {auditPerson.length > 0 ? (
-          <Pressable onPress={() => setAuditPerson("")} hitSlop={8} testID="button-clear-audit-person">
-            <Feather name="x" size={13} color={theme.textSecondary} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      {/* Entity type filter chips */}
-      <View style={styles.auditDateRow}>
-        {ENTITY_TYPES.map(({ key, label }) => {
-          const active = auditEntityType === key;
-          return (
-            <Pressable
-              key={key}
-              testID={`button-audit-entity-${key}`}
-              onPress={() => setAuditEntityType(active ? null : key)}
-              style={[
-                styles.auditPresetChip,
-                {
-                  backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
-                  borderColor: active ? theme.primary + "60" : theme.border,
-                },
-              ]}
-            >
-              <ThemedText
-                style={[
-                  styles.auditPresetChipText,
-                  {
-                    color: active ? theme.primary : theme.textSecondary,
-                    fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
-                  },
-                ]}
-              >
-                {label}
-              </ThemedText>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Action type filter chips */}
-      <View style={styles.auditDateRow}>
-        {[
-          { key: "admin_granted", label: "منح" },
-          { key: "admin_revoked", label: "سحب" },
-        ].map(({ key, label }) => {
-          const active = auditAction === key;
-          return (
-            <Pressable
-              key={key}
-              testID={`button-audit-action-${key}`}
-              onPress={() => setAuditAction(active ? null : key)}
-              style={[
-                styles.auditPresetChip,
-                {
-                  backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
-                  borderColor: active ? theme.primary + "60" : theme.border,
-                },
-              ]}
-            >
-              <ThemedText
-                style={[
-                  styles.auditPresetChipText,
-                  {
-                    color: active ? theme.primary : theme.textSecondary,
-                    fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
-                  },
-                ]}
-              >
-                {label}
-              </ThemedText>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Date preset chips */}
-      <View style={styles.auditDateRow}>
-        {DATE_PRESETS.map(({ key, label }) => {
-          const active = auditDatePreset === key;
-          return (
-            <Pressable
-              key={key ?? "all"}
-              testID={`button-audit-preset-${key}`}
-              onPress={() => setAuditDatePreset(active ? null : key)}
-              style={[
-                styles.auditPresetChip,
-                {
-                  backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
-                  borderColor: active ? theme.primary + "60" : theme.border,
-                },
-              ]}
-            >
-              <ThemedText
-                style={[
-                  styles.auditPresetChipText,
-                  {
-                    color: active ? theme.primary : theme.textSecondary,
-                    fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
-                  },
-                ]}
-              >
-                {label}
-              </ThemedText>
-            </Pressable>
-          );
-        })}
-
-        {hasAuditFilters ? (
-          <Pressable
-            testID="button-clear-audit-filters"
-            onPress={() => {
-              setAuditPerson("");
-              setAuditDatePreset(null);
-              setAuditEntityType(null);
-              setAuditAction(null);
-            }}
-            style={[styles.auditClearBtn, { borderColor: theme.border }]}
-          >
-            <Feather name="x" size={13} color={theme.textSecondary} />
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-
-  const auditSection = (
-    <View style={styles.auditSection}>
-      <View style={[styles.sectionHeader, { justifyContent: "space-between" }]}>
-        <View style={[styles.sectionHeader, { marginBottom: 0 }]}>
-          <Feather name="clock" size={14} color={theme.textSecondary} />
-          <ThemedText
-            style={[styles.sectionTitle, { color: theme.textSecondary, fontFamily: "Cairo_600SemiBold" }]}
-          >
-            سجل التغييرات
-          </ThemedText>
-        </View>
-        <Pressable
-          testID="button-export-audit-log"
-          onPress={handleAuditExport}
-          disabled={isAuditExporting}
-          style={({ pressed }) => [
-            styles.auditExportBtn,
-            {
-              backgroundColor: theme.backgroundDefault,
-              borderColor: theme.border,
-              opacity: pressed || isAuditExporting ? 0.5 : 1,
-            },
-          ]}
-        >
-          {isAuditExporting ? (
-            <ActivityIndicator size="small" color={theme.primary} />
-          ) : (
-            <>
-              <Feather name="download" size={12} color={theme.primary} />
-              <ThemedText style={[styles.auditExportText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
-                تصدير CSV
-              </ThemedText>
-            </>
-          )}
-        </Pressable>
-      </View>
-
-      {auditFilterBar}
-
-      {auditLoading && auditPage === 1 ? (
-        <View style={styles.auditLoading}>
-          <ActivityIndicator size="small" color={theme.primary} />
-        </View>
-      ) : auditEntries.length > 0 ? (
-        <>
-          {auditEntries.map((entry, idx) => (
-            <AuditEntryRow key={entry.auditId} entry={entry} index={idx} />
-          ))}
-          {auditHasMore ? (
-            <Pressable
-              testID="button-audit-load-more"
-              onPress={() => setAuditPage((p) => p + 1)}
-              disabled={auditFetching}
-              style={[
-                styles.auditLoadMoreBtn,
-                {
-                  backgroundColor: theme.backgroundDefault,
-                  borderColor: theme.border,
-                  opacity: auditFetching ? 0.6 : 1,
-                },
-              ]}
-            >
-              {auditFetching ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <>
-                  <Feather name="chevron-down" size={14} color={theme.primary} />
-                  <ThemedText
-                    style={[styles.auditLoadMoreText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}
-                  >
-                    تحميل المزيد
-                  </ThemedText>
-                </>
-              )}
-            </Pressable>
-          ) : null}
-        </>
-      ) : (
-        <View style={styles.auditEmpty}>
-          <Feather name="inbox" size={28} color={theme.textSecondary} />
-          <ThemedText style={[styles.auditEmptyText, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-            {hasAuditFilters ? "لا توجد نتائج للفلاتر المحددة" : "لا توجد تغييرات بعد"}
-          </ThemedText>
-        </View>
-      )}
-    </View>
-  );
 
   return (
     <View style={[styles.root, { backgroundColor: theme.backgroundRoot }]}>
@@ -1111,7 +546,27 @@ export default function AdminCustomersScreen() {
             ) : null}
           </View>
         }
-        ListFooterComponent={auditSection}
+        ListFooterComponent={
+          <Pressable
+            testID="button-open-audit-log"
+            onPress={() => navigation.navigate("AdminAuditLog")}
+            style={[
+              styles.auditLogLink,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Feather name="clock" size={16} color={theme.primary} />
+            <ThemedText
+              style={[styles.auditLogLinkText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}
+            >
+              سجل التغييرات
+            </ThemedText>
+            <Feather name="chevron-left" size={16} color={theme.primary} />
+          </Pressable>
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Feather
@@ -1307,135 +762,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: Spacing.xs,
   },
-  auditSection: {
-    marginTop: Spacing.lg,
-    gap: Spacing.xs,
-  },
-  auditLoading: {
+  auditLogLink: {
+    flexDirection: "row-reverse",
     alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
   },
-  sectionHeader: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: Spacing.xs,
-    paddingHorizontal: 2,
-  },
-  sectionTitle: {
-    fontSize: 13,
-  },
-  auditCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    padding: Spacing.sm,
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-  },
-  auditDot: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.sm,
-    justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
-  },
-  auditInfo: {
+  auditLogLinkText: {
     flex: 1,
-    gap: 2,
-  },
-  auditAction: {
-    fontSize: 13,
+    fontSize: 14,
     textAlign: "right",
-  },
-  auditMeta: {
-    fontSize: 11,
-    textAlign: "right",
-  },
-  auditTimestamp: {
-    fontSize: 10,
-    textAlign: "right",
-    opacity: 0.65,
-    marginTop: 1,
-  },
-  auditFilterBar: {
-    gap: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-  auditSearchRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: Spacing.xs,
-    borderWidth: 1,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 8,
-  },
-  auditSearchInput: {
-    flex: 1,
-    fontSize: 13,
-    padding: 0,
-  },
-  auditDateRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: Spacing.xs,
-    flexWrap: "wrap",
-  },
-  auditPresetChip: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
-  },
-  auditPresetChipText: {
-    fontSize: 12,
-  },
-  auditClearBtn: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.sm,
-    padding: 7,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  auditEmpty: {
-    alignItems: "center",
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  auditEmptyText: {
-    fontSize: 13,
-    textAlign: "center",
-  },
-  auditLoadMoreBtn: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    marginTop: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    minHeight: 40,
-  },
-  auditLoadMoreText: {
-    fontSize: 13,
-  },
-  auditExportBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
-    minWidth: 36,
-    justifyContent: "center",
-  },
-  auditExportText: {
-    fontSize: 12,
   },
   cityFilterRow: {
     flexDirection: "row-reverse",
