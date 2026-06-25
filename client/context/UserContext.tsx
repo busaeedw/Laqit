@@ -7,6 +7,7 @@ import React, {
   ReactNode,
 } from "react";
 import { AppState, AppStateStatus, Alert } from "react-native";
+import NetInfo from "@react-native-community/netinfo";
 import { storeItem, loadItem, deleteItem } from "@/lib/secureStorage";
 import { setAuthToken, getApiUrl } from "@/lib/query-client";
 
@@ -155,6 +156,29 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.remove();
       clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── NetInfo: refresh when device regains connectivity ──────────────────────
+  useEffect(() => {
+    // Track previous connectivity so we only fire on the offline→online edge.
+    const wasConnectedRef = { current: true };
+
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const isConnected = state.isConnected === true;
+      if (isConnected && !wasConnectedRef.current) {
+        const u = userRef.current;
+        const t = tokenRef.current;
+        if (u && t) {
+          refreshProfile(u, t, false);
+        }
+      }
+      wasConnectedRef.current = isConnected;
+    });
+
+    return () => {
+      unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
