@@ -37,12 +37,20 @@ interface CustomersResponse {
 interface AuditEntry {
   auditId: string;
   action: string;
+  entityType: string | null;
+  entityId: string | null;
   createdAt: string;
   payload: {
-    actorName: string | null;
-    actorMobile: string | null;
-    targetName: string | null;
-    targetMobile: string | null;
+    actorName?: string | null;
+    actorMobile?: string | null;
+    targetName?: string | null;
+    targetMobile?: string | null;
+    vendorName?: string | null;
+    fullName?: string | null;
+    inspectionNo?: string | null;
+    previousStatus?: string | null;
+    newStatus?: string | null;
+    reason?: string | null;
   } | null;
 }
 
@@ -61,12 +69,82 @@ function formatRelativeTime(isoDate: string): string {
   return `منذ ${days} يوم`;
 }
 
+type AuditActionConfig = {
+  label: string;
+  icon: React.ComponentProps<typeof Feather>["name"];
+  color: string;
+  getDetail?: (payload: AuditEntry["payload"]) => string | null;
+};
+
+function getActionConfig(action: string, payload: AuditEntry["payload"]): AuditActionConfig {
+  switch (action) {
+    case "admin_granted":
+      return {
+        label: `منح صلاحيات المشرف  ${payload?.targetName ?? payload?.targetMobile ?? ""}`.trim(),
+        icon: "shield",
+        color: "#22C55E",
+      };
+    case "admin_revoked":
+      return {
+        label: `سحب صلاحيات المشرف  ${payload?.targetName ?? payload?.targetMobile ?? ""}`.trim(),
+        icon: "shield-off",
+        color: "#EF4444",
+      };
+    case "vendor_created":
+      return {
+        label: `إضافة مورد: ${payload?.vendorName ?? ""}`.trim(),
+        icon: "plus-circle",
+        color: "#3B82F6",
+      };
+    case "vendor_activated":
+      return {
+        label: `تفعيل المورد: ${payload?.vendorName ?? ""}`.trim(),
+        icon: "check-circle",
+        color: "#22C55E",
+      };
+    case "vendor_deactivated":
+      return {
+        label: `إيقاف المورد: ${payload?.vendorName ?? ""}`.trim(),
+        icon: "x-circle",
+        color: "#EF4444",
+      };
+    case "vendor_user_created":
+      return {
+        label: `إضافة مستخدم مورد: ${payload?.fullName ?? payload?.vendorName ?? ""}`.trim(),
+        icon: "user-plus",
+        color: "#8B5CF6",
+      };
+    case "vendor_user_removed":
+      return {
+        label: `حذف مستخدم مورد: ${payload?.fullName ?? ""}`.trim(),
+        icon: "user-minus",
+        color: "#F59E0B",
+      };
+    case "inspection_status_override":
+      return {
+        label: `تغيير حالة الطلب ${payload?.inspectionNo ?? ""}`.trim(),
+        icon: "edit-2",
+        color: "#F97316",
+        getDetail: (p) =>
+          p?.previousStatus && p?.newStatus
+            ? `${p.previousStatus} ← ${p.newStatus}`
+            : null,
+      };
+    default:
+      return {
+        label: action,
+        icon: "activity",
+        color: "#6B7280",
+      };
+  }
+}
+
 function AuditEntryRow({ entry, index }: { entry: AuditEntry; index: number }) {
   const { theme } = useTheme();
-  const isGrant = entry.action === "admin_granted";
-  const accentColor = isGrant ? "#22C55E" : "#EF4444";
-  const actorLabel = entry.payload?.actorName ?? entry.payload?.actorMobile ?? "مشرف";
-  const targetLabel = entry.payload?.targetName ?? entry.payload?.targetMobile ?? "مستخدم";
+  const config = getActionConfig(entry.action, entry.payload);
+  const actorLabel =
+    entry.payload?.actorName ?? entry.payload?.actorMobile ?? "النظام";
+  const detail = config.getDetail?.(entry.payload);
 
   return (
     <Animated.View entering={FadeInDown.duration(300).delay(index * 30)}>
@@ -75,7 +153,7 @@ function AuditEntryRow({ entry, index }: { entry: AuditEntry; index: number }) {
           styles.auditCard,
           {
             backgroundColor: theme.backgroundDefault,
-            borderColor: accentColor + "30",
+            borderColor: config.color + "30",
           },
         ]}
         testID={`audit-entry-${entry.auditId}`}
@@ -83,28 +161,25 @@ function AuditEntryRow({ entry, index }: { entry: AuditEntry; index: number }) {
         <View
           style={[
             styles.auditDot,
-            { backgroundColor: accentColor + "20" },
+            { backgroundColor: config.color + "20" },
           ]}
         >
-          <Feather
-            name={isGrant ? "shield" : "shield-off"}
-            size={14}
-            color={accentColor}
-          />
+          <Feather name={config.icon} size={14} color={config.color} />
         </View>
         <View style={styles.auditInfo}>
           <ThemedText
             style={[styles.auditAction, { fontFamily: "Cairo_600SemiBold" }]}
             numberOfLines={2}
           >
-            {isGrant ? "منح صلاحيات المشرف" : "سحب صلاحيات المشرف"}
-            {"  "}
-            <ThemedText
-              style={[styles.auditAction, { color: accentColor, fontFamily: "Cairo_700Bold" }]}
-            >
-              {targetLabel}
-            </ThemedText>
+            {config.label}
           </ThemedText>
+          {detail ? (
+            <ThemedText
+              style={[styles.auditMeta, { color: config.color, fontFamily: "Cairo_400Regular" }]}
+            >
+              {detail}
+            </ThemedText>
+          ) : null}
           <ThemedText
             style={[styles.auditMeta, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}
           >
@@ -285,6 +360,7 @@ export default function AdminCustomersScreen() {
   // Audit log filters
   const [auditPerson, setAuditPerson] = useState("");
   const [auditDatePreset, setAuditDatePreset] = useState<DatePreset>(null);
+  const [auditEntityType, setAuditEntityType] = useState<string | null>(null);
 
   const auditQueryUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -294,11 +370,13 @@ export default function AdminCustomersScreen() {
       params.set("since", range.since);
       params.set("until", range.until);
     }
+    if (auditEntityType) params.set("entityType", auditEntityType);
     const qs = params.toString();
     return qs ? `/api/admin/audit-log?${qs}` : "/api/admin/audit-log";
-  }, [auditPerson, auditDatePreset]);
+  }, [auditPerson, auditDatePreset, auditEntityType]);
 
-  const hasAuditFilters = auditPerson.trim().length > 0 || auditDatePreset !== null;
+  const hasAuditFilters =
+    auditPerson.trim().length > 0 || auditDatePreset !== null || auditEntityType !== null;
 
   const { data, isLoading, isError, refetch } = useQuery<CustomersResponse>({
     queryKey: ["/api/customers/all"],
@@ -397,6 +475,13 @@ export default function AdminCustomersScreen() {
     { key: "month", label: "آخر 30 يوم" },
   ];
 
+  const ENTITY_TYPES: { key: string; label: string }[] = [
+    { key: "customer", label: "عملاء" },
+    { key: "vendor", label: "موردون" },
+    { key: "vendor_user", label: "مستخدمو الموردين" },
+    { key: "inspection", label: "طلبات" },
+  ];
+
   const auditFilterBar = (
     <View style={styles.auditFilterBar}>
       {/* Person search */}
@@ -410,7 +495,7 @@ export default function AdminCustomersScreen() {
         <TextInput
           testID="input-audit-person"
           style={[styles.auditSearchInput, { color: theme.text, fontFamily: "Cairo_400Regular" }]}
-          placeholder="بحث بالاسم أو الجوال"
+          placeholder="بحث بالاسم أو الجوال أو المورد"
           placeholderTextColor={theme.textSecondary}
           value={auditPerson}
           onChangeText={setAuditPerson}
@@ -424,6 +509,39 @@ export default function AdminCustomersScreen() {
             <Feather name="x" size={13} color={theme.textSecondary} />
           </Pressable>
         ) : null}
+      </View>
+
+      {/* Entity type filter chips */}
+      <View style={styles.auditDateRow}>
+        {ENTITY_TYPES.map(({ key, label }) => {
+          const active = auditEntityType === key;
+          return (
+            <Pressable
+              key={key}
+              testID={`button-audit-entity-${key}`}
+              onPress={() => setAuditEntityType(active ? null : key)}
+              style={[
+                styles.auditPresetChip,
+                {
+                  backgroundColor: active ? theme.primary + "18" : theme.backgroundDefault,
+                  borderColor: active ? theme.primary + "60" : theme.border,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.auditPresetChipText,
+                  {
+                    color: active ? theme.primary : theme.textSecondary,
+                    fontFamily: active ? "Cairo_600SemiBold" : "Cairo_400Regular",
+                  },
+                ]}
+              >
+                {label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* Date preset chips */}
@@ -464,6 +582,7 @@ export default function AdminCustomersScreen() {
             onPress={() => {
               setAuditPerson("");
               setAuditDatePreset(null);
+              setAuditEntityType(null);
             }}
             style={[styles.auditClearBtn, { borderColor: theme.border }]}
           >

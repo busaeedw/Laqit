@@ -1058,6 +1058,14 @@ Rules:
         .insert(vendors)
         .values({ vendorName, legalName, crNumber, vatNumber })
         .returning();
+      await db.insert(auditLog).values({
+        actorType: "api_key",
+        actorId: null,
+        action: "vendor_created",
+        entityType: "vendor",
+        entityId: vendor.vendorId,
+        payload: { vendorName: vendor.vendorName, legalName: vendor.legalName ?? null },
+      });
       res.json({ success: true, vendor });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
@@ -1089,6 +1097,14 @@ Rules:
         .insert(vendorUsers)
         .values({ vendorId, fullName, mobileE164, email, whatsappE164, isWhatsappPrimary: isFirst, role: role ?? "owner" })
         .returning();
+      await db.insert(auditLog).values({
+        actorType: "api_key",
+        actorId: null,
+        action: "vendor_user_created",
+        entityType: "vendor_user",
+        entityId: vu.vendorUserId,
+        payload: { vendorId, fullName: vu.fullName ?? null, mobileE164: vu.mobileE164, role: vu.role ?? null },
+      });
       res.json({ success: true, vendorUser: vu });
     } catch (err: any) {
       if (err?.code === "23505") {
@@ -1122,6 +1138,91 @@ Rules:
       }
     },
   ];
+
+  // PATCH /api/vendors/:vendorId/status — activate or deactivate a vendor (admin only)
+  app.patch("/api/vendors/:vendorId/status", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      const { vendorId } = req.params;
+      const { status } = req.body;
+      if (status !== "active" && status !== "inactive") {
+        return res.status(400).json({ error: "الحالة يجب أن تكون active أو inactive" });
+      }
+      const [vendor] = await db
+        .select({ vendorId: vendors.vendorId, vendorName: vendors.vendorName, status: vendors.status })
+        .from(vendors)
+        .where(eq(vendors.vendorId, vendorId))
+        .limit(1);
+      if (!vendor) return res.status(404).json({ error: "المورد غير موجود" });
+
+      const [updated] = await db
+        .update(vendors)
+        .set({ status } as any)
+        .where(eq(vendors.vendorId, vendorId))
+        .returning();
+
+      const [actor] = await db
+        .select({ fullName: customers.fullName, mobileE164: customers.mobileE164 })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      await db.insert(auditLog).values({
+        actorType: "customer",
+        actorId: callerCustomerId,
+        action: status === "active" ? "vendor_activated" : "vendor_deactivated",
+        entityType: "vendor",
+        entityId: vendorId,
+        payload: {
+          actorName: actor?.fullName ?? null,
+          actorMobile: actor?.mobileE164 ?? null,
+          vendorName: vendor.vendorName,
+          previousStatus: vendor.status,
+        },
+      });
+      res.json({ success: true, vendor: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // DELETE /api/vendor-users/:vendorUserId — remove a vendor user (admin only)
+  app.delete("/api/vendor-users/:vendorUserId", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      const { vendorUserId } = req.params;
+      const [vu] = await db
+        .select()
+        .from(vendorUsers)
+        .where(eq(vendorUsers.vendorUserId, vendorUserId))
+        .limit(1);
+      if (!vu) return res.status(404).json({ error: "المستخدم غير موجود" });
+
+      await db.delete(vendorUsers).where(eq(vendorUsers.vendorUserId, vendorUserId));
+
+      const [actor] = await db
+        .select({ fullName: customers.fullName, mobileE164: customers.mobileE164 })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      await db.insert(auditLog).values({
+        actorType: "customer",
+        actorId: callerCustomerId,
+        action: "vendor_user_removed",
+        entityType: "vendor_user",
+        entityId: vendorUserId,
+        payload: {
+          actorName: actor?.fullName ?? null,
+          actorMobile: actor?.mobileE164 ?? null,
+          vendorId: vu.vendorId,
+          fullName: vu.fullName ?? null,
+          mobileE164: vu.mobileE164,
+        },
+      });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
 
   // GET /api/vendors/all — returns ALL vendors (active + inactive) for admin use
   app.get("/api/vendors/all", ...requireAdminCustomer, async (_req, res) => {
@@ -1281,15 +1382,19 @@ Rules:
     }
   });
 
-  // GET /api/admin/audit-log — recent admin access changes (granted/revoked)
-  // Query params: since (ISO), until (ISO), person (name/mobile text search), actorId (UUID), targetId (UUID)
+  // GET /api/admin/audit-log — admin action history
+  // Query params: since (ISO), until (ISO), person (name/mobile text search),
+  //               actorId (UUID), targetId (UUID), entityType (customer|vendor|vendor_user|inspection)
   app.get("/api/admin/audit-log", ...requireAdminCustomer, async (req: Request, res: Response) => {
     try {
-      const { since, until, person, actorId, targetId } = req.query as Record<string, string | undefined>;
+      const { since, until, person, actorId, targetId, entityType } = req.query as Record<string, string | undefined>;
 
-      const conditions: ReturnType<typeof sql>[] = [
-        sql`${auditLog.action} IN ('admin_granted', 'admin_revoked')`,
-      ];
+      const conditions: ReturnType<typeof sql>[] = [];
+
+      // Filter by entity type when requested; otherwise all action types are shown.
+      if (entityType && entityType.trim().length > 0) {
+        conditions.push(sql`${auditLog.entityType} = ${entityType.trim()}`);
+      }
 
       if (since) {
         const sinceDate = new Date(since);
@@ -1318,6 +1423,8 @@ Rules:
             OR lower(${auditLog.payload}->>'actorMobile') LIKE ${term}
             OR lower(${auditLog.payload}->>'targetName') LIKE ${term}
             OR lower(${auditLog.payload}->>'targetMobile') LIKE ${term}
+            OR lower(${auditLog.payload}->>'vendorName') LIKE ${term}
+            OR lower(${auditLog.payload}->>'fullName') LIKE ${term}
           )`
         );
       }
@@ -1325,10 +1432,60 @@ Rules:
       const rows = await db
         .select()
         .from(auditLog)
-        .where(and(...conditions))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(auditLog.createdAt))
-        .limit(100);
+        .limit(200);
       res.json({ entries: rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // PATCH /api/admin/laqit-inspections/:id/status — admin-only inspection status override
+  app.patch("/api/admin/laqit-inspections/:id/status", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      const inspectionId = req.params.id;
+      const { status, reason } = req.body;
+
+      if (typeof status !== "string" || !(inspectionStatusEnum.enumValues as string[]).includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+
+      const [inspection] = await db
+        .select({ inspectionId: laqitInspections.inspectionId, inspectionNo: laqitInspections.inspectionNo, status: laqitInspections.status, customerId: laqitInspections.customerId })
+        .from(laqitInspections)
+        .where(eq(laqitInspections.inspectionId, inspectionId))
+        .limit(1);
+      if (!inspection) return res.status(404).json({ error: "الطلب غير موجود" });
+
+      const [updated] = await db
+        .update(laqitInspections)
+        .set({ status: status as typeof inspection.status, updatedAt: new Date() })
+        .where(eq(laqitInspections.inspectionId, inspectionId))
+        .returning();
+
+      const [actor] = await db
+        .select({ fullName: customers.fullName, mobileE164: customers.mobileE164 })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      await db.insert(auditLog).values({
+        actorType: "customer",
+        actorId: callerCustomerId,
+        action: "inspection_status_override",
+        entityType: "inspection",
+        entityId: inspectionId,
+        payload: {
+          actorName: actor?.fullName ?? null,
+          actorMobile: actor?.mobileE164 ?? null,
+          inspectionNo: inspection.inspectionNo,
+          previousStatus: inspection.status,
+          newStatus: status,
+          reason: reason ?? null,
+        },
+      });
+      res.json({ success: true, inspection: updated });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }
