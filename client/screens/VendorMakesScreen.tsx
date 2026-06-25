@@ -25,6 +25,54 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { apiRequest, getApiUrl, authHeaders } from "@/lib/query-client";
 
+function formatExactDateTime(isoDate: string): string {
+  try {
+    return new Intl.DateTimeFormat("ar-SA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(isoDate));
+  } catch {
+    return isoDate;
+  }
+}
+
+function getVendorActionLabel(action: string): { label: string; icon: React.ComponentProps<typeof Feather>["name"]; color: string } {
+  switch (action) {
+    case "vendor_activated":
+      return { label: "تفعيل المورد", icon: "check-circle", color: "#22C55E" };
+    case "vendor_deactivated":
+      return { label: "تعطيل المورد", icon: "x-circle", color: "#EF4444" };
+    case "vendor_created":
+      return { label: "إضافة المورد", icon: "plus-circle", color: "#3B82F6" };
+    default:
+      return { label: action, icon: "activity", color: "#6B7280" };
+  }
+}
+
+interface AuditEntry {
+  auditId: string;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  createdAt: string;
+  payload: {
+    actorName?: string | null;
+    actorMobile?: string | null;
+    vendorName?: string | null;
+    [key: string]: unknown;
+  } | null;
+}
+
+interface AuditLogResponse {
+  entries: AuditEntry[];
+  hasMore: boolean;
+  page: number;
+}
+
 interface Vendor {
   vendorId: string;
   vendorName: string;
@@ -70,6 +118,7 @@ export default function VendorMakesScreen() {
   const [pendingMakeIds, setPendingMakeIds] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"makes" | "history">("makes");
 
   const { data: vendorsData, isLoading: vendorsLoading } = useQuery<VendorsResponse>({
     queryKey: ["/api/vendors/all"],
@@ -78,6 +127,16 @@ export default function VendorMakesScreen() {
   const { data: makesData, isLoading: makesLoading } = useQuery<MakesResponse>({
     queryKey: ["/api/vendors", selectedVendor?.vendorId, "car-makes"],
     enabled: !!selectedVendor,
+  });
+
+  const auditQueryUrl = selectedVendor
+    ? `/api/admin/audit-log?entityType=vendor&targetId=${selectedVendor.vendorId}`
+    : null;
+
+  const { data: auditData, isLoading: auditLoading } = useQuery<AuditLogResponse>({
+    queryKey: [auditQueryUrl],
+    enabled: !!selectedVendor && activeTab === "history",
+    staleTime: 0,
   });
 
   // Sync checkboxes whenever the makes data changes (or vendor changes)
@@ -89,9 +148,10 @@ export default function VendorMakesScreen() {
     }
   }, [makesData]);
 
-  // Reset pending state immediately when switching vendors (before new data arrives)
+  // Reset pending state and tab immediately when switching vendors (before new data arrives)
   const openVendor = (vendor: Vendor) => {
     setPendingMakeIds([]);
+    setActiveTab("makes");
     setSelectedVendor(vendor);
   };
 
@@ -600,81 +660,179 @@ export default function VendorMakesScreen() {
               </Pressable>
               <View style={styles.modalTitleBlock}>
                 <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
-                  ماركات السيارات
-                </ThemedText>
-                <ThemedText
-                  style={[
-                    styles.modalSubtitle,
-                    { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
-                  ]}
-                  numberOfLines={1}
-                >
                   {selectedVendor?.vendorName}
                 </ThemedText>
               </View>
             </View>
 
-            {makesLoading ? (
+            {/* Tab switcher */}
+            <View style={[styles.tabBar, { borderBottomColor: theme.border ?? "#E5E7EB" }]}>
+              <Pressable
+                testID="tab-makes"
+                onPress={() => setActiveTab("makes")}
+                style={[
+                  styles.tabBtn,
+                  activeTab === "makes" && { borderBottomColor: theme.primary, borderBottomWidth: 2 },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.tabBtnText,
+                    {
+                      color: activeTab === "makes" ? theme.primary : theme.textSecondary,
+                      fontFamily: activeTab === "makes" ? "Cairo_700Bold" : "Cairo_400Regular",
+                    },
+                  ]}
+                >
+                  ماركات السيارات
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                testID="tab-history"
+                onPress={() => setActiveTab("history")}
+                style={[
+                  styles.tabBtn,
+                  activeTab === "history" && { borderBottomColor: theme.primary, borderBottomWidth: 2 },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.tabBtnText,
+                    {
+                      color: activeTab === "history" ? theme.primary : theme.textSecondary,
+                      fontFamily: activeTab === "history" ? "Cairo_700Bold" : "Cairo_400Regular",
+                    },
+                  ]}
+                >
+                  سجل الحالة
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            {activeTab === "makes" ? (
+              makesLoading ? (
+                <View style={styles.centered}>
+                  <ActivityIndicator size="large" color={theme.primary} />
+                </View>
+              ) : (
+                <FlatList
+                  data={makesData?.makes ?? []}
+                  keyExtractor={(item) => item.makeId}
+                  renderItem={renderMakeRow}
+                  contentContainerStyle={{
+                    paddingHorizontal: Spacing.lg,
+                    paddingTop: Spacing.md,
+                    paddingBottom: Spacing.xl,
+                    gap: Spacing.sm,
+                  }}
+                  showsVerticalScrollIndicator={false}
+                />
+              )
+            ) : auditLoading ? (
               <View style={styles.centered}>
                 <ActivityIndicator size="large" color={theme.primary} />
               </View>
+            ) : (auditData?.entries ?? []).length === 0 ? (
+              <View style={[styles.centered, { paddingVertical: Spacing.xl * 2 }]}>
+                <Feather name="clock" size={36} color={theme.textSecondary} />
+                <ThemedText
+                  style={[
+                    styles.emptyText,
+                    { color: theme.textSecondary, fontFamily: "Cairo_400Regular", marginTop: Spacing.md },
+                  ]}
+                >
+                  لا يوجد سجل حالة
+                </ThemedText>
+              </View>
             ) : (
               <FlatList
-                data={makesData?.makes ?? []}
-                keyExtractor={(item) => item.makeId}
-                renderItem={renderMakeRow}
+                data={auditData?.entries ?? []}
+                keyExtractor={(item) => item.auditId}
+                showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
                   paddingHorizontal: Spacing.lg,
                   paddingTop: Spacing.md,
-                  paddingBottom: Spacing.xl,
+                  paddingBottom: insets.bottom + Spacing.xl,
                   gap: Spacing.sm,
                 }}
-                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => {
+                  const cfg = getVendorActionLabel(item.action);
+                  const actor = item.payload?.actorName ?? item.payload?.actorMobile ?? "النظام";
+                  return (
+                    <View
+                      testID={`history-entry-${item.auditId}`}
+                      style={[
+                        styles.historyCard,
+                        {
+                          backgroundColor: theme.backgroundRoot,
+                          borderColor: cfg.color + "30",
+                        },
+                      ]}
+                    >
+                      <View style={[styles.historyDot, { backgroundColor: cfg.color + "18" }]}>
+                        <Feather name={cfg.icon} size={16} color={cfg.color} />
+                      </View>
+                      <View style={styles.historyInfo}>
+                        <ThemedText style={[styles.historyAction, { color: cfg.color, fontFamily: "Cairo_700Bold" }]}>
+                          {cfg.label}
+                        </ThemedText>
+                        <ThemedText style={[styles.historyActor, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                          {`بواسطة ${actor}`}
+                        </ThemedText>
+                        <ThemedText style={[styles.historyDate, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                          {formatExactDateTime(item.createdAt)}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  );
+                }}
               />
             )}
 
-            <View
-              style={[
-                styles.saveBar,
-                {
-                  borderTopColor: theme.border ?? "#E5E7EB",
-                  paddingBottom: insets.bottom + Spacing.md,
-                },
-              ]}
-            >
-              <ThemedText
+            {activeTab === "makes" ? (
+              <View
                 style={[
-                  styles.selectedCount,
-                  { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
-                ]}
-              >
-                {makesLoading
-                  ? "جارٍ التحميل..."
-                  : pendingMakeIds.length > 0
-                  ? `${pendingMakeIds.length} ماركة محددة`
-                  : "لم يتم تحديد أي ماركة"}
-              </ThemedText>
-              <Pressable
-                testID="button-save-makes"
-                onPress={handleSave}
-                disabled={!canSave}
-                style={({ pressed }) => [
-                  styles.saveBtn,
+                  styles.saveBar,
                   {
-                    backgroundColor: theme.primary,
-                    opacity: pressed || !canSave ? 0.5 : 1,
+                    borderTopColor: theme.border ?? "#E5E7EB",
+                    paddingBottom: insets.bottom + Spacing.md,
                   },
                 ]}
               >
-                {saveMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <ThemedText style={[styles.saveBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                    حفظ
-                  </ThemedText>
-                )}
-              </Pressable>
-            </View>
+                <ThemedText
+                  style={[
+                    styles.selectedCount,
+                    { color: theme.textSecondary, fontFamily: "Cairo_400Regular" },
+                  ]}
+                >
+                  {makesLoading
+                    ? "جارٍ التحميل..."
+                    : pendingMakeIds.length > 0
+                    ? `${pendingMakeIds.length} ماركة محددة`
+                    : "لم يتم تحديد أي ماركة"}
+                </ThemedText>
+                <Pressable
+                  testID="button-save-makes"
+                  onPress={handleSave}
+                  disabled={!canSave}
+                  style={({ pressed }) => [
+                    styles.saveBtn,
+                    {
+                      backgroundColor: theme.primary,
+                      opacity: pressed || !canSave ? 0.5 : 1,
+                    },
+                  ]}
+                >
+                  {saveMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <ThemedText style={[styles.saveBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                      حفظ
+                    </ThemedText>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -886,5 +1044,48 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 13,
+  },
+  tabBar: {
+    flexDirection: "row-reverse",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+  },
+  tabBtnText: {
+    fontSize: 13,
+  },
+  historyCard: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    gap: Spacing.md,
+  },
+  historyDot: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  historyInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  historyAction: {
+    fontSize: 14,
+    textAlign: "right",
+  },
+  historyActor: {
+    fontSize: 12,
+    textAlign: "right",
+  },
+  historyDate: {
+    fontSize: 12,
+    textAlign: "right",
   },
 });
