@@ -330,8 +330,6 @@ function setupErrorHandler(app: express.Application) {
     const message = error.message || "Internal Server Error";
 
     res.status(status).json({ message });
-
-    throw err;
   });
 }
 
