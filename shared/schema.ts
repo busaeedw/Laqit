@@ -240,6 +240,7 @@ export const customers = pgTable(
       .defaultNow(),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     isAdmin: boolean("is_admin").notNull().default(false),
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   },
   (t) => [index("idx_customers_city_id").on(t.cityId)]
 );

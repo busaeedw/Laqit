@@ -406,6 +406,10 @@ export async function ensureMigrations() {
           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
+      // Add email_verified_at to customers if missing (idempotent — safe on repeat runs)
+      await client.query(`
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ
+      `);
     } finally {
       client.release();
     }

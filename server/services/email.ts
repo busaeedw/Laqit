@@ -74,6 +74,46 @@ function getTransporter(): nodemailer.Transporter | null {
   return transporter;
 }
 
+export async function sendEmailVerificationEmail(
+  to: string,
+  verificationToken: string,
+  customerId: string,
+): Promise<EmailSendResult> {
+  try {
+    const tx = getTransporter();
+    if (!tx) {
+      return { success: false, error: "Email transport not configured" };
+    }
+
+    const subject = "تأكيد بريدك الإلكتروني - لاقط";
+    const html = `
+  <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #1E74F2;">لاقط — تأكيد البريد الإلكتروني</h2>
+    <p>مرحباً،</p>
+    <p>يرجى إدخال رمز التحقق التالي في التطبيق لتفعيل ميزة إرسال التقارير:</p>
+    <div style="background:#f0f4ff;border-radius:8px;padding:16px 24px;margin:16px 0;text-align:center;">
+      <span style="font-size:28px;font-weight:bold;letter-spacing:4px;color:#1E74F2;">${verificationToken}</span>
+    </div>
+    <p>صلاحية الرمز 24 ساعة. إذا لم تطلب تأكيد البريد، يمكنك تجاهل هذه الرسالة.</p>
+    <hr />
+    <p style="color:#888;font-size:12px;">تم إرسال هذا البريد تلقائياً من منصة لاقط.</p>
+  </div>
+`;
+
+    const info = await tx.sendMail({
+      from: `${AGENTMAIL_FROM_NAME} <${AGENTMAIL_INBOX}>`,
+      to,
+      subject,
+      html,
+    });
+
+    return { success: true, messageId: info.messageId };
+  } catch (err: any) {
+    console.error("[Email] Verification send error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
 export async function sendCustomerExportEmail(
   to: string | string[],
   csvContent: string,

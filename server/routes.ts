@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { createHmac, timingSafeEqual } from "crypto";
 import OpenAI from "openai";
 import { db } from "./db";
-import { signToken, requireCustomer, optionalCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter, emailIpLimiter } from "./auth";
+import { signToken, requireCustomer, optionalCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter, emailIpLimiter, issueEmailVerificationToken, verifyEmailToken } from "./auth";
 import {
   users,
   inspections,
@@ -36,7 +36,7 @@ import { extractTotalPrice } from "./services/ocr";
 import { createPaymentIntent } from "./services/payment";
 import { generateAnalysisPdf, PdfLocale, CarInfo, PartEntry } from "./services/analysisPdf";
 import { translatePartNames } from "./services/translate";
-import { sendAnalysisPdfEmail, sendCustomerExportEmail } from "./services/email";
+import { sendAnalysisPdfEmail, sendCustomerExportEmail, sendEmailVerificationEmail } from "./services/email";
 import { computeInitialNextRunAt } from "./services/exportScheduler";
 
 const openai = new OpenAI({
@@ -498,20 +498,30 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { email, carInfo, parts, imageUri, locale } = req.body;
-
-      if (!email || typeof email !== "string") {
-        return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({ error: "البريد الإلكتروني غير صحيح" });
-      }
+      const { carInfo, parts, imageUri, locale } = req.body;
 
       if (!carInfo || !Array.isArray(parts)) {
         return res.status(400).json({ error: "بيانات التقرير غير مكتملة" });
       }
+
+      // Restrict delivery to the authenticated customer's own verified email —
+      // never accept a caller-supplied address so this endpoint cannot be used
+      // as an arbitrary email relay. Require verified ownership to prevent
+      // an attacker from registering with a victim's email and abusing this
+      // endpoint for phishing.
+      const callerCustomerId: string = res.locals.customerId;
+      const [customer] = await db
+        .select({ email: customers.email, emailVerifiedAt: customers.emailVerifiedAt })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      if (!customer?.email) {
+        return res.status(400).json({ error: "لا يوجد بريد إلكتروني مسجل في حسابك" });
+      }
+      if (!customer.emailVerifiedAt) {
+        return res.status(403).json({ error: "يجب تأكيد بريدك الإلكتروني أولاً قبل إرسال التقارير" });
+      }
+      const email = customer.email;
 
       const safeImageUri = typeof imageUri === "string" && imageUri.startsWith("https://") ? imageUri : undefined;
       const VALID_LOCALES: PdfLocale[] = ["ar", "en"];
@@ -931,6 +941,78 @@ Rules:
       res.json({ success: true, customer: updated });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // ─── Email Verification ───────────────────────────────────────────────────
+  // Sends a one-time token to the customer's registered email address.
+  // The customer must verify ownership before outbound PDF emails are allowed.
+
+  app.post("/api/customers/:id/send-email-verification", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
+
+      const [customer] = await db
+        .select({ email: customers.email, emailVerifiedAt: customers.emailVerifiedAt })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      if (!customer) return res.status(404).json({ error: "غير موجود" });
+      if (customer.emailVerifiedAt) {
+        return res.status(400).json({ error: "البريد الإلكتروني مؤكد بالفعل" });
+      }
+
+      const issued = issueEmailVerificationToken(callerCustomerId);
+      if (!issued.token) {
+        return res.status(429).json({
+          error: `يرجى الانتظار ${issued.cooldownRemaining} ثانية قبل إعادة الإرسال`,
+          cooldownRemaining: issued.cooldownRemaining,
+        });
+      }
+
+      const result = await sendEmailVerificationEmail(customer.email, issued.token, callerCustomerId);
+      if (!result.success) {
+        return res.status(500).json({ error: "فشل في إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
+      }
+
+      res.json({ ok: true });
+    } catch (err: any) {
+      console.error("POST send-email-verification error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء إرسال رمز التحقق" });
+    }
+  });
+
+  // Verifies the one-time token and marks the customer's email as verified.
+  app.post("/api/customers/:id/verify-email", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) {
+        return res.status(403).json({ error: "غير مسموح" });
+      }
+
+      const { token } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "رمز التحقق مطلوب" });
+      }
+
+      const verifyResult = verifyEmailToken(callerCustomerId, token);
+      if (!verifyResult.success) {
+        return res.status(400).json({ error: verifyResult.error });
+      }
+
+      const [updated] = await db
+        .update(customers)
+        .set({ emailVerifiedAt: new Date() })
+        .where(eq(customers.customerId, callerCustomerId))
+        .returning({ emailVerifiedAt: customers.emailVerifiedAt });
+
+      res.json({ ok: true, emailVerifiedAt: updated?.emailVerifiedAt });
+    } catch (err: any) {
+      console.error("POST verify-email error:", err?.message);
+      res.status(500).json({ error: "حدث خطأ أثناء التحقق من البريد الإلكتروني" });
     }
   });
 
@@ -2190,16 +2272,27 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { email, locale } = req.body;
-      if (!email || typeof email !== "string") {
-        return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
-      }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({ error: "البريد الإلكتروني غير صحيح" });
-      }
+      const { locale } = req.body;
 
       const callerCustomerId: string = res.locals.customerId;
+
+      // Restrict delivery to the authenticated customer's own verified email —
+      // never accept a caller-supplied address so this endpoint cannot be used
+      // as an arbitrary email relay. Require verified ownership to prevent
+      // an attacker from registering with a victim's email and abusing this
+      // endpoint for phishing.
+      const [customer] = await db
+        .select({ email: customers.email, emailVerifiedAt: customers.emailVerifiedAt })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+      if (!customer?.email) {
+        return res.status(400).json({ error: "لا يوجد بريد إلكتروني مسجل في حسابك" });
+      }
+      if (!customer.emailVerifiedAt) {
+        return res.status(403).json({ error: "يجب تأكيد بريدك الإلكتروني أولاً قبل إرسال التقارير" });
+      }
+
       const [inspection] = await db
         .select()
         .from(laqitInspections)
@@ -2215,7 +2308,7 @@ Rules:
         return res.status(built.status).json({ error: built.error });
       }
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
-      const result = await sendAnalysisPdfEmail(email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar");
+      const result = await sendAnalysisPdfEmail(customer.email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar");
       if (!result.success) {
         return res.status(500).json({ error: "فشل في إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
       }
@@ -2243,6 +2336,8 @@ Rules:
         return res.status(403).json({ error: "غير مسموح" });
       }
 
+      // ── 1. Validate all prerequisites before claiming the status transition ──
+
       // Resolve the agent email for this inspection's car make
       const [carModel] = await db
         .select()
@@ -2267,19 +2362,37 @@ Rules:
         return res.status(built.status).json({ error: built.error });
       }
 
+      // ── 2. Atomically claim draft → rfq_sent ────────────────────────────────
+      // All prerequisites passed. Now atomically advance status so concurrent
+      // or repeated calls cannot fan out duplicate emails. If the inspection
+      // is no longer in draft, it was already sent — reject without side effects.
+      const claimed = await db
+        .update(laqitInspections)
+        .set({ status: "rfq_sent", updatedAt: new Date() })
+        .where(
+          and(
+            eq(laqitInspections.inspectionId, inspection.inspectionId),
+            eq(laqitInspections.status, "draft")
+          )
+        )
+        .returning();
+      if (claimed.length === 0) {
+        return res.status(409).json({ error: "تم إرسال هذا الطلب من قبل" });
+      }
+
+      // ── 3. Send email; roll back status to draft on delivery failure ─────────
       const filename = `laqit-${inspection.inspectionNo}-${Date.now()}.pdf`;
       const agentBodyLine = "يرجى الاطلاع على تقرير تشخيص لسيارة العميل المرفق أدناه.";
       const agentDetailLine = "يحتوي التقرير على معلومات السيارة والقطع المكتشفة نرجو الرد على هذا البريد الالكتروني و ارفاق ملف (بي دي اف) بالاسعار لكل قطعة لكي يتم تحليلها آليا و الرد للعميل.";
       const result = await sendAnalysisPdfEmail(agent.email, built.pdfBuffer, filename, typeof locale === "string" ? locale : "ar", agentBodyLine, agentDetailLine);
       if (!result.success) {
+        // Roll back so the customer can retry
+        await db
+          .update(laqitInspections)
+          .set({ status: "draft", updatedAt: new Date() })
+          .where(eq(laqitInspections.inspectionId, inspection.inspectionId));
         return res.status(500).json({ error: "فشل إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
       }
-
-      // Advance status to rfq_sent
-      await db
-        .update(laqitInspections)
-        .set({ status: "rfq_sent", updatedAt: new Date() })
-        .where(eq(laqitInspections.inspectionId, inspection.inspectionId));
 
       res.json({ ok: true, agentEmail: agent.email });
     } catch (err: any) {
@@ -2304,6 +2417,8 @@ Rules:
       if (inspection.customerId !== callerCustomerId) {
         return res.status(403).json({ error: "غير مسموح" });
       }
+
+      // ── 1. Validate all prerequisites before claiming the status transition ──
 
       // Resolve the car make for this inspection
       const [carModel] = await db
@@ -2345,6 +2460,25 @@ Rules:
         return res.status(built.status).json({ error: built.error });
       }
 
+      // ── 2. Atomically claim draft → rfq_sent ────────────────────────────────
+      // All prerequisites passed. Now atomically advance status so concurrent
+      // or repeated calls cannot fan out duplicate emails. If the inspection
+      // is no longer in draft, it was already sent — reject without side effects.
+      const claimed = await db
+        .update(laqitInspections)
+        .set({ status: "rfq_sent", updatedAt: new Date() })
+        .where(
+          and(
+            eq(laqitInspections.inspectionId, inspection.inspectionId),
+            eq(laqitInspections.status, "draft")
+          )
+        )
+        .returning();
+      if (claimed.length === 0) {
+        return res.status(409).json({ error: "تم إرسال هذا الطلب من قبل" });
+      }
+
+      // ── 3. Send emails; roll back status to draft if all deliveries fail ─────
       const vendorBodyLine = "يرجى الاطلاع على تقرير تشخيص لسيارة العميل المرفق أدناه.";
       const vendorDetailLine = "يحتوي التقرير على معلومات السيارة والقطع المكتشفة نرجو الرد على هذا البريد الالكتروني و ارفاق ملف (بي دي اف) بالاسعار لكل قطعة لكي يتم تحليلها آليا و الرد للعميل.";
 
@@ -2363,14 +2497,13 @@ Rules:
       }
 
       if (sentCount === 0) {
+        // Roll back so the customer can retry
+        await db
+          .update(laqitInspections)
+          .set({ status: "draft", updatedAt: new Date() })
+          .where(eq(laqitInspections.inspectionId, inspection.inspectionId));
         return res.status(500).json({ error: "فشل إرسال البريد الإلكتروني، يرجى المحاولة لاحقاً" });
       }
-
-      // Advance status to rfq_sent
-      await db
-        .update(laqitInspections)
-        .set({ status: "rfq_sent", updatedAt: new Date() })
-        .where(eq(laqitInspections.inspectionId, inspection.inspectionId));
 
       res.json({ ok: true, sentCount });
     } catch (err: any) {

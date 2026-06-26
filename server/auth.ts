@@ -171,6 +171,86 @@ export const aiIpLimiter = new RateLimiter(60 * 60 * 1000, 40);
  */
 export const emailIpLimiter = new RateLimiter(60 * 1000, 5);
 
+// ─── Email Verification Token Store ─────────────────────────────────────────
+//
+// Stores short-lived tokens (24 h) used to verify customer-owned email
+// addresses before allowing any outbound PDF email to that address.
+
+const EMAIL_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const EMAIL_TOKEN_RESEND_COOLDOWN_MS = 60 * 1000;
+const EMAIL_TOKEN_MAX_ATTEMPTS = 10;
+
+interface EmailTokenEntry {
+  hash: string;
+  expiresAt: number;
+  attempts: number;
+  lastSentAt: number;
+}
+
+const emailTokenStore = new Map<string, EmailTokenEntry>();
+
+function hashEmailToken(token: string): string {
+  return createHmac("sha256", jwtSecret).update(token).digest("hex");
+}
+
+export interface EmailTokenIssueResult {
+  token?: string;
+  cooldownRemaining?: number;
+}
+
+/**
+ * Issues a cryptographically random 32-byte email-verification token for the
+ * given customerId. Returns the plaintext token (to be included in the
+ * verification link) or a cooldown remainder if called too soon.
+ */
+export function issueEmailVerificationToken(customerId: string): EmailTokenIssueResult {
+  const existing = emailTokenStore.get(customerId);
+  const now = Date.now();
+  if (existing && now - existing.lastSentAt < EMAIL_TOKEN_RESEND_COOLDOWN_MS) {
+    return { cooldownRemaining: Math.ceil((EMAIL_TOKEN_RESEND_COOLDOWN_MS - (now - existing.lastSentAt)) / 1000) };
+  }
+  const token = randomBytes(32).toString("hex");
+  emailTokenStore.set(customerId, {
+    hash: hashEmailToken(token),
+    expiresAt: now + EMAIL_TOKEN_TTL_MS,
+    attempts: 0,
+    lastSentAt: now,
+  });
+  return { token };
+}
+
+export type EmailTokenVerifyResult =
+  | { success: true }
+  | { success: false; error: string };
+
+/**
+ * Verifies the plaintext token for the given customerId. Deletes the entry on
+ * success or when max attempts are exceeded.
+ */
+export function verifyEmailToken(customerId: string, token: string): EmailTokenVerifyResult {
+  const entry = emailTokenStore.get(customerId);
+  if (!entry) {
+    return { success: false, error: "لم يتم إرسال رابط التحقق، يرجى طلب رابط جديد" };
+  }
+  if (Date.now() > entry.expiresAt) {
+    emailTokenStore.delete(customerId);
+    return { success: false, error: "انتهت صلاحية رابط التحقق، يرجى طلب رابط جديد" };
+  }
+  if (entry.attempts >= EMAIL_TOKEN_MAX_ATTEMPTS) {
+    emailTokenStore.delete(customerId);
+    return { success: false, error: "تجاوزت الحد المسموح من المحاولات، يرجى طلب رابط جديد" };
+  }
+  const expected = hashEmailToken(token.trim());
+  const expBuf = Buffer.from(expected, "hex");
+  const gotBuf = Buffer.from(entry.hash, "hex");
+  if (expBuf.length !== gotBuf.length || !timingSafeEqual(expBuf, gotBuf)) {
+    entry.attempts += 1;
+    return { success: false, error: "رمز التحقق غير صحيح أو انتهت صلاحيته" };
+  }
+  emailTokenStore.delete(customerId);
+  return { success: true };
+}
+
 // ─── OTP Store ──────────────────────────────────────────────────────────────
 
 interface OtpEntry {
