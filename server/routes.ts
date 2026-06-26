@@ -1317,7 +1317,8 @@ Rules:
       });
 
       const escape = (val: string | null | undefined) => {
-        const s = val ?? "";
+        let s = val ?? "";
+        if (/^[=+\-@]/.test(s)) s = "'" + s;
         if (s.includes(",") || s.includes('"') || s.includes("\n")) {
           return `"${s.replace(/"/g, '""')}"`;
         }
@@ -1472,7 +1473,8 @@ Rules:
       });
 
       const escape = (v: string | null | undefined) => {
-        const s = v ?? "";
+        let s = v ?? "";
+        if (/^[=+\-@]/.test(s)) s = "'" + s;
         if (s.includes(",") || s.includes('"') || s.includes("\n")) {
           return `"${s.replace(/"/g, '""')}"`;
         }
@@ -1646,7 +1648,8 @@ Rules:
         .orderBy(customers.createdAt);
 
       const escape = (v: string | null | undefined) => {
-        const s = v ?? "";
+        let s = v ?? "";
+        if (/^[=+\-@]/.test(s)) s = "'" + s;
         if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
         return s;
       };
@@ -1850,7 +1853,8 @@ Rules:
         .orderBy(desc(auditLog.createdAt));
 
       const escape = (v: string | null | undefined) => {
-        const s = v ?? "";
+        let s = v ?? "";
+        if (/^[=+\-@]/.test(s)) s = "'" + s;
         if (s.includes(",") || s.includes('"') || s.includes("\n")) {
           return `"${s.replace(/"/g, '""')}"`;
         }
