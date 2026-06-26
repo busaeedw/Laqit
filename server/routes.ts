@@ -2673,8 +2673,25 @@ Rules:
         .from(laqitInspections)
         .where(eq(laqitInspections.inspectionId, inspectionId))
         .limit(1);
-      if (!inspection) return res.status(404).json({ error: "\u0627\u0644\u0637\u0644\u0628 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f" });
-      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "\u063a\u064a\u0631 \u0645\u0633\u0645\u0648\u062d" });
+      if (!inspection) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
+
+      // Deletion is only allowed for early-stage inspections that have not yet
+      // entered the payment or post-acceptance workflow. Any inspection in
+      // quote_accepted, payment_pending, paid, vendor_notified, ready_for_pickup,
+      // or closed must not be deleted — doing so would erase payment evidence and
+      // disrupt vendor fulfilment.
+      const DELETION_BLOCKED_STATUSES = [
+        "quote_accepted",
+        "payment_pending",
+        "paid",
+        "vendor_notified",
+        "ready_for_pickup",
+        "closed",
+      ] as const;
+      if ((DELETION_BLOCKED_STATUSES as readonly string[]).includes(inspection.status)) {
+        return res.status(409).json({ error: "لا يمكن حذف الطلب بعد قبول العرض أو بدء الدفع" });
+      }
 
       // Child tables first (no FK cascades configured).
       await db.delete(whatsappMessages).where(eq(whatsappMessages.inspectionId, inspectionId));
@@ -2739,17 +2756,37 @@ Rules:
         return res.json({ success: true, vendorsNotified: 0, message: "لا يوجد موردون في مدينتك بعد" });
       }
 
+      // Only include active vendors — suspended/rejected vendors must not receive new RFQs.
+      const activeVendorRows = await db
+        .select({ vendorId: vendors.vendorId })
+        .from(vendors)
+        .where(
+          and(
+            eq(vendors.status, "active"),
+            inArray(vendors.vendorId, cityVendorIds)
+          )
+        );
+      const activeVendorIds = activeVendorRows.map((r) => r.vendorId);
+
+      if (activeVendorIds.length === 0) {
+        return res.json({ success: true, vendorsNotified: 0, message: "لا يوجد موردون نشطون في مدينتك بعد" });
+      }
+
       const modelRows = await db
         .select({ vendorId: vendorSupportedModels.vendorId })
         .from(vendorSupportedModels)
         .where(
           and(
             eq(vendorSupportedModels.carModelId, inspection.carModelId),
-            inArray(vendorSupportedModels.vendorId, cityVendorIds)
+            inArray(vendorSupportedModels.vendorId, activeVendorIds)
           )
         );
 
       const eligibleVendorIds = modelRows.map((r) => r.vendorId);
+
+      if (eligibleVendorIds.length === 0) {
+        return res.json({ success: true, vendorsNotified: 0, message: "لا يوجد موردون مؤهلون في مدينتك بعد" });
+      }
 
       // Get parts for RFQ text
       const parts = await db
@@ -2832,7 +2869,11 @@ Rules:
           .select()
           .from(vendorUsers)
           .where(
-            and(eq(vendorUsers.vendorId, vendorId), eq(vendorUsers.isWhatsappPrimary, true))
+            and(
+              eq(vendorUsers.vendorId, vendorId),
+              eq(vendorUsers.isWhatsappPrimary, true),
+              eq(vendorUsers.status, "active")
+            )
           )
           .limit(1);
 
@@ -2985,22 +3026,50 @@ Rules:
 
       // If media attached → run OCR and create quote
       if (mediaUrl && vendorUser) {
-        // Verify this vendor was an RFQ recipient for the linked inspection before
-        // accepting a quote — prevents forged quotes from vendors who were not invited.
+        // Reject quotes from blocked vendor users — a blocked staff member must not
+        // be able to inject quotes even if their number is still known to the system.
+        if (vendorUser.status !== "active") {
+          console.warn(
+            `WhatsApp webhook: vendor user ${vendorUser.vendorUserId} is not active (status=${vendorUser.status}) — ignoring quote`
+          );
+          return res.sendStatus(200);
+        }
+
+        // Re-verify the vendor account is still active at quote-acceptance time.
+        // A vendor invited while active but later suspended/rejected must not be
+        // allowed to submit quotes — the prior rfqRecipients row does not grant
+        // ongoing participation rights.
+        const [vendorAccount] = await db
+          .select({ status: vendors.status })
+          .from(vendors)
+          .where(eq(vendors.vendorId, vendorUser.vendorId))
+          .limit(1);
+
+        if (!vendorAccount || vendorAccount.status !== "active") {
+          console.warn(
+            `WhatsApp webhook: vendor ${vendorUser.vendorId} is no longer active (status=${vendorAccount?.status ?? "not found"}) — ignoring quote from user ${vendorUser.vendorUserId}`
+          );
+          return res.sendStatus(200);
+        }
+
+        // Verify this specific vendor user was the invited RFQ recipient for the
+        // linked inspection — matching on both vendorId AND vendorUserId prevents
+        // any other staff number under the same vendor from injecting quotes.
         const [rfqEntry] = await db
           .select({ rfqRecipientId: rfqRecipients.rfqRecipientId })
           .from(rfqRecipients)
           .where(
             and(
               eq(rfqRecipients.inspectionId, linkedInspection.inspectionId),
-              eq(rfqRecipients.vendorId, vendorUser.vendorId)
+              eq(rfqRecipients.vendorId, vendorUser.vendorId),
+              eq(rfqRecipients.vendorUserId, vendorUser.vendorUserId)
             )
           )
           .limit(1);
 
         if (!rfqEntry) {
           console.warn(
-            `WhatsApp webhook: vendor ${vendorUser.vendorId} not an RFQ recipient for inspection ${linkedInspection.inspectionNo} — ignoring quote`
+            `WhatsApp webhook: vendor user ${vendorUser.vendorUserId} (vendor ${vendorUser.vendorId}) not the invited RFQ recipient for inspection ${linkedInspection.inspectionNo} — ignoring quote`
           );
           return res.sendStatus(200);
         }
