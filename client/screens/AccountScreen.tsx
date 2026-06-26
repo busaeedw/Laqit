@@ -321,27 +321,6 @@ export default function AccountScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // OTP disabled for login: the server returns the session token directly
-      // for an existing account, so skip the verification step entirely.
-      if (data.token && data.customer) {
-        const customer = data.customer;
-        setSession(
-          {
-            id: customer.customerId,
-            name: customer.fullName ?? formName.trim(),
-            mobile: customer.mobileE164,
-            email: customer.email,
-            customerId: customer.customerId,
-            cityId: customer.cityId,
-            isAdmin: !!customer.isAdmin,
-          },
-          data.token
-        );
-        setIsModalVisible(false);
-        setOtpStep(false);
-        return;
-      }
-
       setPendingMobileE164(mobileE164);
       setFormOtp("");
       setOtpStep(true);
@@ -485,22 +464,11 @@ export default function AccountScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // OTP frozen: server creates the account and returns a session token directly.
-      const customer = custData.customer;
-      setSession(
-        {
-          id: customer.customerId,
-          name: customer.fullName ?? formName.trim(),
-          mobile: customer.mobileE164,
-          email: customer.email,
-          customerId: customer.customerId,
-          cityId: customer.cityId,
-          isAdmin: !!customer.isAdmin,
-        },
-        custData.token
-      );
-      setIsModalVisible(false);
-      setOtpStep(false);
+      // Server issued an OTP — move to verification step.
+      // The account is created only after phone ownership is proven.
+      setPendingMobileE164(mobileE164);
+      setFormOtp("");
+      setOtpStep(true);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

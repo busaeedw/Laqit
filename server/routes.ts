@@ -763,7 +763,7 @@ Rules:
         return res.status(429).json({ error: `طلبات كثيرة جداً، يرجى المحاولة بعد ${retryAfter} ثانية` });
       }
 
-      const { fullName, mobileE164, email, cityId } = req.body;
+      const { mobileE164, email, cityId } = req.body;
       if (!mobileE164 || !email || !cityId) {
         return res.status(400).json({ error: "رقم الجوال والبريد والمدينة مطلوبة" });
       }
@@ -786,29 +786,16 @@ Rules:
         return res.status(400).json({ error: "البريد الإلكتروني مسجل مسبقاً" });
       }
 
-      // OTP is frozen for registration: create the account directly and return a
-      // session token, without sending or verifying a verification code.
-      let customer;
-      try {
-        [customer] = await db
-          .insert(customers)
-          .values({
-            fullName: fullName ?? null,
-            mobileE164,
-            email,
-            cityId,
-            lastLoginAt: new Date(),
-          })
-          .returning();
-      } catch (insertErr: any) {
-        if (insertErr?.code === "23505") {
-          return res.status(400).json({ error: "رقم الجوال أو البريد الإلكتروني مسجل مسبقاً" });
-        }
-        throw insertErr;
+      // Issue OTP — the account is only created after the caller proves phone
+      // ownership via POST /api/customers/verify-otp.
+      const result = issueOtp(mobileE164);
+      if ("cooldownRemaining" in result && !("code" in result)) {
+        return res.status(429).json({ error: `يرجى الانتظار ${result.cooldownRemaining} ثانية قبل طلب رمز جديد` });
       }
-
-      const token = signToken(customer.customerId);
-      res.json({ success: true, customer, token });
+      const { code } = result as { code: string };
+      const { sendSms } = await import("./services/sms");
+      await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك" });
     } catch (err: any) {
       console.error("Customer register error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء التسجيل" });
@@ -827,26 +814,14 @@ Rules:
       if (!mobileE164) return res.status(400).json({ error: "رقم الجوال مطلوب" });
 
       const [customer] = await db
-        .select()
+        .select({ customerId: customers.customerId })
         .from(customers)
         .where(eq(customers.mobileE164, mobileE164))
         .limit(1);
 
-      // OTP is disabled for login: an existing verified account is logged in
-      // directly without a verification code.
-      if (customer) {
-        await db
-          .update(customers)
-          .set({ lastLoginAt: new Date() })
-          .where(eq(customers.customerId, customer.customerId));
-        const token = signToken(customer.customerId);
-        return res.json({ success: true, customer, token });
-      }
-
-      // No verified account yet. Allow re-sending OTP for a pending (unverified)
-      // registration so the client's resend flow works before the account has
-      // been committed to the DB.
-      if (!hasPendingOtp(mobileE164)) {
+      // Require OTP for login regardless of whether the account exists, to
+      // prevent phone-number enumeration and to enforce phone-ownership proof.
+      if (!customer && !hasPendingOtp(mobileE164)) {
         return res.status(404).json({ error: "المستخدم غير موجود" });
       }
 
@@ -857,7 +832,7 @@ Rules:
       const { code } = result as { code: string };
       const { sendSms } = await import("./services/sms");
       await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
-      res.json({ success: true, message: "تم إرسال رمز التحقق إلى جوالك" });
+      res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك" });
     } catch (err: any) {
       console.error("Customer login error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });

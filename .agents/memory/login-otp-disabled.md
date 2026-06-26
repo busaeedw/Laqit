@@ -1,28 +1,25 @@
 ---
-name: Login + registration OTP intentionally disabled
-description: Both customer login and registration bypass OTP by design (user request) — phone number / form data alone yields a token
+name: Login + registration OTP — restored
+description: OTP phone-ownership proof is now mandatory for both login and registration; this was previously disabled by user request and has since been re-enabled as a security fix.
 ---
 
-# Login AND registration OTP are intentionally disabled
+# OTP is now required for both login and registration
 
-`POST /api/customers/login` logs an existing customer in **directly** from `mobileE164`
-alone (updates lastLoginAt, signs JWT, returns `{customer, token}`) — no code.
-`POST /api/customers/register` now also creates the customer row **directly** and returns
-`{customer, token}` — no code sent or verified. The `/api/customers/verify-otp` route and
-the `issueOtp`/`hasPendingOtp` machinery still exist but are effectively orphaned (only the
-login resend branch references them); re-enabling OTP means re-wiring register/login to it.
+`POST /api/customers/register` issues an OTP via SMS and returns `{requiresOtp:true}`.
+The customer row is only inserted by `POST /api/customers/verify-otp` after the code is proven.
 
-**Why:** explicit user requests ("disable otp check when logging in", then "freeze the otp
-during registration", both "for now") — testing convenience while SMS is stubbed.
+`POST /api/customers/login` also issues an OTP via SMS and returns `{requiresOtp:true}`.
+No token is ever minted in the login/register routes themselves.
 
-**Security tradeoff (do NOT silently re-enable or treat as a bug):** this is broken
-authentication — anyone who knows a customer's phone number (or just submits a registration
-form) can obtain a valid token and impersonate/squat an account. Per-IP rate limiting does
-not stop targeted takeover. Before any production launch, restore OTP on both flows (or gate
-the bypass behind a dev-only env flag so production keeps OTP mandatory).
+`POST /api/customers/verify-otp` handles both paths: if no account exists yet it runs the
+insert (registration path); if the account already exists it updates lastLoginAt (login path).
+In both cases it returns `{customer, token}`.
 
-**How to apply:** if asked to "fix auth" or harden auth, reinstate the OTP step in
-`server/routes.ts` (both login and register routes) and `client/screens/AccountScreen.tsx`
-(`handleLogin` and `handleRegister`, which currently short-circuit to setSession when the
-response carries a token). Re-point register/login at the existing `/api/customers/verify-otp`
-flow.
+The client (`AccountScreen.tsx`) always transitions to the OTP step after either form
+submission — there is no fast-path that stores a token from the first response.
+
+**Why:** security fix — previously any caller who knew a phone number could obtain a valid
+session token without proving phone ownership.
+
+**How to apply:** if OTP ever needs to be bypassed again (dev convenience only), the right
+pattern is a dev-env flag, not removing the OTP gate from the production routes.
