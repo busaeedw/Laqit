@@ -2,6 +2,8 @@ export interface SmsSendResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  /** True when the message was not actually delivered to a real device (dev stub). */
+  stub?: boolean;
 }
 
 const TWILIO_TIMEOUT_MS = 10_000;
@@ -46,7 +48,7 @@ export async function sendSms(
     // tested without a real device.
     console.log(`[SMS STUB] Twilio not configured (dev). To ${maskNumber(toE164)}:`);
     console.log(`  ${body}`);
-    return { success: true, messageId: `mock_sms_${Date.now()}` };
+    return { success: true, messageId: `mock_sms_${Date.now()}`, stub: true };
   }
 
   const controller = new AbortController();

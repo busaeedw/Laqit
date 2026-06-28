@@ -74,6 +74,7 @@ export default function AccountScreen() {
 
   const [otpStep, setOtpStep] = useState(false);
   const [formOtp, setFormOtp] = useState("");
+  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [pendingMobileE164, setPendingMobileE164] = useState("");
 
   const fetchInspections = async () => {
@@ -244,6 +245,7 @@ export default function AccountScreen() {
     setFormErrors({});
     setOtpStep(false);
     setFormOtp("");
+    setDevOtp(null);
     setPendingMobileE164("");
     setIsModalVisible(true);
     if (mode === "register") loadCities();
@@ -322,7 +324,8 @@ export default function AccountScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       setPendingMobileE164(mobileE164);
-      setFormOtp("");
+      setDevOtp(data.devOtp ?? null);
+      setFormOtp(data.devOtp ?? "");
       setOtpStep(true);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
@@ -411,7 +414,8 @@ export default function AccountScreen() {
       if (!response.ok) {
         setFormErrors({ general: data.error || "حدث خطأ أثناء إعادة الإرسال" });
       } else {
-        setFormOtp("");
+        setDevOtp(data.devOtp ?? null);
+        setFormOtp(data.devOtp ?? "");
       }
     } catch {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
@@ -467,7 +471,8 @@ export default function AccountScreen() {
       // Server issued an OTP — move to verification step.
       // The account is created only after phone ownership is proven.
       setPendingMobileE164(mobileE164);
-      setFormOtp("");
+      setDevOtp(custData.devOtp ?? null);
+      setFormOtp(custData.devOtp ?? "");
       setOtpStep(true);
     } catch (error) {
       setFormErrors({ general: "حدث خطأ في الاتصال بالخادم" });
@@ -731,6 +736,7 @@ export default function AccountScreen() {
                   if (otpStep) {
                     setOtpStep(false);
                     setFormOtp("");
+                    setDevOtp(null);
                     setFormErrors({});
                   } else {
                     setIsModalVisible(false);
@@ -791,6 +797,20 @@ export default function AccountScreen() {
                       autoFocus
                     />
                   </View>
+                  {devOtp ? (
+                    <View style={[styles.inputGroup, { marginTop: -Spacing.sm }]}>
+                      <ThemedText
+                        style={{
+                          color: theme.textSecondary,
+                          fontFamily: "Cairo_400Regular",
+                          fontSize: 13,
+                          textAlign: "center",
+                        }}
+                      >
+                        {`وضع المعاينة: تعذّر إرسال الرسالة النصية، تم إدخال الرمز تلقائياً (${devOtp})`}
+                      </ThemedText>
+                    </View>
+                  ) : null}
                   <Pressable
                     onPress={handleVerifyOtp}
                     disabled={isLoading}

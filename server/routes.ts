@@ -765,6 +765,36 @@ Rules:
 
   // ─── Customers ────────────────────────────────────────────────────────────
 
+  // Sends the OTP SMS and decides whether the flow may proceed.
+  // Production requires a real delivery. In development (the Replit preview),
+  // when Twilio can't deliver (e.g. a trial account can't text unverified
+  // numbers) or is unconfigured, the code is surfaced so login/registration
+  // stays testable. The code is NEVER returned to the client in production.
+  async function deliverOtp(
+    mobileE164: string,
+    code: string
+  ): Promise<{ ok: boolean; devOtp?: string }> {
+    const isDev = process.env.NODE_ENV !== "production";
+    const smsResult = await sendSms(
+      mobileE164,
+      `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`
+    );
+    if (smsResult.success && !smsResult.stub) return { ok: true };
+    if (smsResult.success && smsResult.stub) {
+      // Dev stub (Twilio unconfigured) — the code was already logged.
+      return { ok: true, devOtp: isDev ? code : undefined };
+    }
+    // Real send failed.
+    if (isDev) {
+      console.log(
+        `[OTP DEV] SMS delivery to ${mobileE164} failed (${smsResult.error}); ` +
+          `use this code to continue testing: ${code}`
+      );
+      return { ok: true, devOtp: code };
+    }
+    return { ok: false };
+  }
+
   app.post("/api/customers/register", async (req, res) => {
     try {
       const ip = clientIp(req);
@@ -803,13 +833,12 @@ Rules:
         return res.status(429).json({ error: `يرجى الانتظار ${result.cooldownRemaining} ثانية قبل طلب رمز جديد` });
       }
       const { code } = result as { code: string };
-      const { sendSms } = await import("./services/sms");
-      const smsResult = await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
-      if (!smsResult.success) {
+      const delivery = await deliverOtp(mobileE164, code);
+      if (!delivery.ok) {
         clearOtp(mobileE164);
         return res.status(502).json({ error: "تعذر إرسال رمز التحقق عبر الرسائل النصية، يرجى المحاولة لاحقاً" });
       }
-      res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك" });
+      res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك", ...(delivery.devOtp ? { devOtp: delivery.devOtp } : {}) });
     } catch (err: any) {
       console.error("Customer register error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء التسجيل" });
@@ -844,13 +873,12 @@ Rules:
         return res.status(429).json({ error: `يرجى الانتظار ${result.cooldownRemaining} ثانية قبل طلب رمز جديد` });
       }
       const { code } = result as { code: string };
-      const { sendSms } = await import("./services/sms");
-      const smsResult = await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
-      if (!smsResult.success) {
+      const delivery = await deliverOtp(mobileE164, code);
+      if (!delivery.ok) {
         clearOtp(mobileE164);
         return res.status(502).json({ error: "تعذر إرسال رمز التحقق عبر الرسائل النصية، يرجى المحاولة لاحقاً" });
       }
-      res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك" });
+      res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك", ...(delivery.devOtp ? { devOtp: delivery.devOtp } : {}) });
     } catch (err: any) {
       console.error("Customer login error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
