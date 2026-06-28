@@ -3482,7 +3482,7 @@ Rules:
 
             if (inspection) {
               const msg = `لقيت - تم الدفع لفحص رقم ${inspection.inspectionNo}. يرجى تجهيز القطع للاستلام. شكراً لتعاملكم معنا.`;
-              await sendWhatsAppMessage(
+              const notifyResult = await sendWhatsAppMessage(
                 primaryUser.whatsappE164,
                 msg,
                 undefined,
@@ -3493,10 +3493,10 @@ Rules:
                 recipientType: "vendor",
                 vendorUserId: primaryUser.vendorUserId,
                 channel: "whatsapp",
-                status: "sent",
+                status: notifyResult.success ? "sent" : "failed",
                 inspectionId: payment.inspectionId,
                 body: msg,
-                sentAt: new Date(),
+                sentAt: notifyResult.success ? new Date() : null,
               });
             }
           }

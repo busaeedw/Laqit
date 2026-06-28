@@ -14,7 +14,16 @@ export async function createPaymentIntent(
   const secretKey = process.env.PAYMENT_SECRET_KEY;
 
   if (!secretKey) {
-    console.log(`[Payment STUB] Creating intent: ${amount} ${currency}`, metadata);
+    if (process.env.NODE_ENV === "production") {
+      // Never fake a payment intent in production: a mock "success" could mark an
+      // order as paid and trigger vendor fulfilment without a real charge.
+      console.error(
+        "[Payment] PAYMENT_SECRET_KEY is not configured; refusing to create a payment intent."
+      );
+      throw new Error("Payment provider not configured");
+    }
+    // Development-only stub so the checkout flow can be exercised locally.
+    console.log(`[Payment STUB] Creating intent: ${amount} ${currency} (dev)`);
     const mockId = `pi_mock_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     return {
       id: mockId,
@@ -55,7 +64,14 @@ export async function createPaymentIntent(
 export async function capturePayment(gatewayRef: string): Promise<boolean> {
   const secretKey = process.env.PAYMENT_SECRET_KEY;
   if (!secretKey) {
-    console.log(`[Payment STUB] Capturing payment: ${gatewayRef}`);
+    if (process.env.NODE_ENV === "production") {
+      // Never report a capture as successful in production without a real charge.
+      console.error(
+        "[Payment] PAYMENT_SECRET_KEY is not configured; refusing to capture payment."
+      );
+      return false;
+    }
+    console.log(`[Payment STUB] Capturing payment (dev): ${gatewayRef}`);
     return true;
   }
 

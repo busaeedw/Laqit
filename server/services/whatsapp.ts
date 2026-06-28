@@ -7,6 +7,12 @@ export interface WhatsAppSendResult {
   error?: string;
 }
 
+/** Masks an E.164 number for logs, e.g. +966512345678 -> +9665****78. */
+function maskNumber(e164: string): string {
+  if (!e164 || e164.length < 6) return "***";
+  return `${e164.slice(0, 5)}****${e164.slice(-2)}`;
+}
+
 export async function sendWhatsAppMessage(
   toE164: string,
   text: string,
@@ -17,9 +23,16 @@ export async function sendWhatsAppMessage(
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!apiKey || !phoneNumberId) {
-    console.log(`[WhatsApp STUB] Would send to ${toE164}:`);
-    console.log(`  Text: ${text.substring(0, 100)}...`);
-    if (pdfUrl) console.log(`  PDF: ${pdfUrl}`);
+    if (process.env.NODE_ENV === "production") {
+      // Never report a false success in production: callers persist "sent" state
+      // (RFQ recipients, notifications) based on this result.
+      console.error(
+        `[WhatsApp] Not configured; refusing to send to ${maskNumber(toE164)}.`
+      );
+      return { success: false, error: "WhatsApp provider not configured" };
+    }
+    // Development-only stub so the RFQ/notification flow can be tested locally.
+    console.log(`[WhatsApp STUB] Would send to ${maskNumber(toE164)} (dev).`);
     const mockId = `mock_wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await db.insert(whatsappMessages).values({
       direction: "outbound",
@@ -97,9 +110,13 @@ export async function sendWhatsAppDocument(
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!apiKey || !phoneNumberId) {
-    console.log(`[WhatsApp STUB] Would send PDF document to ${toE164}:`);
-    console.log(`  File: ${filename} (${pdfBuffer.length} bytes)`);
-    console.log(`  Caption: ${caption.substring(0, 100)}`);
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        `[WhatsApp] Not configured; refusing to send document to ${maskNumber(toE164)}.`
+      );
+      return { success: false, error: "WhatsApp provider not configured" };
+    }
+    console.log(`[WhatsApp STUB] Would send PDF document to ${maskNumber(toE164)} (dev): ${filename} (${pdfBuffer.length} bytes)`);
     const mockId = `mock_wa_doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     await db.insert(whatsappMessages).values({
       direction: "outbound",
