@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { createHmac, timingSafeEqual } from "crypto";
 import OpenAI from "openai";
 import { db } from "./db";
-import { signToken, requireCustomer, optionalCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter, emailIpLimiter, issueEmailVerificationToken, verifyEmailToken } from "./auth";
+import { signToken, requireCustomer, optionalCustomer, requireAdmin, issueOtp, verifyOtp, hasPendingOtp, clearOtp, otpIpLimiter, aiCustomerLimiter, aiIpLimiter, emailIpLimiter, issueEmailVerificationToken, verifyEmailToken } from "./auth";
 import {
   users,
   inspections,
@@ -804,7 +804,11 @@ Rules:
       }
       const { code } = result as { code: string };
       const { sendSms } = await import("./services/sms");
-      await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      const smsResult = await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      if (!smsResult.success) {
+        clearOtp(mobileE164);
+        return res.status(502).json({ error: "تعذر إرسال رمز التحقق عبر الرسائل النصية، يرجى المحاولة لاحقاً" });
+      }
       res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك" });
     } catch (err: any) {
       console.error("Customer register error:", err?.message);
@@ -841,7 +845,11 @@ Rules:
       }
       const { code } = result as { code: string };
       const { sendSms } = await import("./services/sms");
-      await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      const smsResult = await sendSms(mobileE164, `لاقط: رمز التحقق الخاص بك هو ${code}. صالح لمدة 5 دقائق.`);
+      if (!smsResult.success) {
+        clearOtp(mobileE164);
+        return res.status(502).json({ error: "تعذر إرسال رمز التحقق عبر الرسائل النصية، يرجى المحاولة لاحقاً" });
+      }
       res.json({ success: true, requiresOtp: true, message: "تم إرسال رمز التحقق إلى جوالك" });
     } catch (err: any) {
       console.error("Customer login error:", err?.message);

@@ -2,12 +2,10 @@
 - [Per-table seed guards for prod](per-table-seed-guards.md) — seedIfEmpty guards on cities; any new reference table added post-deploy needs its own seedXIfEmpty() or prod never gets that data.
 - [Startup seed/bundling gotchas](startup-seed-bundling-gotchas.md) — bundled server makes seed CLI-guard fire (killed prod); guard on entry basename; Postgres has no MIN(uuid) (cast ::text); FK-safe dedupe pattern.
 - [Dependency vuln remediation](dependency-audit-remediation.md) — `npm audit fix` (no force) for transitive; bump direct deps (EOVERRIDE blocks overriding them); remaining moderates are Expo/drizzle-kit framework-locked, don't force.
-- [Login OTP disabled](login-otp-disabled.md) — customer login bypasses OTP by user request (phone number alone yields token); broken auth, restore/gate before production.
+- [OTP enforced on login + register](login-otp-disabled.md) — earlier login-OTP bypass was removed; both flows now require SMS OTP (phone ownership); don't restore the bypass.
 - [AI analyze/identify optional auth](analyze-flow-requires-auth.md) — damage-assessment AI endpoints allow anonymous; per-IP limit (40/hr) is the only guard for logged-out callers.
 - [Email delivery via AgentMail SMTP](email-delivery-agentmail.md) — reports sent via AgentMail SMTP (nodemailer); FROM must match inbox + key scope, else 550 sender-rejected; org-level key sends from any inbox.
 - [Inspection PDF must route through one helper](inspection-pdf-helper.md) — all inspection PDF endpoints must call buildInspectionPdfBuffer; inline part mapping skips Arabic→English translation and reintroduces the English-shows-Arabic bug.
 - [gpt-5 reasoning token budget](gpt5-reasoning-token-budget.md) — reasoning tokens eat max_completion_tokens; big prompt + medium effort → empty content (finish_reason=length), looks like "no results". Use low effort, big headroom, branch on length/empty.
 - [WhatsApp report send modes](whatsapp-send-modes.md) — personal WhatsApp can't auto-send/attach; trial uses OS share sheet, business uses Cloud API (flag-toggled).
-- [Admin secrets handling](admin-secrets-handling.md) — admin/server keys belong in Secrets, never EXPO_PUBLIC_ (bundled to client) or .replit plaintext (git); rotate if leaked; 403 vs 503 = key loaded vs missing.
-- [Expo missing dep fails publish](expo-missing-dep-fails-publish.md) — an imported-but-uninstalled Expo pkg survives dev HMR but fails the production static Metro build; install exact version from expo/bundledNativeModules.json.
-- [react-query staleTime Infinity](react-query-staletime-invalidation.md) — global default never refetches on reopen; mutations must invalidate the exact read key or edits look unsaved.
+- [Twilio SMS OTP](sms-otp-twilio.md) — OTP via Twilio Messages API; trial blocks unverified numbers (err 21608, needs paid plan); creds-missing stub must be dev-gated or prod leaks OTP + fakes success.

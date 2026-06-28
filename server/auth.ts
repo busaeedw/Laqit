@@ -301,6 +301,15 @@ export function hasPendingOtp(mobileE164: string): boolean {
   return !!entry && Date.now() <= entry.expiresAt;
 }
 
+/**
+ * Removes any pending OTP entry for this number. Used to roll back a freshly
+ * issued OTP when the SMS provider fails to send, so the caller can retry
+ * immediately instead of waiting out the resend cooldown.
+ */
+export function clearOtp(mobileE164: string): void {
+  otpStore.delete(mobileE164);
+}
+
 export type OtpVerifyResult =
   | { success: true }
   | { success: false; error: string; attemptsLeft?: number };
