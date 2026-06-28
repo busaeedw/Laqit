@@ -8,4 +8,5 @@
 - [Inspection PDF must route through one helper](inspection-pdf-helper.md) — all inspection PDF endpoints must call buildInspectionPdfBuffer; inline part mapping skips Arabic→English translation and reintroduces the English-shows-Arabic bug.
 - [gpt-5 reasoning token budget](gpt5-reasoning-token-budget.md) — reasoning tokens eat max_completion_tokens; big prompt + medium effort → empty content (finish_reason=length), looks like "no results". Use low effort, big headroom, branch on length/empty.
 - [WhatsApp report send modes](whatsapp-send-modes.md) — personal WhatsApp can't auto-send/attach; trial uses OS share sheet, business uses Cloud API (flag-toggled).
+- [SDK54 native-only API removals](expo-sdk54-native-only-api-removal.md) — Expo Go crash that's clean on web = native path hitting a removed API; SDK54 moved file legacy API to `expo-file-system/legacy`.
 - [Twilio SMS OTP](sms-otp-twilio.md) — OTP via Twilio Messages API; trial blocks unverified numbers (err 21608, needs paid plan); creds-missing stub must be dev-gated or prod leaks OTP + fakes success.
