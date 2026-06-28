@@ -6,6 +6,17 @@ export interface PaymentIntent {
   status: "initiated" | "authorized" | "captured" | "failed";
 }
 
+// Raised whenever a payment intent cannot be created because the provider is
+// unconfigured or actively rejects the request. The route layer uses this to
+// surface a clear, user-facing message instead of a generic 500 — and, crucially,
+// to avoid advancing the inspection to payment_pending without a real intent.
+export class PaymentProviderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PaymentProviderError";
+  }
+}
+
 export async function createPaymentIntent(
   amount: number,
   currency: string,
@@ -20,7 +31,7 @@ export async function createPaymentIntent(
       console.error(
         "[Payment] PAYMENT_SECRET_KEY is not configured; refusing to create a payment intent."
       );
-      throw new Error("Payment provider not configured");
+      throw new PaymentProviderError("Payment provider not configured");
     }
     // Development-only stub so the checkout flow can be exercised locally.
     console.log(`[Payment STUB] Creating intent: ${amount} ${currency} (dev)`);
@@ -51,7 +62,21 @@ export async function createPaymentIntent(
     body: params.toString(),
   });
 
-  const result = await response.json() as any;
+  const result = await response.json().catch(() => null) as any;
+
+  // The provider can reject the request (bad key, declined params, outage, etc.).
+  // Without this guard the caller would persist a payment row with an undefined
+  // gatewayRef and flip the inspection to payment_pending — a silent "paid-ish"
+  // state with no real intent behind it. Fail loudly instead.
+  if (!response.ok || !result?.id || !result?.client_secret) {
+    const providerMessage =
+      result?.error?.message ?? `Stripe responded with status ${response.status}`;
+    console.error(
+      `[Payment] Payment intent creation rejected by provider: ${providerMessage}`
+    );
+    throw new PaymentProviderError("Payment provider rejected the intent");
+  }
+
   return {
     id: result.id,
     clientSecret: result.client_secret,

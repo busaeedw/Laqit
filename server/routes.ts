@@ -33,7 +33,7 @@ import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendWhatsAppDocument } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
-import { createPaymentIntent } from "./services/payment";
+import { createPaymentIntent, PaymentProviderError } from "./services/payment";
 import { generateAnalysisPdf, PdfLocale, CarInfo, PartEntry } from "./services/analysisPdf";
 import { translatePartNames } from "./services/translate";
 import { sendAnalysisPdfEmail, sendCustomerExportEmail, sendEmailVerificationEmail } from "./services/email";
@@ -3431,6 +3431,16 @@ Rules:
 
       res.json({ success: true, payment, clientSecret: intent.clientSecret });
     } catch (err: any) {
+      // Payment provider unconfigured or rejecting: surface a clear, user-facing
+      // Arabic message and a 503 so the client can tell this apart from a generic
+      // failure. The inspection was never advanced to payment_pending because the
+      // intent throws before the status-flip transaction runs.
+      if (err instanceof PaymentProviderError) {
+        console.error("Payment provider unavailable:", err?.message);
+        return res.status(503).json({
+          error: "خدمة الدفع غير متاحة حالياً. لم يتم خصم أي مبلغ. يرجى المحاولة لاحقاً أو التواصل مع الدعم.",
+        });
+      }
       console.error("Create payment error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء إنشاء الدفع" });
     }
