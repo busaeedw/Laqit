@@ -54,6 +54,7 @@ interface PdfPreviewModalProps {
   onClose: () => void;
   onShare: () => void;
   sharing: boolean;
+  previewFileUri: string | null;
   pdfLocale: PdfLocale;
   onReload: (locale: PdfLocale) => void;
 }
@@ -66,6 +67,7 @@ function PdfPreviewModal({
   onClose,
   onShare,
   sharing,
+  previewFileUri,
   pdfLocale,
   onReload,
 }: PdfPreviewModalProps) {
@@ -1079,6 +1081,7 @@ export default function InspectionDetailScreen() {
         }}
         onShare={handleShareFromPreview}
         sharing={previewSharing}
+        previewFileUri={previewFileUri}
         pdfLocale={pdfLocale}
         onReload={handlePreviewPdf}
       />
