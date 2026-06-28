@@ -1979,6 +1979,88 @@ Rules:
     }
   });
 
+  // GET /api/admin/delivery-failures — failed RFQ recipients + failed notifications (admin only)
+  // Read-only observability surface so operators can spot RFQ broadcasts or vendor
+  // notifications that silently failed (e.g. missing provider credentials).
+  // Query params: limit (default 100, max 200)
+  app.get("/api/admin/delivery-failures", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const limitParam = parseInt((req.query.limit as string) ?? "100", 10);
+      const limit = Math.min(200, Math.max(1, isNaN(limitParam) ? 100 : limitParam));
+
+      // Failed RFQ recipients (vendor never received the broadcast)
+      const failedRfqRows = await db
+        .select({
+          rfqRecipientId: rfqRecipients.rfqRecipientId,
+          inspectionId: rfqRecipients.inspectionId,
+          inspectionNo: laqitInspections.inspectionNo,
+          vendorName: vendors.vendorName,
+          whatsappE164: vendorUsers.whatsappE164,
+          channel: rfqRecipients.channel,
+          createdAt: rfqRecipients.createdAt,
+        })
+        .from(rfqRecipients)
+        .leftJoin(laqitInspections, eq(laqitInspections.inspectionId, rfqRecipients.inspectionId))
+        .leftJoin(vendors, eq(vendors.vendorId, rfqRecipients.vendorId))
+        .leftJoin(vendorUsers, eq(vendorUsers.vendorUserId, rfqRecipients.vendorUserId))
+        .where(eq(rfqRecipients.status, "failed"))
+        .orderBy(desc(rfqRecipients.createdAt))
+        .limit(limit);
+
+      // Failed notifications (e.g. post-payment vendor WhatsApp that never sent)
+      const failedNotificationRows = await db
+        .select({
+          notificationId: notifications.notificationId,
+          recipientType: notifications.recipientType,
+          inspectionId: notifications.inspectionId,
+          inspectionNo: laqitInspections.inspectionNo,
+          vendorName: vendors.vendorName,
+          whatsappE164: vendorUsers.whatsappE164,
+          channel: notifications.channel,
+          body: notifications.body,
+          createdAt: notifications.createdAt,
+        })
+        .from(notifications)
+        .leftJoin(laqitInspections, eq(laqitInspections.inspectionId, notifications.inspectionId))
+        .leftJoin(vendorUsers, eq(vendorUsers.vendorUserId, notifications.vendorUserId))
+        .leftJoin(vendors, eq(vendors.vendorId, vendorUsers.vendorId))
+        .where(eq(notifications.status, "failed"))
+        .orderBy(desc(notifications.createdAt))
+        .limit(limit);
+
+      // Inspections whose RFQ broadcast reached zero vendors (all recipients failed,
+      // or recipients exist but none are "sent"). This surfaces a misconfigured
+      // provider where an entire broadcast silently went nowhere.
+      const zeroVendorRows = await db
+        .select({
+          inspectionId: rfqRecipients.inspectionId,
+          inspectionNo: laqitInspections.inspectionNo,
+          totalRecipients: sql<number>`count(*)::int`,
+          sentCount: sql<number>`count(*) filter (where ${rfqRecipients.status} = 'sent')::int`,
+          lastAttemptAt: sql<string>`max(${rfqRecipients.createdAt})`,
+        })
+        .from(rfqRecipients)
+        .leftJoin(laqitInspections, eq(laqitInspections.inspectionId, rfqRecipients.inspectionId))
+        .groupBy(rfqRecipients.inspectionId, laqitInspections.inspectionNo)
+        .having(sql`count(*) filter (where ${rfqRecipients.status} = 'sent') = 0`)
+        .orderBy(desc(sql`max(${rfqRecipients.createdAt})`))
+        .limit(limit);
+
+      res.json({
+        rfqFailures: failedRfqRows,
+        notificationFailures: failedNotificationRows,
+        zeroVendorBroadcasts: zeroVendorRows,
+        counts: {
+          rfqFailures: failedRfqRows.length,
+          notificationFailures: failedNotificationRows.length,
+          zeroVendorBroadcasts: zeroVendorRows.length,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   // PATCH /api/admin/laqit-inspections/:id/status — admin-only inspection status override
   app.patch("/api/admin/laqit-inspections/:id/status", ...requireAdminCustomer, async (req: Request, res: Response) => {
     try {
@@ -2922,6 +3004,13 @@ Rules:
       }
 
       // Status was already set to rfq_sent by the atomic claim above.
+      // Surface a clear alert in logs when a broadcast reached zero vendors so a
+      // misconfigured provider (e.g. missing WhatsApp credentials) is caught early.
+      if (vendorsNotified === 0) {
+        console.error(
+          `[Submit] ALERT: RFQ broadcast for inspection ${inspection.inspectionNo} (${inspectionId}) reached 0 vendors — ${eligibleVendorIds.length} eligible vendor(s), all sends failed or skipped.`
+        );
+      }
       res.json({ success: true, vendorsNotified });
     } catch (err: any) {
       console.error("Submit RFQ error:", err?.message);

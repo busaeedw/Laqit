@@ -24,6 +24,7 @@ const VendorMakesScreen = lazy(() => import("@/screens/VendorMakesScreen"));
 const AdminCustomersScreen = lazy(() => import("@/screens/AdminCustomersScreen"));
 const AdminAuditLogScreen = lazy(() => import("@/screens/AdminAuditLogScreen"));
 const AdminInspectionsScreen = lazy(() => import("@/screens/AdminInspectionsScreen"));
+const AdminDeliveryFailuresScreen = lazy(() => import("@/screens/AdminDeliveryFailuresScreen"));
 const WelcomeScreen = lazy(() => import("@/screens/WelcomeScreen"));
 
 function ScreenFallback() {
@@ -109,6 +110,7 @@ export type RootStackParamList = {
   AdminCustomers: undefined;
   AdminAuditLog: undefined;
   AdminInspections: undefined;
+  AdminDeliveryFailures: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -252,6 +254,11 @@ export default function RootStackNavigator() {
         name="AdminInspections"
         component={withSuspense(AdminInspectionsScreen)}
         options={{ headerTitle: "جميع الطلبات" }}
+      />
+      <Stack.Screen
+        name="AdminDeliveryFailures"
+        component={withSuspense(AdminDeliveryFailuresScreen)}
+        options={{ headerTitle: "إخفاقات الإرسال" }}
       />
     </Stack.Navigator>
   );

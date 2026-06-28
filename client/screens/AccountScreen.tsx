@@ -658,6 +658,30 @@ export default function AccountScreen() {
                   <Feather name="chevron-left" size={18} color={theme.textSecondary} />
                 </View>
               </Pressable>
+              <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+              <Pressable
+                testID="button-admin-delivery-failures"
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  navigation.navigate("AdminDeliveryFailures");
+                }}
+                style={({ pressed }) => [
+                  styles.menuItem,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: theme.error + "15" }]}>
+                    <Feather name="alert-triangle" size={18} color={theme.error} />
+                  </View>
+                  <ThemedText style={[styles.menuLabel, { fontFamily: "Cairo_600SemiBold" }]}>
+                    إخفاقات الإرسال
+                  </ThemedText>
+                </View>
+                <View style={styles.menuItemRight}>
+                  <Feather name="chevron-left" size={18} color={theme.textSecondary} />
+                </View>
+              </Pressable>
             </View>
           </Animated.View>
         ) : null}
