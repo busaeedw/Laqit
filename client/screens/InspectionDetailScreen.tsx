@@ -18,7 +18,7 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navig
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { WebView } from "react-native-webview";
 import { arrayBufferToBase64 } from "../lib/pdfUtils";

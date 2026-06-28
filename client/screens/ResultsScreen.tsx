@@ -20,7 +20,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { arrayBufferToBase64 } from "../lib/pdfUtils";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { WebView } from "react-native-webview";
 
