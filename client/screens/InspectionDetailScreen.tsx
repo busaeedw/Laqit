@@ -796,6 +796,15 @@ export default function InspectionDetailScreen() {
           <ThemedText style={[styles.inspNoValue, { fontFamily: "Cairo_700Bold" }]}>
             {inspection.inspectionNo}
           </ThemedText>
+          {inspection.createdAt ? (
+            <ThemedText style={[styles.inspNoDate, { fontFamily: "Cairo_400Regular" }]}>
+              {new Date(inspection.createdAt).toLocaleDateString("ar-SA", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </ThemedText>
+          ) : null}
         </View>
 
         {/* Status timeline */}
@@ -1470,6 +1479,7 @@ const styles = StyleSheet.create({
   },
   inspNoLabel: { color: "rgba(255,255,255,0.8)", fontSize: 13 },
   inspNoValue: { color: "#fff", fontSize: 24 },
+  inspNoDate: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 },
   carInfoCard: {
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md,
