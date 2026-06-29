@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Animated,
+  Dimensions,
   StyleSheet,
   View,
   ScrollView,
@@ -1563,7 +1564,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.xl,
     padding: Spacing.xl,
     gap: Spacing.md,
-    maxHeight: "90%",
+    maxHeight: Dimensions.get("window").height * 0.85,
   },
   modalHandle: {
     width: 40,
@@ -1641,6 +1642,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: BorderRadius.md,
     overflow: "hidden",
+    maxHeight: 220,
   },
   overridePickerItem: {
     flexDirection: "row-reverse",
