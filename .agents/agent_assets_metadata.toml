@@ -36,6 +36,12 @@ uri = "file://attached_assets/logo_concept_5.png"
 type = "image"
 title = "laqit-logo-5-shield-spark"
 
+[[generated]]
+id = "WInfnZC9K-gOmseJKOGIU"
+uri = "file://assets/images/laqit-splash-hires.png"
+type = "image"
+title = "laqit-magnifying-car-icon"
+
 [[outputs]]
 id = "raUHONJAqy75JwSJx9k3H"
 uri = "file://attached_assets/generated_audio/laqit_vo.mp3"
