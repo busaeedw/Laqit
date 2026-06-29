@@ -1266,27 +1266,50 @@ export default function InspectionDetailScreen() {
               </ThemedText>
             ) : null}
 
-            <Pressable
-              testID="button-override-confirm"
-              onPress={handleOverrideSubmit}
-              disabled={overriding}
-              style={({ pressed }) => [
-                styles.sendBtn,
-                {
-                  backgroundColor: theme.primary,
-                  opacity: pressed || overriding ? 0.7 : 1,
-                },
-              ]}
-            >
-              {overriding ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Feather name="check" size={18} color="#fff" />
-              )}
-              <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold" }]}>
-                {overriding ? "جارٍ التحديث..." : "تأكيد التغيير"}
-              </ThemedText>
-            </Pressable>
+            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+              <Pressable
+                testID="button-override-cancel"
+                onPress={() => setOverrideModalVisible(false)}
+                disabled={overriding}
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  {
+                    flex: 1,
+                    backgroundColor: theme.backgroundRoot,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    opacity: pressed || overriding ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold", color: theme.textSecondary }]}>
+                  إلغاء
+                </ThemedText>
+              </Pressable>
+
+              <Pressable
+                testID="button-override-confirm"
+                onPress={handleOverrideSubmit}
+                disabled={overriding}
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  {
+                    flex: 2,
+                    backgroundColor: theme.primary,
+                    opacity: pressed || overriding ? 0.7 : 1,
+                  },
+                ]}
+              >
+                {overriding ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Feather name="check" size={18} color="#fff" />
+                )}
+                <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold" }]}>
+                  {overriding ? "جارٍ التحديث..." : "تأكيد التغيير"}
+                </ThemedText>
+              </Pressable>
+            </View>
 
             <View style={{ height: insets.bottom + Spacing.md }} />
           </View>
