@@ -1205,7 +1205,8 @@ export default function InspectionDetailScreen() {
             </ThemedText>
 
             {/* Status picker */}
-            <ScrollView style={[styles.overridePickerWrap, { borderColor: theme.border, backgroundColor: theme.backgroundRoot }]} showsVerticalScrollIndicator={false} bounces={false}>
+            <View style={[styles.overridePickerWrap, { borderColor: theme.border }]}>
+              <ScrollView style={{ backgroundColor: theme.backgroundRoot }} showsVerticalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled">
               {ALL_STATUSES.map((s) => (
                 <Pressable
                   key={s.key}
@@ -1239,7 +1240,8 @@ export default function InspectionDetailScreen() {
                   </ThemedText>
                 </Pressable>
               ))}
-            </ScrollView>
+              </ScrollView>
+            </View>
 
             {/* Reason input */}
             <TextInput
