@@ -1306,7 +1306,7 @@ export default function InspectionDetailScreen() {
                 style={({ pressed }) => [
                   styles.sendBtn,
                   {
-                    flex: 2,
+                    flex: 1,
                     backgroundColor: theme.primary,
                     opacity: pressed || overriding ? 0.7 : 1,
                   },
