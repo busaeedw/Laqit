@@ -290,6 +290,8 @@ export default function InspectionDetailScreen() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const { pdfLocale, savePdfLocale } = usePdfLocale();
 
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -616,13 +618,13 @@ export default function InspectionDetailScreen() {
         setSendingToAgent(false);
       }
     };
-    if (Platform.OS === "web") {
-      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) doSend();
-    } else {
+    if (Platform.OS !== "web") {
       Alert.alert(confirmTitle, confirmMsg, [
         { text: "إلغاء", style: "cancel" },
         { text: "إرسال", style: "default", onPress: doSend },
       ]);
+    } else {
+      setConfirmDialog({ title: confirmTitle, message: confirmMsg, onConfirm: doSend });
     }
   };
 
@@ -660,13 +662,13 @@ export default function InspectionDetailScreen() {
         setSendingToVendors(false);
       }
     };
-    if (Platform.OS === "web") {
-      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) doSend();
-    } else {
+    if (Platform.OS !== "web") {
       Alert.alert(confirmTitle, confirmMsg, [
         { text: "إلغاء", style: "cancel" },
         { text: "إرسال", style: "default", onPress: doSend },
       ]);
+    } else {
+      setConfirmDialog({ title: confirmTitle, message: confirmMsg, onConfirm: doSend });
     }
   };
 
@@ -706,26 +708,17 @@ export default function InspectionDetailScreen() {
   };
 
   const handleDelete = () => {
-    const title = "\u062d\u0630\u0641 \u0627\u0644\u0637\u0644\u0628";
-    const message =
-      "\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f \u0645\u0646 \u0623\u0646\u0643 \u062a\u0631\u064a\u062f \u062d\u0630\u0641 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628\u061f \u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646\u0647.";
+    const title = "حذف الطلب";
+    const message = "هل أنت متأكد من أنك تريد حذف هذا الطلب؟ لا يمكن التراجع عنه.";
 
-    if (Platform.OS === "web") {
-      const confirmed = window.confirm(`${title}\n\n${message}`);
-      if (confirmed) {
-        performDelete();
-      }
-      return;
+    if (Platform.OS !== "web") {
+      Alert.alert(title, message, [
+        { text: "إلغاء", style: "cancel" },
+        { text: "حذف", style: "destructive", onPress: performDelete },
+      ]);
+    } else {
+      setConfirmDialog({ title, message, onConfirm: performDelete });
     }
-
-    Alert.alert(title, message, [
-      { text: "\u0625\u0644\u063a\u0627\u0621", style: "cancel" },
-      {
-        text: "\u062d\u0630\u0641",
-        style: "destructive",
-        onPress: performDelete,
-      },
-    ]);
   };
 
   const handleSendEmail = async () => {
@@ -1326,6 +1319,54 @@ export default function InspectionDetailScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Generic in-app confirmation dialog — replaces window.confirm() on web */}
+      <Modal
+        visible={confirmDialog != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmDialog(null)}
+        testID="modal-confirm-dialog"
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setConfirmDialog(null)} />
+          <View style={[styles.confirmSheet, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={[styles.modalHandle, { backgroundColor: theme.border }]} />
+            <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold", textAlign: "right", marginTop: Spacing.md, marginBottom: Spacing.sm }]}>
+              {confirmDialog?.title ?? ""}
+            </ThemedText>
+            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular", lineHeight: 22, marginBottom: Spacing.lg }]}>
+              {confirmDialog?.message ?? ""}
+            </ThemedText>
+            <View style={[styles.overrideButtonRow, { borderTopColor: theme.border }]}>
+              <Pressable
+                testID="button-confirm-cancel"
+                onPress={() => setConfirmDialog(null)}
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  { flex: 1, backgroundColor: theme.backgroundRoot, borderWidth: 1, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold", color: theme.textSecondary }]}>إلغاء</ThemedText>
+              </Pressable>
+              <Pressable
+                testID="button-confirm-ok"
+                onPress={() => { const fn = confirmDialog?.onConfirm; setConfirmDialog(null); fn?.(); }}
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  { flex: 1, backgroundColor: theme.primary, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <ThemedText style={[styles.sendBtnText, { fontFamily: "Cairo_700Bold" }]}>تأكيد</ThemedText>
+              </Pressable>
+            </View>
+            <View style={{ height: insets.bottom > 0 ? insets.bottom : Spacing.md }} />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }
@@ -1576,6 +1617,12 @@ const styles = StyleSheet.create({
   },
   overrideScrollable: {
     flexShrink: 1,
+  },
+  confirmSheet: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
   },
   overrideButtonRow: {
     flexDirection: "row",

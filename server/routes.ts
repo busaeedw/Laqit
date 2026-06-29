@@ -2793,7 +2793,8 @@ Rules:
         .where(eq(laqitInspections.inspectionId, inspectionId))
         .limit(1);
       if (!inspection) return res.status(404).json({ error: "الطلب غير موجود" });
-      if (inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
+      const callerAdmin = await callerIsAdmin(callerCustomerId);
+      if (!callerAdmin && inspection.customerId !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
 
       // Deletion is only allowed for early-stage inspections that have not yet
       // entered the payment or post-acceptance workflow. Any inspection in
