@@ -1205,7 +1205,7 @@ export default function InspectionDetailScreen() {
             </ThemedText>
 
             {/* Status picker */}
-            <View style={[styles.overridePickerWrap, { borderColor: theme.border, backgroundColor: theme.backgroundRoot }]}>
+            <ScrollView style={[styles.overridePickerWrap, { borderColor: theme.border, backgroundColor: theme.backgroundRoot }]} showsVerticalScrollIndicator={false} bounces={false}>
               {ALL_STATUSES.map((s) => (
                 <Pressable
                   key={s.key}
@@ -1239,7 +1239,7 @@ export default function InspectionDetailScreen() {
                   </ThemedText>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
 
             {/* Reason input */}
             <TextInput
@@ -1561,6 +1561,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.xl,
     padding: Spacing.xl,
     gap: Spacing.md,
+    maxHeight: "90%",
   },
   modalHandle: {
     width: 40,
@@ -1642,9 +1643,9 @@ const styles = StyleSheet.create({
   overridePickerItem: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
   },
   overrideRadio: {
     width: 20,
