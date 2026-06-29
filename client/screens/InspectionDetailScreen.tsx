@@ -1186,9 +1186,10 @@ export default function InspectionDetailScreen() {
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setOverrideModalVisible(false)} />
           <View style={[styles.modalSheet, { backgroundColor: theme.backgroundDefault }]}>
+            {/* Fixed top — always visible */}
             <View style={[styles.modalHandle, { backgroundColor: theme.border }]} />
 
-            <View style={styles.modalHeaderRow}>
+            <View style={[styles.modalHeaderRow, { marginTop: Spacing.md }]}>
               <ThemedText style={[styles.modalTitle, { fontFamily: "Cairo_700Bold" }]}>
                 تغيير حالة الطلب
               </ThemedText>
@@ -1201,75 +1202,83 @@ export default function InspectionDetailScreen() {
                 <Feather name="x" size={20} color={theme.textSecondary} />
               </Pressable>
             </View>
-            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary, fontFamily: "Cairo_400Regular", marginTop: Spacing.xs, marginBottom: Spacing.md }]}>
               اختر الحالة الجديدة وأدخل السبب اختيارياً
             </ThemedText>
 
-            {/* Status picker */}
-            <View style={[styles.overridePickerWrap, { borderColor: theme.border }]}>
-              <ScrollView style={{ backgroundColor: theme.backgroundRoot }} showsVerticalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled">
-              {ALL_STATUSES.map((s) => (
-                <Pressable
-                  key={s.key}
-                  testID={`button-status-option-${s.key}`}
-                  onPress={() => setOverrideStatus(s.key)}
-                  style={[
-                    styles.overridePickerItem,
-                    overrideStatus === s.key && { backgroundColor: theme.primary + "18" },
-                  ]}
-                >
-                  <View
+            {/* Scrollable middle — shrinks to give buttons room */}
+            <ScrollView
+              style={styles.overrideScrollable}
+              contentContainerStyle={{ gap: Spacing.sm, paddingBottom: Spacing.sm }}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Status picker — items rendered directly, outer ScrollView handles scrolling */}
+              <View style={[styles.overridePickerWrap, { borderColor: theme.border }]}>
+                {ALL_STATUSES.map((s) => (
+                  <Pressable
+                    key={s.key}
+                    testID={`button-status-option-${s.key}`}
+                    onPress={() => setOverrideStatus(s.key)}
                     style={[
-                      styles.overrideRadio,
-                      { borderColor: overrideStatus === s.key ? theme.primary : theme.border },
+                      styles.overridePickerItem,
+                      overrideStatus === s.key && { backgroundColor: theme.primary + "18" },
                     ]}
                   >
-                    {overrideStatus === s.key ? (
-                      <View style={[styles.overrideRadioDot, { backgroundColor: theme.primary }]} />
-                    ) : null}
-                  </View>
-                  <ThemedText
-                    style={[
-                      styles.overridePickerLabel,
-                      {
-                        fontFamily: overrideStatus === s.key ? "Cairo_700Bold" : "Cairo_400Regular",
-                        color: overrideStatus === s.key ? theme.primary : theme.text,
-                      },
-                    ]}
-                  >
-                    {s.label}
-                  </ThemedText>
-                </Pressable>
-              ))}
-              </ScrollView>
-            </View>
+                    <View
+                      style={[
+                        styles.overrideRadio,
+                        { borderColor: overrideStatus === s.key ? theme.primary : theme.border },
+                      ]}
+                    >
+                      {overrideStatus === s.key ? (
+                        <View style={[styles.overrideRadioDot, { backgroundColor: theme.primary }]} />
+                      ) : null}
+                    </View>
+                    <ThemedText
+                      style={[
+                        styles.overridePickerLabel,
+                        {
+                          fontFamily: overrideStatus === s.key ? "Cairo_700Bold" : "Cairo_400Regular",
+                          color: overrideStatus === s.key ? theme.primary : theme.text,
+                        },
+                      ]}
+                    >
+                      {s.label}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
 
-            {/* Reason input */}
-            <TextInput
-              testID="input-override-reason"
-              value={overrideReason}
-              onChangeText={(t) => { setOverrideReason(t); setOverrideError(null); }}
-              placeholder="السبب (اختياري)"
-              placeholderTextColor={theme.textSecondary}
-              style={[
-                styles.emailInput,
-                {
-                  backgroundColor: theme.backgroundRoot,
-                  borderColor: theme.border,
-                  color: theme.text,
-                  fontFamily: "Cairo_400Regular",
-                  textAlign: "right",
-                },
-              ]}
-            />
+              {/* Reason input */}
+              <TextInput
+                testID="input-override-reason"
+                value={overrideReason}
+                onChangeText={(t) => { setOverrideReason(t); setOverrideError(null); }}
+                placeholder="السبب (اختياري)"
+                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.emailInput,
+                  {
+                    backgroundColor: theme.backgroundRoot,
+                    borderColor: theme.border,
+                    color: theme.text,
+                    fontFamily: "Cairo_400Regular",
+                    textAlign: "right",
+                  },
+                ]}
+              />
 
-            {overrideError != null ? (
-              <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
-                {overrideError}
-              </ThemedText>
-            ) : null}
+              {overrideError != null ? (
+                <ThemedText style={[styles.errorText, { color: theme.error ?? "#d32f2f", fontFamily: "Cairo_400Regular" }]}>
+                  {overrideError}
+                </ThemedText>
+              ) : null}
+            </ScrollView>
 
-            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+            {/* Fixed bottom — always visible */}
+            <View style={[styles.overrideButtonRow, { borderTopColor: theme.border }]}>
               <Pressable
                 testID="button-override-cancel"
                 onPress={() => setOverrideModalVisible(false)}
@@ -1313,8 +1322,7 @@ export default function InspectionDetailScreen() {
                 </ThemedText>
               </Pressable>
             </View>
-
-            <View style={{ height: insets.bottom + Spacing.md }} />
+            <View style={{ height: insets.bottom > 0 ? insets.bottom : Spacing.md }} />
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1562,9 +1570,19 @@ const styles = StyleSheet.create({
   modalSheet: {
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
     maxHeight: Dimensions.get("window").height * 0.85,
+  },
+  overrideScrollable: {
+    flexShrink: 1,
+  },
+  overrideButtonRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: Spacing.sm,
   },
   modalHandle: {
     width: 40,
@@ -1642,7 +1660,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: BorderRadius.md,
     overflow: "hidden",
-    maxHeight: 220,
   },
   overridePickerItem: {
     flexDirection: "row-reverse",
