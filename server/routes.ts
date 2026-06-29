@@ -944,7 +944,8 @@ Rules:
     }
   });
 
-  app.get("/api/customers/:id", requireCustomer, async (req: Request, res: Response) => {
+  app.get("/api/customers/:id", requireCustomer, async (req: Request, res: Response, next: import("express").NextFunction) => {
+    if (["all", "export"].includes(req.params.id)) return next("route");
     try {
       const callerCustomerId: string = res.locals.customerId;
       if (req.params.id !== callerCustomerId) {
