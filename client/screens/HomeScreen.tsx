@@ -278,12 +278,14 @@ export default function HomeScreen() {
               <View style={[styles.featureIcon, { backgroundColor: feature.color + "20" }]}>
                 <Feather name={feature.icon} size={24} color={feature.color} />
               </View>
-              <ThemedText style={[styles.featureTitle, { fontFamily: "Cairo_700Bold" }]}>
-                {feature.title}
-              </ThemedText>
-              <ThemedText style={[styles.featureDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
-                {feature.description}
-              </ThemedText>
+              <View style={styles.featureTextWrap}>
+                <ThemedText style={[styles.featureTitle, { fontFamily: "Cairo_700Bold" }]}>
+                  {feature.title}
+                </ThemedText>
+                <ThemedText style={[styles.featureDescription, { color: theme.textSecondary, fontFamily: "Cairo_400Regular" }]}>
+                  {feature.description}
+                </ThemedText>
+              </View>
             </View>
           ))}
         </View>
@@ -351,16 +353,15 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   featuresGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: Spacing.md,
     marginBottom: Spacing.xl,
   },
   featureCard: {
-    width: "47%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
     padding: Spacing.lg,
     borderRadius: BorderRadius.md,
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   featureIcon: {
     width: 44,
@@ -368,14 +369,17 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-    alignSelf: "flex-end",
+  },
+  featureTextWrap: {
+    flex: 1,
   },
   featureTitle: {
-    fontSize: 14,
+    fontSize: 15,
     textAlign: "right",
+    marginBottom: 2,
   },
   featureDescription: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "right",
     lineHeight: 18,
   },
