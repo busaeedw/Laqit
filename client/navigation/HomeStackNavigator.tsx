@@ -25,6 +25,8 @@ export default function HomeStackNavigator() {
         options={{
           headerTitle: () => <HeaderTitle title="لاقط قطع السيارات" showLogo />,
           headerBackVisible: false,
+          headerLeft: () => null,
+          gestureEnabled: false,
         }}
       />
       <Stack.Screen
