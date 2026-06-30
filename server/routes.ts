@@ -30,7 +30,7 @@ import {
   exportSchedules,
   customerVehicles,
 } from "../shared/schema";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, or } from "drizzle-orm";
 import { sendWhatsAppMessage, sendWhatsAppDocument } from "./services/whatsapp";
 import { sendSms } from "./services/sms";
 import { extractTotalPrice } from "./services/ocr";
@@ -1906,6 +1906,78 @@ Rules:
       });
 
       res.json({ success: true, customer: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // DELETE /api/customers/:id — permanently remove a customer and all related data (admin only)
+  app.delete("/api/customers/:id", ...requireAdminCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      const { id: targetId } = req.params;
+
+      if (targetId === callerCustomerId) {
+        return res.status(400).json({ error: "لا يمكنك حذف حسابك بنفسك" });
+      }
+
+      const [target] = await db
+        .select({ customerId: customers.customerId, fullName: customers.fullName, mobileE164: customers.mobileE164 })
+        .from(customers)
+        .where(eq(customers.customerId, targetId))
+        .limit(1);
+      if (!target) return res.status(404).json({ error: "المستخدم غير موجود" });
+
+      const [actor] = await db
+        .select({ fullName: customers.fullName, mobileE164: customers.mobileE164 })
+        .from(customers)
+        .where(eq(customers.customerId, callerCustomerId))
+        .limit(1);
+
+      const inspRows = await db
+        .select({ inspectionId: laqitInspections.inspectionId })
+        .from(laqitInspections)
+        .where(eq(laqitInspections.customerId, targetId));
+      const inspectionIds = inspRows.map((r) => r.inspectionId);
+
+      await db.transaction(async (tx) => {
+        await tx.delete(customerVehicles).where(eq(customerVehicles.customerId, targetId));
+        // Notifications can reference the customer directly OR an inspection belonging
+        // to the customer (with customerId = null), so cover both FK paths.
+        if (inspectionIds.length > 0) {
+          await tx.delete(notifications).where(
+            or(eq(notifications.customerId, targetId), inArray(notifications.inspectionId, inspectionIds))
+          );
+          await tx.delete(rfqRecipients).where(inArray(rfqRecipients.inspectionId, inspectionIds));
+          await tx.delete(rfqDocuments).where(inArray(rfqDocuments.inspectionId, inspectionIds));
+          await tx.delete(inspectionParts).where(inArray(inspectionParts.inspectionId, inspectionIds));
+          await tx.delete(inspectionMedia).where(inArray(inspectionMedia.inspectionId, inspectionIds));
+          await tx.delete(whatsappMessages).where(inArray(whatsappMessages.inspectionId, inspectionIds));
+          await tx.delete(quotes).where(inArray(quotes.inspectionId, inspectionIds));
+        } else {
+          await tx.delete(notifications).where(eq(notifications.customerId, targetId));
+        }
+        await tx.delete(payments).where(eq(payments.customerId, targetId));
+        await tx.delete(laqitInspections).where(eq(laqitInspections.customerId, targetId));
+        await tx.delete(customers).where(eq(customers.customerId, targetId));
+      });
+
+      await db.insert(auditLog).values({
+        actorType: "customer",
+        actorId: callerCustomerId,
+        action: "customer_deleted",
+        entityType: "customer",
+        entityId: targetId,
+        payload: {
+          actorName: actor?.fullName ?? null,
+          actorMobile: actor?.mobileE164 ?? null,
+          deletedName: target.fullName ?? null,
+          deletedMobile: target.mobileE164 ?? null,
+          inspectionsDeleted: inspectionIds.length,
+        },
+      });
+
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err?.message });
     }

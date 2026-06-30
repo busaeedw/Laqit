@@ -68,6 +68,8 @@ function CustomerRow({
   currentUserId,
   onToggle,
   isPending,
+  isDeleting,
+  onDelete,
   cityList,
 }: {
   item: CustomerItem;
@@ -75,6 +77,8 @@ function CustomerRow({
   currentUserId: string | undefined;
   onToggle: (customerId: string, isAdmin: boolean) => void;
   isPending: boolean;
+  isDeleting: boolean;
+  onDelete: (customerId: string) => void;
   cityList: CityItem[];
 }) {
   const { theme } = useTheme();
@@ -94,6 +98,18 @@ function CustomerRow({
     });
     if (confirmed) {
       onToggle(item.customerId, !adminStatus);
+    }
+  };
+
+  const handleDelete = async () => {
+    const confirmed = await confirmDialog({
+      title: "حذف المستخدم",
+      message: `سيتم حذف ${item.fullName ?? item.mobileE164} وجميع بياناته نهائياً. هذا الإجراء لا يمكن التراجع عنه.`,
+      confirmText: "حذف",
+      destructive: true,
+    });
+    if (confirmed) {
+      onDelete(item.customerId);
     }
   };
 
@@ -197,14 +213,31 @@ function CustomerRow({
             </ThemedText>
           </View>
         ) : (
-          <Switch
-            testID={`switch-admin-${item.customerId}`}
-            value={adminStatus}
-            onValueChange={handleToggle}
-            disabled={isPending}
-            trackColor={{ false: theme.border, true: theme.primary + "80" }}
-            thumbColor={adminStatus ? theme.primary : theme.textSecondary}
-          />
+          <View style={styles.cardActions}>
+            <Switch
+              testID={`switch-admin-${item.customerId}`}
+              value={adminStatus}
+              onValueChange={handleToggle}
+              disabled={isPending || isDeleting}
+              trackColor={{ false: theme.border, true: theme.primary + "80" }}
+              thumbColor={adminStatus ? theme.primary : theme.textSecondary}
+            />
+            <Pressable
+              testID={`button-delete-customer-${item.customerId}`}
+              onPress={handleDelete}
+              disabled={isPending || isDeleting}
+              style={({ pressed }) => [
+                styles.deleteBtn,
+                { opacity: pressed || isDeleting ? 0.5 : 1 },
+              ]}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#FF3B30" />
+              ) : (
+                <Feather name="trash-2" size={16} color="#FF3B30" />
+              )}
+            </Pressable>
+          </View>
         )}
       </View>
     </Animated.View>
@@ -253,6 +286,7 @@ export default function AdminCustomersScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [adminsOnly, setAdminsOnly] = useState(false);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
@@ -373,6 +407,29 @@ export default function AdminCustomersScreen() {
 
   const handleToggle = (customerId: string, isAdmin: boolean) => {
     toggleMutation.mutate({ customerId, isAdmin });
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: async (customerId: string) => {
+      const res = await apiRequest("DELETE", `/api/customers/${customerId}`);
+      return res.json();
+    },
+    onMutate: (customerId) => {
+      setDeletePendingId(customerId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers/all"] });
+    },
+    onError: () => {
+      Alert.alert("خطأ", "حدث خطأ أثناء حذف المستخدم، يرجى المحاولة مجدداً");
+    },
+    onSettled: () => {
+      setDeletePendingId(null);
+    },
+  });
+
+  const handleDelete = (customerId: string) => {
+    deleteMutation.mutate(customerId);
   };
 
   const handleExport = async () => {
@@ -513,6 +570,8 @@ export default function AdminCustomersScreen() {
             currentUserId={user?.customerId}
             onToggle={handleToggle}
             isPending={pendingId === item.customerId}
+            isDeleting={deletePendingId === item.customerId}
+            onDelete={handleDelete}
             cityList={cityList}
           />
         )}
@@ -1280,6 +1339,20 @@ const styles = StyleSheet.create({
   },
   selfTagText: {
     fontSize: 12,
+  },
+  cardActions: {
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FF3B3014",
+    borderWidth: 1,
+    borderColor: "#FF3B3030",
   },
   emptyState: {
     flex: 1,
