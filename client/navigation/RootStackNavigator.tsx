@@ -265,7 +265,7 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="AdminMenu"
         component={withSuspense(AdminMenuScreen)}
-        options={{ headerTitle: "مدير النظام" }}
+        options={{ headerTitle: "إدارة النظام" }}
       />
     </Stack.Navigator>
   );
