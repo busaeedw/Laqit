@@ -190,13 +190,17 @@ export default function NewInspectionScreen() {
     setModelsLoading(true);
     setModels([]);
     setSelectedModel(null);
+    let matchedModel = false;
     try {
       const resp = await fetch(new URL(`/api/car-models/${vehicle.makeId}`, apiUrl).toString());
       const data = await resp.json();
       const fetched = data.models ?? [];
       setModels(fetched);
       const match = fetched.find((m: ApiModel) => m.carModelId === vehicle.carModelId);
-      if (match) setSelectedModel(match);
+      if (match) {
+        setSelectedModel(match);
+        matchedModel = true;
+      }
     } catch {
       // silent
     } finally {
@@ -210,6 +214,11 @@ export default function NewInspectionScreen() {
     setSelectedFromVehicleId(vehicle.vehicleId);
     // Auto-check "أضف إلى سياراتي" since this is already saved
     setAddToMyCars(false);
+    // A saved car already has make + model — skip straight to the photos step
+    if (matchedModel) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setStep(2);
+    }
   };
 
   const handleIdentifyByCar = async () => {
