@@ -1065,6 +1065,7 @@ Rules:
           vehicleId: customerVehicles.vehicleId,
           carModelId: customerVehicles.carModelId,
           carYear: customerVehicles.carYear,
+          photoUrl: customerVehicles.photoUrl,
           createdAt: customerVehicles.createdAt,
           makeName: carMakes.makeName,
           modelName: carModels.modelName,
@@ -1085,14 +1086,15 @@ Rules:
     try {
       const callerCustomerId: string = res.locals.customerId;
       if (req.params.id !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
-      const { carModelId, carYear } = req.body;
+      const { carModelId, carYear, photoUrl } = req.body;
       if (!carModelId || typeof carModelId !== "string") return res.status(400).json({ error: "carModelId مطلوب" });
       const yearVal = carYear ? Number(carYear) : null;
+      const photoVal = typeof photoUrl === "string" && photoUrl.length > 0 ? photoUrl : null;
 
       // Upsert — ignore duplicate (unique index on customerId+carModelId+carYear)
       const [row] = await db
         .insert(customerVehicles)
-        .values({ customerId: callerCustomerId, carModelId, carYear: yearVal })
+        .values({ customerId: callerCustomerId, carModelId, carYear: yearVal, photoUrl: photoVal })
         .onConflictDoNothing()
         .returning();
       res.json({ vehicle: row ?? null });

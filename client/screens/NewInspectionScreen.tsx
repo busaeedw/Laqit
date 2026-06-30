@@ -418,7 +418,7 @@ export default function NewInspectionScreen() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json", ...authHeaders() },
-              body: JSON.stringify({ carModelId: selectedModel.carModelId, carYear: selectedYear || null }),
+              body: JSON.stringify({ carModelId: selectedModel.carModelId, carYear: selectedYear || null, photoUrl: carPhotoUri || null }),
             }
           );
         } catch {

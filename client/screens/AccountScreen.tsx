@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -1319,9 +1320,17 @@ export default function AccountScreen() {
                   >
                     <View style={[styles.carCardHeader, { justifyContent: "space-between" }]}>
                       <View style={[styles.carCardHeader, { flex: 1 }]}>
-                        <View style={[styles.carIconContainer, { backgroundColor: theme.primary + "15" }]}>
-                          <Feather name="bookmark" size={22} color={theme.primary} />
-                        </View>
+                        {car.photoUrl ? (
+                          <Image
+                            source={{ uri: car.photoUrl }}
+                            style={styles.myCarsThumb}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.carIconContainer, { backgroundColor: theme.primary + "15" }]}>
+                            <Feather name="bookmark" size={22} color={theme.primary} />
+                          </View>
+                        )}
                         <View style={styles.carInfoContainer}>
                           <ThemedText style={[styles.carName, { fontFamily: "Cairo_700Bold" }]}>
                             {car.makeName} {car.modelName}
@@ -1776,6 +1785,12 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
+    marginLeft: Spacing.md,
+  },
+  myCarsThumb: {
+    width: 56,
+    height: 48,
+    borderRadius: BorderRadius.md,
     marginLeft: Spacing.md,
   },
   carInfoContainer: {

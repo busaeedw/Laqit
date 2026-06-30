@@ -688,6 +688,7 @@ export const customerVehicles = pgTable(
       .notNull()
       .references(() => carModels.carModelId),
     carYear: integer("car_year"),
+    photoUrl: text("photo_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
