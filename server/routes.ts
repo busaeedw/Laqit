@@ -477,10 +477,16 @@ Rules:
           },
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 2048,
+        reasoning_effort: "low",
+        max_completion_tokens: 3072,
       });
 
-      const raw = response.choices[0]?.message?.content ?? "{}";
+      const finishReason = response.choices[0]?.finish_reason;
+      const raw = response.choices[0]?.message?.content?.trim() || "";
+      if (finishReason === "length" || !raw) {
+        console.warn(`identify-car response unusable (finish_reason=${finishReason}, len=${raw.length})`);
+        return res.status(502).json({ error: "تعذر تحليل صورة السيارة، يرجى المحاولة مرة أخرى" });
+      }
       const result = JSON.parse(raw);
       res.json(result);
     } catch (err: any) {

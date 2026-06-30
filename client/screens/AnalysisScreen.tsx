@@ -95,8 +95,8 @@ export default function AnalysisScreen() {
         } else {
           const manipulatedImage = await ImageManipulator.manipulateAsync(
             imageUri,
-            [{ resize: { width: 800 } }],
-            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.7 }
+            [{ resize: { width: 1024 } }],
+            { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 0.8 }
           );
           
           if (manipulatedImage.base64) {
@@ -188,7 +188,7 @@ export default function AnalysisScreen() {
       }
     };
 
-    const timer = setTimeout(analyzeImage, 2000);
+    const timer = setTimeout(analyzeImage, 0);
     return () => clearTimeout(timer);
   }, [imageUri, carInfo, navigation]);
 
