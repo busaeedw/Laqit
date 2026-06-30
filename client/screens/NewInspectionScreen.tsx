@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -98,6 +99,12 @@ export default function NewInspectionScreen() {
   // "أضف إلى سياراتي" checkbox
   const [addToMyCars, setAddToMyCars] = useState(false);
 
+  // "اختر من سياراتي" picker
+  const [isMyCarsPickerVisible, setIsMyCarsPickerVisible] = useState(false);
+  const [myCarsForPicker, setMyCarsForPicker] = useState<any[]>([]);
+  const [isLoadingMyCarsForPicker, setIsLoadingMyCarsForPicker] = useState(false);
+  const [selectedFromVehicleId, setSelectedFromVehicleId] = useState<string | null>(null);
+
   // Step 4 / submission
   const [inspectionId, setInspectionId] = useState<string | null>(null);
   const [inspectionNo, setInspectionNo] = useState<string | null>(null);
@@ -155,6 +162,55 @@ export default function NewInspectionScreen() {
     },
     [apiUrl]
   );
+
+  const fetchMyCarsForPicker = async () => {
+    if (!user?.customerId) return;
+    setIsLoadingMyCarsForPicker(true);
+    try {
+      const resp = await fetch(
+        new URL(`/api/customers/${user.customerId}/vehicles`, apiUrl).toString(),
+        { headers: authHeaders() }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        setMyCarsForPicker(data.vehicles ?? []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setIsLoadingMyCarsForPicker(false);
+    }
+  };
+
+  const selectFromMyCars = async (vehicle: any) => {
+    setIsMyCarsPickerVisible(false);
+    // Set make
+    setSelectedMake({ makeId: vehicle.makeId, makeName: vehicle.makeName });
+    // Fetch models for this make, then auto-select the right model
+    setModelsLoading(true);
+    setModels([]);
+    setSelectedModel(null);
+    try {
+      const resp = await fetch(new URL(`/api/car-models/${vehicle.makeId}`, apiUrl).toString());
+      const data = await resp.json();
+      const fetched = data.models ?? [];
+      setModels(fetched);
+      const match = fetched.find((m: ApiModel) => m.carModelId === vehicle.carModelId);
+      if (match) setSelectedModel(match);
+    } catch {
+      // silent
+    } finally {
+      setModelsLoading(false);
+    }
+    // Year
+    if (vehicle.carYear) setSelectedYear(String(vehicle.carYear));
+    // Photo — pre-fill car photo from saved vehicle
+    if (vehicle.photoUrl) setCarPhotoUri(vehicle.photoUrl);
+    // Track this vehicle for photo update on submit
+    setSelectedFromVehicleId(vehicle.vehicleId);
+    // Auto-check "أضف إلى سياراتي" since this is already saved
+    setAddToMyCars(false);
+  };
 
   const handleIdentifyByCar = async () => {
     const picked = await ImagePicker.launchImageLibraryAsync({
@@ -425,6 +481,22 @@ export default function NewInspectionScreen() {
           // Non-critical — inspection already saved, don't block the success screen
         }
       }
+
+      // If car was selected from "سياراتي", update its stored photo with the latest photo
+      if (selectedFromVehicleId && user?.customerId && carPhotoUri) {
+        try {
+          await fetch(
+            new URL(`/api/customers/${user.customerId}/vehicles/${selectedFromVehicleId}`, apiUrl).toString(),
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", ...authHeaders() },
+              body: JSON.stringify({ photoUrl: carPhotoUri }),
+            }
+          );
+        } catch {
+          // Non-critical
+        }
+      }
     } catch (err: any) {
       const msg = err.message ?? "حدث خطأ أثناء الإرسال";
       setSubmitError(msg);
@@ -562,6 +634,26 @@ export default function NewInspectionScreen() {
                 {carIdentifying ? "جاري تحليل الصورة..." : "تحديد نوع السيارة بالصورة"}
               </ThemedText>
             </Pressable>
+
+            {/* Choose from My Cars */}
+            {isLoggedIn ? (
+              <Pressable
+                testID="button-pick-from-my-cars"
+                style={[
+                  styles.myCarsPickerBtn,
+                  { borderColor: theme.primary + "66", backgroundColor: theme.primary + "0D" },
+                ]}
+                onPress={() => {
+                  fetchMyCarsForPicker();
+                  setIsMyCarsPickerVisible(true);
+                }}
+              >
+                <Feather name="bookmark" size={16} color={theme.primary} />
+                <ThemedText style={[styles.identifyPhotoBtnText, { color: theme.primary, fontFamily: "Cairo_600SemiBold" }]}>
+                  اختر من سياراتي
+                </ThemedText>
+              </Pressable>
+            ) : null}
 
             {/* Makes */}
             {makesLoading ? (
@@ -954,6 +1046,76 @@ export default function NewInspectionScreen() {
           </View>
         )}
       </View>
+
+      {/* ── My Cars Picker Modal ── */}
+      <Modal
+        visible={isMyCarsPickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsMyCarsPickerVisible(false)}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerSheet, { backgroundColor: theme.backgroundDefault }]}>
+            {/* Header */}
+            <View style={styles.pickerHeader}>
+              <Pressable onPress={() => setIsMyCarsPickerVisible(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={22} color={theme.text} />
+              </Pressable>
+              <ThemedText style={[styles.pickerTitle, { fontFamily: "Cairo_700Bold" }]}>
+                اختر من سياراتي
+              </ThemedText>
+              <View style={{ width: 30 }} />
+            </View>
+
+            {isLoadingMyCarsForPicker ? (
+              <ActivityIndicator color={theme.primary} style={{ marginTop: 32 }} />
+            ) : myCarsForPicker.length === 0 ? (
+              <View style={styles.pickerEmpty}>
+                <Feather name="bookmark" size={40} color={theme.textSecondary} />
+                <ThemedText style={[styles.pickerEmptyText, { fontFamily: "Cairo_700Bold" }]}>
+                  لا توجد سيارات محفوظة
+                </ThemedText>
+                <ThemedText style={[styles.pickerEmptyText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary, fontSize: 12, marginTop: 4 }]}>
+                  أضف سيارة عند إنشاء طلب فحص
+                </ThemedText>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+                {myCarsForPicker.map((car) => (
+                  <Pressable
+                    key={car.vehicleId}
+                    testID={`picker-vehicle-${car.vehicleId}`}
+                    onPress={() => selectFromMyCars(car)}
+                    style={({ pressed }) => [
+                      styles.pickerItem,
+                      { backgroundColor: pressed ? theme.primary + "14" : theme.backgroundSecondary },
+                    ]}
+                  >
+                    {car.photoUrl ? (
+                      <Image source={{ uri: car.photoUrl }} style={styles.pickerThumb} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.pickerThumbPlaceholder, { backgroundColor: theme.primary + "15" }]}>
+                        <Feather name="truck" size={20} color={theme.primary} />
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <ThemedText style={[styles.pickerItemName, { fontFamily: "Cairo_700Bold" }]}>
+                        {car.makeName} {car.modelName}
+                      </ThemedText>
+                      {car.carYear ? (
+                        <ThemedText style={[styles.pickerItemYear, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                          سنة {car.carYear}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    <Feather name="chevron-left" size={18} color={theme.textSecondary} />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1008,7 +1170,67 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   identifyPhotoBtnText: { fontSize: 14, textAlign: "center" },
+  myCarsPickerBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
   chipsRow: { flexDirection: "row", marginBottom: Spacing.sm },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  pickerSheet: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    maxHeight: "75%",
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerTitle: { fontSize: 17, textAlign: "center" },
+  pickerEmpty: {
+    alignItems: "center",
+    paddingVertical: 48,
+    gap: Spacing.sm,
+  },
+  pickerEmptyText: { fontSize: 15, textAlign: "center" },
+  pickerItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.md,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+  },
+  pickerThumb: {
+    width: 58,
+    height: 48,
+    borderRadius: BorderRadius.sm,
+  },
+  pickerThumbPlaceholder: {
+    width: 58,
+    height: 48,
+    borderRadius: BorderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerItemName: { fontSize: 15, textAlign: "right" },
+  pickerItemYear: { fontSize: 12, textAlign: "right", marginTop: 2 },
   addToMyCarsRow: {
     flexDirection: "row-reverse",
     alignItems: "center",

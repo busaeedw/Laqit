@@ -1103,6 +1103,22 @@ Rules:
     }
   });
 
+  app.patch("/api/customers/:id/vehicles/:vehicleId", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
+      const { photoUrl } = req.body;
+      const photoVal = typeof photoUrl === "string" && photoUrl.length > 0 ? photoUrl : null;
+      await db
+        .update(customerVehicles)
+        .set({ photoUrl: photoVal })
+        .where(and(eq(customerVehicles.vehicleId, req.params.vehicleId), eq(customerVehicles.customerId, callerCustomerId)));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
   app.delete("/api/customers/:id/vehicles/:vehicleId", requireCustomer, async (req: Request, res: Response) => {
     try {
       const callerCustomerId: string = res.locals.customerId;
