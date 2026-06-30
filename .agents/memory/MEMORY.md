@@ -10,3 +10,4 @@
 - [WhatsApp report send modes](whatsapp-send-modes.md) — personal WhatsApp can't auto-send/attach; trial uses OS share sheet, business uses Cloud API (flag-toggled).
 - [SDK54 native-only API removals](expo-sdk54-native-only-api-removal.md) — Expo Go crash that's clean on web = native path hitting a removed API; SDK54 moved file legacy API to `expo-file-system/legacy`.
 - [Twilio SMS OTP](sms-otp-twilio.md) — OTP via Twilio Messages API; trial blocks unverified numbers (err 21608, needs paid plan); creds-missing stub must be dev-gated or prod leaks OTP + fakes success.
+- [Alert.alert confirm no-op on web](web-alert-confirm-noop.md) — RN-web doesn't fire Alert button onPress; confirm-gated actions silently do nothing on web. Use confirmDialog (client/lib/confirm.ts).

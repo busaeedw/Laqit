@@ -24,6 +24,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { apiRequest, getApiUrl, authHeaders } from "@/lib/query-client";
+import { confirmDialog } from "@/lib/confirm";
 import { useUser } from "@/context/UserContext";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -83,21 +84,17 @@ function CustomerRow({
     ? (cityList.find((c) => c.cityId === item.cityId)?.nameAr ?? null)
     : null;
 
-  const handleToggle = () => {
+  const handleToggle = async () => {
     if (isCurrentUser) return;
     const action = adminStatus ? "سحب صلاحيات المشرف من" : "منح صلاحيات المشرف لـ";
-    Alert.alert(
-      "تأكيد",
-      `${action} ${item.fullName ?? item.mobileE164}؟`,
-      [
-        { text: "إلغاء", style: "cancel" },
-        {
-          text: "تأكيد",
-          style: adminStatus ? "destructive" : "default",
-          onPress: () => onToggle(item.customerId, !adminStatus),
-        },
-      ]
-    );
+    const confirmed = await confirmDialog({
+      title: "تأكيد",
+      message: `${action} ${item.fullName ?? item.mobileE164}؟`,
+      destructive: adminStatus,
+    });
+    if (confirmed) {
+      onToggle(item.customerId, !adminStatus);
+    }
   };
 
   return (
@@ -884,15 +881,16 @@ export default function AdminCustomersScreen() {
                         </Pressable>
                         <Pressable
                           testID={`button-delete-schedule-${sched.scheduleId}`}
-                          onPress={() => {
-                            Alert.alert("حذف الجدولة", "هل أنت متأكد من حذف هذه الجدولة؟", [
-                              { text: "إلغاء", style: "cancel" },
-                              {
-                                text: "حذف",
-                                style: "destructive",
-                                onPress: () => deleteScheduleMutation.mutate(sched.scheduleId),
-                              },
-                            ]);
+                          onPress={async () => {
+                            const confirmed = await confirmDialog({
+                              title: "حذف الجدولة",
+                              message: "هل أنت متأكد من حذف هذه الجدولة؟",
+                              confirmText: "حذف",
+                              destructive: true,
+                            });
+                            if (confirmed) {
+                              deleteScheduleMutation.mutate(sched.scheduleId);
+                            }
                           }}
                           style={({ pressed }) => [
                             styles.scheduleActionBtn,
