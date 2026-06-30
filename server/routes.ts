@@ -28,6 +28,7 @@ import {
   auditLog,
   inspectionStatusEnum,
   exportSchedules,
+  customerVehicles,
 } from "../shared/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendWhatsAppDocument } from "./services/whatsapp";
@@ -1050,6 +1051,66 @@ Rules:
     } catch (err: any) {
       console.error("POST verify-email error:", err?.message);
       res.status(500).json({ error: "حدث خطأ أثناء التحقق من البريد الإلكتروني" });
+    }
+  });
+
+  // ─── Customer saved vehicles ("سياراتي") ─────────────────────────────────
+
+  app.get("/api/customers/:id/vehicles", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
+      const rows = await db
+        .select({
+          vehicleId: customerVehicles.vehicleId,
+          carModelId: customerVehicles.carModelId,
+          carYear: customerVehicles.carYear,
+          createdAt: customerVehicles.createdAt,
+          makeName: carMakes.makeName,
+          modelName: carModels.modelName,
+          makeId: carMakes.makeId,
+        })
+        .from(customerVehicles)
+        .innerJoin(carModels, eq(carModels.carModelId, customerVehicles.carModelId))
+        .innerJoin(carMakes, eq(carMakes.makeId, carModels.makeId))
+        .where(eq(customerVehicles.customerId, callerCustomerId))
+        .orderBy(desc(customerVehicles.createdAt));
+      res.json({ vehicles: rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.post("/api/customers/:id/vehicles", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
+      const { carModelId, carYear } = req.body;
+      if (!carModelId || typeof carModelId !== "string") return res.status(400).json({ error: "carModelId مطلوب" });
+      const yearVal = carYear ? Number(carYear) : null;
+
+      // Upsert — ignore duplicate (unique index on customerId+carModelId+carYear)
+      const [row] = await db
+        .insert(customerVehicles)
+        .values({ customerId: callerCustomerId, carModelId, carYear: yearVal })
+        .onConflictDoNothing()
+        .returning();
+      res.json({ vehicle: row ?? null });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
+
+  app.delete("/api/customers/:id/vehicles/:vehicleId", requireCustomer, async (req: Request, res: Response) => {
+    try {
+      const callerCustomerId: string = res.locals.customerId;
+      if (req.params.id !== callerCustomerId) return res.status(403).json({ error: "غير مسموح" });
+      await db
+        .delete(customerVehicles)
+        .where(and(eq(customerVehicles.vehicleId, req.params.vehicleId), eq(customerVehicles.customerId, callerCustomerId)));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
     }
   });
 

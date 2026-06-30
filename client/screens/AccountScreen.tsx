@@ -64,6 +64,11 @@ export default function AccountScreen() {
   const [userCars, setUserCars] = useState<any[]>([]);
   const [isLoadingCars, setIsLoadingCars] = useState(false);
 
+  const [isMyCarsModalVisible, setIsMyCarsModalVisible] = useState(false);
+  const [myCars, setMyCars] = useState<any[]>([]);
+  const [isLoadingMyCars, setIsLoadingMyCars] = useState(false);
+  const [deletingVehicleId, setDeletingVehicleId] = useState<string | null>(null);
+
   const [isPartsModalVisible, setIsPartsModalVisible] = useState(false);
   const [userParts, setUserParts] = useState<any[]>([]);
   const [isLoadingParts, setIsLoadingParts] = useState(false);
@@ -170,6 +175,52 @@ export default function AccountScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     fetchUserCars();
     setIsCarsModalVisible(true);
+  };
+
+  const fetchMyCars = async () => {
+    if (!user?.customerId) return;
+    setIsLoadingMyCars(true);
+    try {
+      const resp = await fetch(
+        new URL(`/api/customers/${user.customerId}/vehicles`, getApiUrl()).toString(),
+        { headers: authHeaders() }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        setMyCars(data.vehicles ?? []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setIsLoadingMyCars(false);
+    }
+  };
+
+  const handleViewMyCars = () => {
+    if (!isLoggedIn) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    fetchMyCars();
+    setIsMyCarsModalVisible(true);
+  };
+
+  const handleDeleteVehicle = async (vehicleId: string) => {
+    if (!user?.customerId || deletingVehicleId) return;
+    setDeletingVehicleId(vehicleId);
+    try {
+      await fetch(
+        new URL(`/api/customers/${user.customerId}/vehicles/${vehicleId}`, getApiUrl()).toString(),
+        { method: "DELETE", headers: authHeaders() }
+      );
+      setMyCars((prev) => prev.filter((v) => v.vehicleId !== vehicleId));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      // silent
+    } finally {
+      setDeletingVehicleId(null);
+    }
   };
 
   const fetchUserParts = async () => {
@@ -498,6 +549,7 @@ export default function AccountScreen() {
     ],
     [
       { id: "history", icon: "clock", label: "سجل الفحوصات", onPress: handleViewHistory },
+      { id: "my-cars", icon: "bookmark", label: "سياراتي", onPress: handleViewMyCars },
       { id: "favorites", icon: "heart", label: "القطع المحفوظة", onPress: handleViewParts },
       { id: "vehicles", icon: "truck", label: "سيارات فحصت", onPress: handleViewCars },
     ],
@@ -1205,6 +1257,93 @@ export default function AccountScreen() {
                       <ThemedText style={[styles.carInspectionDate, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
                         آخر طلب: {formatDate(car.lastInspectionDate)}
                       </ThemedText>
+                    </View>
+                  </Animated.View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── سياراتي Modal ── */}
+      <Modal
+        visible={isMyCarsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsMyCarsModalVisible(false)}
+        testID="modal-my-cars"
+      >
+        <View style={styles.historyModalOverlay}>
+          <View style={[styles.historyModalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.historyModalHeader}>
+              <Pressable
+                onPress={() => setIsMyCarsModalVisible(false)}
+                style={styles.historyCloseButton}
+                testID="button-close-my-cars"
+              >
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+              <ThemedText style={[styles.historyModalTitle, { fontFamily: "Cairo_700Bold" }]}>
+                سياراتي
+              </ThemedText>
+              <View style={{ width: 24 }} />
+            </View>
+
+            {isLoadingMyCars ? (
+              <View style={styles.historyLoadingContainer}>
+                <ThemedText style={[styles.historyLoadingText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                  جاري التحميل...
+                </ThemedText>
+              </View>
+            ) : myCars.length === 0 ? (
+              <View style={styles.historyEmptyContainer}>
+                <Feather name="bookmark" size={48} color={theme.textSecondary} />
+                <ThemedText style={[styles.historyEmptyText, { fontFamily: "Cairo_700Bold" }]}>
+                  لا توجد سيارات محفوظة
+                </ThemedText>
+                <ThemedText style={[styles.historyEmptyText, { fontFamily: "Cairo_400Regular", color: theme.textSecondary, fontSize: 13, marginTop: 4 }]}>
+                  عند إنشاء طلب فحص، اختر "أضف إلى سياراتي" لحفظ السيارة هنا
+                </ThemedText>
+              </View>
+            ) : (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: Spacing.xl }}
+              >
+                {myCars.map((car, index) => (
+                  <Animated.View
+                    key={car.vehicleId}
+                    entering={FadeInDown.duration(300).delay(50 * index)}
+                    style={[styles.carCard, { backgroundColor: theme.backgroundSecondary }]}
+                  >
+                    <View style={[styles.carCardHeader, { justifyContent: "space-between" }]}>
+                      <View style={[styles.carCardHeader, { flex: 1 }]}>
+                        <View style={[styles.carIconContainer, { backgroundColor: theme.primary + "15" }]}>
+                          <Feather name="bookmark" size={22} color={theme.primary} />
+                        </View>
+                        <View style={styles.carInfoContainer}>
+                          <ThemedText style={[styles.carName, { fontFamily: "Cairo_700Bold" }]}>
+                            {car.makeName} {car.modelName}
+                          </ThemedText>
+                          {car.carYear ? (
+                            <ThemedText style={[styles.carYear, { fontFamily: "Cairo_400Regular", color: theme.textSecondary }]}>
+                              سنة {car.carYear}
+                            </ThemedText>
+                          ) : null}
+                        </View>
+                      </View>
+                      <Pressable
+                        testID={`button-delete-vehicle-${car.vehicleId}`}
+                        onPress={() => handleDeleteVehicle(car.vehicleId)}
+                        disabled={deletingVehicleId === car.vehicleId}
+                        style={({ pressed }) => [{
+                          opacity: pressed || deletingVehicleId === car.vehicleId ? 0.5 : 1,
+                          padding: Spacing.sm,
+                        }]}
+                      >
+                        <Feather name="trash-2" size={18} color={theme.error ?? "#E53935"} />
+                      </Pressable>
                     </View>
                   </Animated.View>
                 ))}

@@ -673,6 +673,31 @@ export const carMakeAgents = pgTable(
   }
 );
 
+// ─── Customer saved vehicles ──────────────────────────────────────────────────
+
+export const customerVehicles = pgTable(
+  "customer_vehicles",
+  {
+    vehicleId: uuid("vehicle_id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.customerId),
+    carModelId: uuid("car_model_id")
+      .notNull()
+      .references(() => carModels.carModelId),
+    carYear: integer("car_year"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("idx_customer_vehicles_customer").on(t.customerId),
+    uniqueIndex("idx_customer_vehicles_unique").on(t.customerId, t.carModelId, t.carYear),
+  ]
+);
+
 // ─── Insert schemas & types for new tables ────────────────────────────────────
 
 export const insertCitySchema = createInsertSchema(cities).omit({

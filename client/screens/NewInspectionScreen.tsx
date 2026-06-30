@@ -95,6 +95,9 @@ export default function NewInspectionScreen() {
   const [newPartName, setNewPartName] = useState("");
   const [partsLoading, setPartsLoading] = useState(false);
 
+  // "أضف إلى سياراتي" checkbox
+  const [addToMyCars, setAddToMyCars] = useState(false);
+
   // Step 4 / submission
   const [inspectionId, setInspectionId] = useState<string | null>(null);
   const [inspectionNo, setInspectionNo] = useState<string | null>(null);
@@ -406,6 +409,22 @@ export default function NewInspectionScreen() {
       setInspectionNo(inspNo);
       setSubmitted(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Save car to "سياراتي" if the user checked the box
+      if (addToMyCars && user?.customerId && selectedModel) {
+        try {
+          await fetch(
+            new URL(`/api/customers/${user.customerId}/vehicles`, apiUrl).toString(),
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...authHeaders() },
+              body: JSON.stringify({ carModelId: selectedModel.carModelId, carYear: selectedYear || null }),
+            }
+          );
+        } catch {
+          // Non-critical — inspection already saved, don't block the success screen
+        }
+      }
     } catch (err: any) {
       const msg = err.message ?? "حدث خطأ أثناء الإرسال";
       setSubmitError(msg);
@@ -672,6 +691,31 @@ export default function NewInspectionScreen() {
                 </ScrollView>
               </>
             )}
+            {/* Add to My Cars checkbox — shown once the user picks a model */}
+            {selectedModel && isLoggedIn ? (
+              <Pressable
+                testID="checkbox-add-to-my-cars"
+                onPress={() => setAddToMyCars((v) => !v)}
+                style={[styles.addToMyCarsRow, { borderColor: theme.border, backgroundColor: theme.backgroundDefault }]}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    {
+                      borderColor: addToMyCars ? theme.primary : theme.border,
+                      backgroundColor: addToMyCars ? theme.primary : "transparent",
+                    },
+                  ]}
+                >
+                  {addToMyCars ? (
+                    <Feather name="check" size={13} color="#fff" />
+                  ) : null}
+                </View>
+                <ThemedText style={[styles.addToMyCarsLabel, { fontFamily: "Cairo_400Regular" }]}>
+                  أضف هذه السيارة إلى سياراتي
+                </ThemedText>
+              </Pressable>
+            ) : null}
           </Animated.View>
         )}
 
@@ -965,6 +1009,25 @@ const styles = StyleSheet.create({
   },
   identifyPhotoBtnText: { fontSize: 14, textAlign: "center" },
   chipsRow: { flexDirection: "row", marginBottom: Spacing.sm },
+  addToMyCarsRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addToMyCarsLabel: { fontSize: 14, flex: 1, textAlign: "right" },
   chip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
