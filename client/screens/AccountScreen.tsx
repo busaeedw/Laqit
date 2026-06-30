@@ -545,7 +545,7 @@ export default function AccountScreen() {
 
   const menuItems: MenuItem[][] = [
     [
-      { id: "subscription", icon: "star", label: isLoggedIn && user?.isAdmin ? "إدارة النظام" : "اشتراكي", badge: isLoggedIn && user?.isAdmin ? "مدير" : "مجاني", onPress: isLoggedIn && user?.isAdmin ? handleAdminMenu : handleViewPricing },
+      { id: "subscription", icon: "star", label: isLoggedIn && user?.isAdmin ? "إدارة النظام" : "اشتراكي", badge: isLoggedIn && user?.isAdmin ? undefined : "مجاني", onPress: isLoggedIn && user?.isAdmin ? handleAdminMenu : handleViewPricing },
       { id: "pricing", icon: "credit-card", label: "الباقات والأسعار", onPress: handleViewPricing },
     ],
     [
