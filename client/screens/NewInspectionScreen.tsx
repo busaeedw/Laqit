@@ -537,7 +537,7 @@ export default function NewInspectionScreen() {
             تم حفظ الطلب كمسودة. راجع الطلب في قائمة الطلبات ثم أرسله للموردين للحصول على عروض الأسعار.
           </ThemedText>
           <Pressable
-            onPress={() => navigation.navigate("Main")}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: "Main" }] })}
             style={[styles.successBtn, { backgroundColor: theme.primary }]}
           >
             <ThemedText style={[styles.successBtnText, { fontFamily: "Cairo_700Bold" }]}>

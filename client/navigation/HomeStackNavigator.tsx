@@ -24,6 +24,7 @@ export default function HomeStackNavigator() {
         component={HomeScreen}
         options={{
           headerTitle: () => <HeaderTitle title="لاقط قطع السيارات" showLogo />,
+          headerBackVisible: false,
         }}
       />
       <Stack.Screen
