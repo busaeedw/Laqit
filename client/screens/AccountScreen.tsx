@@ -499,7 +499,7 @@ export default function AccountScreen() {
     [
       { id: "history", icon: "clock", label: "سجل الفحوصات", onPress: handleViewHistory },
       { id: "favorites", icon: "heart", label: "القطع المحفوظة", onPress: handleViewParts },
-      { id: "vehicles", icon: "truck", label: "سياراتي", onPress: handleViewCars },
+      { id: "vehicles", icon: "truck", label: "سيارات فحصت", onPress: handleViewCars },
     ],
     [
       { id: "notifications", icon: "bell", label: "الإشعارات" },
@@ -1150,7 +1150,7 @@ export default function AccountScreen() {
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
               <ThemedText style={[styles.historyModalTitle, { fontFamily: "Cairo_700Bold" }]}>
-                سياراتي
+                سيارات فحصت
               </ThemedText>
               <View style={{ width: 24 }} />
             </View>
