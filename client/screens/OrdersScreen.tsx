@@ -133,7 +133,7 @@ export default function OrdersScreen() {
         سجل الدخول لعرض طلباتك السابقة
       </ThemedText>
       <Pressable
-        onPress={() => (navigation as any).push("Main", { screen: "AccountTab" })}
+        onPress={() => (navigation as any).navigate("Main", { screen: "AccountTab" })}
         style={[styles.loginButton, { backgroundColor: theme.primary }]}
       >
         <ThemedText style={[styles.loginButtonText, { color: "#FFFFFF", fontFamily: "Cairo_700Bold" }]}>
