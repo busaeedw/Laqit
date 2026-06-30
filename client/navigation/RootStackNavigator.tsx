@@ -25,6 +25,7 @@ const AdminCustomersScreen = lazy(() => import("@/screens/AdminCustomersScreen")
 const AdminAuditLogScreen = lazy(() => import("@/screens/AdminAuditLogScreen"));
 const AdminInspectionsScreen = lazy(() => import("@/screens/AdminInspectionsScreen"));
 const AdminDeliveryFailuresScreen = lazy(() => import("@/screens/AdminDeliveryFailuresScreen"));
+const AdminMenuScreen = lazy(() => import("@/screens/AdminMenuScreen"));
 const WelcomeScreen = lazy(() => import("@/screens/WelcomeScreen"));
 
 function ScreenFallback() {
@@ -111,6 +112,7 @@ export type RootStackParamList = {
   AdminAuditLog: undefined;
   AdminInspections: undefined;
   AdminDeliveryFailures: undefined;
+  AdminMenu: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -259,6 +261,11 @@ export default function RootStackNavigator() {
         name="AdminDeliveryFailures"
         component={withSuspense(AdminDeliveryFailuresScreen)}
         options={{ headerTitle: "إخفاقات الإرسال" }}
+      />
+      <Stack.Screen
+        name="AdminMenu"
+        component={withSuspense(AdminMenuScreen)}
+        options={{ headerTitle: "مدير النظام" }}
       />
     </Stack.Navigator>
   );

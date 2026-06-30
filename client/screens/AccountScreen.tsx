@@ -539,13 +539,13 @@ export default function AccountScreen() {
     clearSession();
   };
 
-  const handleAdminCustomers = () => {
-    navigation.navigate("AdminCustomers");
+  const handleAdminMenu = () => {
+    navigation.navigate("AdminMenu");
   };
 
   const menuItems: MenuItem[][] = [
     [
-      { id: "subscription", icon: "star", label: isLoggedIn && user?.isAdmin ? "مدير النظام" : "اشتراكي", badge: isLoggedIn && user?.isAdmin ? "مدير" : "مجاني", onPress: handleViewPricing },
+      { id: "subscription", icon: "star", label: isLoggedIn && user?.isAdmin ? "مدير النظام" : "اشتراكي", badge: isLoggedIn && user?.isAdmin ? "مدير" : "مجاني", onPress: isLoggedIn && user?.isAdmin ? handleAdminMenu : handleViewPricing },
       { id: "pricing", icon: "credit-card", label: "الباقات والأسعار", onPress: handleViewPricing },
     ],
     [
@@ -665,84 +665,6 @@ export default function AccountScreen() {
         <View style={styles.menuContainer}>
           {menuItems.map((section, index) => renderMenuSection(section, index))}
         </View>
-
-        {isLoggedIn && user?.isAdmin ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(450)}>
-            <View style={[styles.menuSection, { backgroundColor: theme.backgroundDefault }]}>
-              <Pressable
-                testID="button-admin-all-orders"
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  navigation.navigate("AdminInspections");
-                }}
-                style={({ pressed }) => [
-                  styles.menuItem,
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
-              >
-                <View style={styles.menuItemLeft}>
-                  <View style={[styles.menuIcon, { backgroundColor: theme.primary + "15" }]}>
-                    <Feather name="clipboard" size={18} color={theme.primary} />
-                  </View>
-                  <ThemedText style={[styles.menuLabel, { fontFamily: "Cairo_600SemiBold" }]}>
-                    جميع الطلبات
-                  </ThemedText>
-                </View>
-                <View style={styles.menuItemRight}>
-                  <Feather name="chevron-left" size={18} color={theme.textSecondary} />
-                </View>
-              </Pressable>
-              <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
-              <Pressable
-                testID="button-admin-customers"
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  handleAdminCustomers();
-                }}
-                style={({ pressed }) => [
-                  styles.menuItem,
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
-              >
-                <View style={styles.menuItemLeft}>
-                  <View style={[styles.menuIcon, { backgroundColor: theme.primary + "15" }]}>
-                    <Feather name="users" size={18} color={theme.primary} />
-                  </View>
-                  <ThemedText style={[styles.menuLabel, { fontFamily: "Cairo_600SemiBold" }]}>
-                    إدارة المستخدمين
-                  </ThemedText>
-                </View>
-                <View style={styles.menuItemRight}>
-                  <Feather name="chevron-left" size={18} color={theme.textSecondary} />
-                </View>
-              </Pressable>
-              <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
-              <Pressable
-                testID="button-admin-delivery-failures"
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  navigation.navigate("AdminDeliveryFailures");
-                }}
-                style={({ pressed }) => [
-                  styles.menuItem,
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
-              >
-                <View style={styles.menuItemLeft}>
-                  <View style={[styles.menuIcon, { backgroundColor: theme.error + "15" }]}>
-                    <Feather name="alert-triangle" size={18} color={theme.error} />
-                  </View>
-                  <ThemedText style={[styles.menuLabel, { fontFamily: "Cairo_600SemiBold" }]}>
-                    إخفاقات الإرسال
-                  </ThemedText>
-                </View>
-                <View style={styles.menuItemRight}>
-                  <Feather name="chevron-left" size={18} color={theme.textSecondary} />
-                </View>
-              </Pressable>
-            </View>
-          </Animated.View>
-        ) : null}
 
         {isLoggedIn ? (
           <Animated.View entering={FadeInDown.duration(400).delay(500)}>
